@@ -1,0 +1,123 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Entities.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+partial class ClientEntities
+{
+string dataAnnotationsNamespace = "System.ComponentModel.DataAnnotations";
+string dynamicType = "DynamicType";
+string iCustomTypeDescriptorTypeName = "ICustomTypeDescriptor";
+string customTypeDescriptorPropertyName = "CustomTypeDescriptor";
+string dynamicTypeParameters = "this, CustomPropertyDescriptors";
+string customPropertyDescriptorTypeName = "CustomPropertyDescriptor";
+string customPropertyDescriptorsName = "CustomPropertyDescriptors";
+string dataErrorInfoTypeName = "DataErrorInfo";
+
+void WriteDynamicTypeMethods(CodeGenerationTools code, EntityType entityType)
+{
+#>
+	#region DynamicType
+	protected override <#=iCustomTypeDescriptorTypeName#> <#=customTypeDescriptorPropertyName#>
+	{
+		get { return new DynamicType<<#=code.Escape(entityType)#>>(<#=dynamicTypeParameters#>); }
+	}
+	protected override IEnumerable<<#=customPropertyDescriptorTypeName#>> <#=customPropertyDescriptorsName#>
+	{
+		get { return DynamicType<<#=code.Escape(entityType)#>>.CustomProperties<#+
+if (entityType.BaseType != null)
+{
+#>.Union(base.<#=customPropertyDescriptorsName#>)<#+
+}
+#>; }
+	}
+	#endregion
+<#+
+}
+
+void DisplayAutoGenerateFilterAutoGenerateField(bool autoGenerateFilter, bool autoGenerateField)
+{
+#>
+	[Display(AutoGenerateFilter = <#=autoGenerateFilter.ToString().ToLower()#>, AutoGenerateField = <#=autoGenerateField.ToString().ToLower()#>)]
+<#+
+}
+
+void AddPropertyDescriptorsOnType(CodeGenerationTools code, EdmType edmType, IEnumerable<EdmProperty> properties, IEnumerable<NavigationProperty> navigationProperties, List<MethodDeclarationSyntax> getMethods)
+{
+	var className = code.Escape(edmType);
+	var entityType = edmType as EntityType;
+#>
+	static <#=className#>()
+	{
+<#+
+	foreach (var edmProperty in properties)
+	{
+		string propertyName = code.Escape(edmProperty);
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>IsMandatory", e => e.UISpecifications.Get<#=propertyName#>IsMandatory(e));
+<#+
+		if (edmProperty.TypeUsage.ToString() == "Edm.String" || edmProperty.TypeUsage.ToString() == "Edm.Binary")
+		{
+			var maxLength = MaxLength(edmProperty).HasValue;
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>MaxLength", e => e.UISpecifications.Get<#=propertyName#>MaxLength(e));
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>MinLength", e => e.UISpecifications.Get<#=propertyName#>MinLength(e));
+<#+
+			if (edmProperty.TypeUsage.ToString() == "Edm.String")
+			{
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>Pattern", e => e.UISpecifications.Get<#=propertyName#>Pattern(e));
+<#+
+			}
+		}
+		else
+		{
+			if (IsStruct(edmProperty))
+			{
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>MinValue", e => e.UISpecifications.Get<#=propertyName#>MinValue(e));
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>MaxValue", e => e.UISpecifications.Get<#=propertyName#>MaxValue(e));
+<#+
+			}
+		}
+	}
+	foreach (var navigationProperty in navigationProperties.Where(np => np.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many))
+	{
+		string propertyName = code.Escape(navigationProperty);
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>IsMandatory", e => e.UISpecifications.Get<#=propertyName#>IsMandatory(e));
+<#+
+	}
+#>
+		DynamicType<<#=className#>>.AddProperty("AllErrors", e => e.Errors.AllErrors);
+<#+
+	foreach (var edmProperty in properties)
+	{
+		string propertyName = code.Escape(edmProperty);
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>Errors", e => e.Errors.<#=propertyName#>);
+<#+
+	}
+	foreach (var navigationProperty in navigationProperties.Where(np => np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.One))
+	{
+		string propertyName = code.Escape(navigationProperty);
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=propertyName#>Errors", e => e.Errors.<#=propertyName#>);
+<#+
+	}
+	if (getMethods != null)
+		foreach (var getMethod in getMethods)
+		{
+			string getPropertyName = SpecificationMethods.GetPropertyNameFromMethod(getMethod);
+#>
+		DynamicType<<#=className#>>.AddProperty("<#=getPropertyName#>Errors", e => e.Errors.<#=getPropertyName#>);
+<#+
+		}
+#>
+		StaticInitializer();
+	}
+	static partial void StaticInitializer();
+
+<#+
+}
+}
+#>

@@ -1,0 +1,27 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Fx.ComponentModel.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string dataAnnotationNamespace = null;
+string iDataErrorInfoTypeName = null;
+string bindableObjectErrorCode =
+@"	public string Error
+	{
+		get { return DataErrorInfo.Error; }
+	}
+
+	public string this[string columnName]
+	{
+		get { return DataErrorInfo[columnName]; }
+	}
+
+	private DataErrorInfo _dataErrorInfo;
+	protected DataErrorInfo DataErrorInfo
+	{
+		get { return _dataErrorInfo ?? (_dataErrorInfo = new DataErrorInfo()); }
+	}";
+
+void WriteSpecificClasses(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string namespaceName)
+{
+}
+#>

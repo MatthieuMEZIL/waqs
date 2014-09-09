@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<WCFAsyncQueryableServices.Server EdmxPath="$edmxPath$">
+  <Specifications>
+    <Specification SlnFilePath="$SpecificationsSlnFilePath$" CsprojPath="$SpecificationsCsprojPath$" FolderPath="$SpecificationsFolderPath$" />
+  </Specifications>
+  <DTOs>
+    <DTO SlnFilePath="$DTOSlnFilePath$" CsprojPath="$DTOCsprojPath$" FolderPath="$DTOFolderPath$" />
+  </DTOs>
+  <Entities NamespaceName="$ServerEntitiesNamespace$" SlnFilePath="$ServerEntitiesSolutionPath$" CsprojPath="$ServerEntitiesProjectPath$" FolderPath="$ServerEntitiesFolderPath$" Generate="false" />
+  <DALMock />
+  <DAL NamespaceName="$ServerDALNamespace$" Generate="false" />
+  <DALInterfaces NamespaceName="$ServerDALInterfacesNamespace$" Generate="false" />
+  <SpecificationsMock />
+  <Framework>
+    <Common NamespaceName="WCFAsyncQueryableServices.Common" Generate="false" />
+    <Specifications NamespaceName="WCFAsyncQueryableServices.Specifications" Generate="false" />
+    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="false" />
+    <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" Generate="false" />
+    <Expressions NamespaceName="WCFAsyncQueryableServices.SerializableExpressions" Generate="false" />
+    <ServiceInterfaces NamespaceName="WCFAsyncQueryableServices.Service.Interfaces" Generate="false" />
+    <DALMock NamespaceName="WCFAsyncQueryableServices.DAL.Mock" Generate="false" />
+  </Framework>
+</WCFAsyncQueryableServices.Server>

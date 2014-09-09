@@ -1,0 +1,651 @@
+<#@ include file="WCFAsyncQueryableServices.Root.Base.ttinclude"#>
+<#@ import namespace="System.IO"#>
+<#+ 
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string expressionVisitorNamespace = null;
+string fxComponentModelNamespaceName = null;
+string fxEntitiesTrackingNamespaceName = null;
+string fxClientContextInterfacesNamespaceName = null;
+string fxClientContextNamespaceName = null;
+string fxEntitiesNamespaceName = null;
+string serverFxCommonNamespaceName = null;
+string serverFxSpecificationsNamespaceName = null;
+string serverFxDALInterfacesNamespaceName = null;
+string serverFxServiceInterfacesNamespaceName = null;
+string serverEntitiesNamespaceName = null;
+string dtoNamespaceName = null;
+string entitiesNamespaceName = null;
+string clientContextInterfacesNamespaceName = null;
+string clientContextNamespaceName = null;
+
+void WriteClient(string waqsFilePath, string namespaceName = null, string relativePath = "")
+{
+	var merge = string.IsNullOrEmpty(relativePath) ? "" : ".merge";
+	
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	var root = XElement.Load(Path.Combine(Path.GetDirectoryName(this.Host.TemplateFile), waqsFilePath));
+	XAttribute edmxPathAttribute = root.Attribute("EdmxPath");
+	string asyncSuffix = "true";
+	var asyncSuffixAttribute = root.Attribute("AsyncSuffix");
+	if (asyncSuffixAttribute != null)
+		asyncSuffix = asyncSuffixAttribute.Value;
+	string edmxPath = null;
+	string edmxName = null;
+	if (edmxPathAttribute != null)
+	{
+		edmxPath = edmxPathAttribute.Value;
+		edmxName = Path.GetFileNameWithoutExtension(edmxPath);
+	}
+
+	var fx = root.Element("Framework");
+	if (fx == null)
+		throw new InvalidOperationException(@"Framework can't be null");
+
+	WriteCustomFxClientBeginning(fileManager, code, fx, relativePath, merge);
+
+	var fxComponentModel = fx.Element("ComponentModel");
+	if (fxComponentModel != null)
+	{
+		var fxComponentModelNamespaceNameAttribute = fxComponentModel.Attribute("NamespaceName");
+		if (fxComponentModelNamespaceNameAttribute == null)
+			fxComponentModelNamespaceName = "WCFAsyncQueryableServices.ComponentModel";
+		else
+			fxComponentModelNamespaceName = fxComponentModelNamespaceNameAttribute.Value;
+		var fxComponentModelGenerateAttribute = fxComponentModel.Attribute("Generate");
+		if (fxComponentModelGenerateAttribute == null || fxComponentModelGenerateAttribute.Value != "false")
+		{
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Fx.ComponentModel.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{6}WCFAsyncQueryableServices.{4}.{3}.Client.{5}.Fx.ComponentModel{7}.ttinclude\"#{1}{0}#WriteClientFxComponentModel(\"{2}\");#{1}", "<", ">", fxComponentModelNamespaceName, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+		}
+	}
+
+	var fxEntitiesTracking = fx.Element("EntitiesTracking");
+	if (fxEntitiesTracking != null)
+	{
+		var fxEntitiesTrackingNamespaceNameAttribute = fxEntitiesTracking.Attribute("NamespaceName");
+		if (fxEntitiesTrackingNamespaceNameAttribute == null)
+			fxEntitiesTrackingNamespaceName = "WCFAsyncQueryableServices.Entities.Tracking";
+		else
+			fxEntitiesTrackingNamespaceName = fxEntitiesTrackingNamespaceNameAttribute.Value;
+		var fxEntitiesTrackingGenerateAttribute = fxEntitiesTracking.Attribute("Generate");
+		if (fxEntitiesTrackingGenerateAttribute == null || fxEntitiesTrackingGenerateAttribute.Value != "false")
+		{
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Fx.Entities.Tracking.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{6}WCFAsyncQueryableServices.{4}.{3}.Client.{5}.Fx.Entities.Tracking{7}.ttinclude\"#{1}{0}#WriteClientFxEntitiesTracking(\"{2}\");#{1}", "<", ">", fxEntitiesTrackingNamespaceName, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+		}
+	}
+
+	var fxClientContextInterfaces = fx.Element("ClientContextInterfaces");
+	if (fxClientContextInterfaces != null)
+	{
+		var fxClientContextInterfacesNamespaceNameAttribute = fxClientContextInterfaces.Attribute("NamespaceName");
+		if (fxClientContextInterfacesNamespaceNameAttribute == null)
+			fxClientContextInterfacesNamespaceName = "WCFAsyncQueryableServices.ClientContext.Interfaces";
+		else
+			fxClientContextInterfacesNamespaceName = fxClientContextInterfacesNamespaceNameAttribute.Value;
+		var fxClientContextInterfacesGenerateAttribute = fxClientContextInterfaces.Attribute("Generate");
+		if (fxClientContextInterfacesGenerateAttribute == null || fxClientContextInterfacesGenerateAttribute.Value != "false")
+		{
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			if (fxEntitiesTrackingNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\EntitiesTracking can't be null");
+			SetFxClientContextInterfaces();
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Fx.ClientContext.Interfaces.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{10}WCFAsyncQueryableServices.{8}.{7}.Client.{9}.Fx.ClientContext.Interfaces{11}.ttinclude\"#{1}{0}#WriteClientFxClientContextInterfaces(\"{2}\", \"{3}\", {4}, \"{5}\", {6});#{1}", "<", ">", fxComponentModelNamespaceName, fxEntitiesTrackingNamespaceName, expressionVisitorNamespace ?? "null", fxClientContextInterfacesNamespaceName, asyncSuffix, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+		}
+	}
+
+	var fxClientContext = fx.Element("ClientContext");
+	if (fxClientContext != null)
+	{
+		var fxClientContextNamespaceNameAttribute = fxClientContext.Attribute("NamespaceName");
+		if (fxClientContextNamespaceNameAttribute == null)
+			fxClientContextNamespaceName = "WCFAsyncQueryableServices.ClientContext";
+		else
+			fxClientContextNamespaceName = fxClientContextNamespaceNameAttribute.Value;
+		var fxClientContextGenerateAttribute = fxClientContext.Attribute("Generate");
+		if (fxClientContextGenerateAttribute == null || fxClientContextGenerateAttribute.Value != "false")
+		{
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			if (fxEntitiesTrackingNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\EntitiesTracking can't be null");
+			if (fxClientContextInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContextInterfaces can't be null");
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Fx.ClientContext.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{11}WCFAsyncQueryableServices.{9}.{8}.Client.{10}.Fx.ClientContext{12}.ttinclude\"#{1}{0}#WriteClientFxClientContext(\"{2}\", \"{3}\", \"{4}\", {5}, \"{6}\", {7});#{1}", "<", ">", fxComponentModelNamespaceName, fxEntitiesTrackingNamespaceName, fxClientContextInterfacesNamespaceName, expressionVisitorNamespace ?? "null", fxClientContextNamespaceName, asyncSuffix, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+		}
+	}
+
+	var fxEntities = fx.Element("Entities");
+	if (fxEntities != null)
+	{
+		var fxEntitiesNamespaceNameAttribute = fxEntities.Attribute("NamespaceName");
+		if (fxEntitiesNamespaceNameAttribute == null)
+			fxEntitiesNamespaceName = "WCFAsyncQueryableServices.Entities";
+		else
+			fxEntitiesNamespaceName = fxEntitiesNamespaceNameAttribute.Value;
+		var fxEntitiesGenerateAttribute = fxEntities.Attribute("Generate");
+		if (fxEntitiesGenerateAttribute == null || fxEntitiesGenerateAttribute.Value != "false")
+		{
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			if (fxEntitiesTrackingNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\EntitiesTracking can't be null");
+			if (fxClientContextNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContext can't be null");
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Fx.Entities.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{10}WCFAsyncQueryableServices.{8}.{7}.Client.{9}.Fx.Entities{11}.ttinclude\"#{1}{0}#WriteClientFxEntities(\"{2}\", \"{3}\", \"{4}\", \"{5}\", \"{6}\");#{1}", "<", ">", fxComponentModelNamespaceName, fxClientContextInterfacesNamespaceName, fxClientContextNamespaceName, fxEntitiesTrackingNamespaceName, fxEntitiesNamespaceName, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+		}
+	}
+
+	WriteFxControls(fileManager, fx, relativePath, merge);
+
+	WriteCustomFxClientEnding(fileManager, code, fx, relativePath, merge);
+
+
+
+	var serverElement = root.Element("WCFAsyncQueryableServices.Server");
+	SpecificationPath serverEntitiesPath = null;
+	if (serverElement != null)
+	{
+		XElement serverFxElement = serverElement.Element("Framework");
+		if (serverFxElement != null)
+		{
+			XElement serverFxCommonElement;
+			XAttribute serverFxCommonNamespaceAttribute;
+			if ((serverFxCommonElement = serverFxElement.Element("Common")) != null && (serverFxCommonNamespaceAttribute = serverFxCommonElement.Attribute("NamespaceName")) != null)
+				serverFxCommonNamespaceName = serverFxCommonNamespaceAttribute.Value;
+			XElement serverFxSpecificationsElement;
+			XAttribute serverFxSpecificationsNamespaceAttribute;
+			if ((serverFxSpecificationsElement = serverFxElement.Element("Specifications")) != null && (serverFxSpecificationsNamespaceAttribute = serverFxSpecificationsElement.Attribute("NamespaceName")) != null)
+				serverFxSpecificationsNamespaceName = serverFxSpecificationsNamespaceAttribute.Value;
+			XElement serverFxDALInterfacesElement;
+			XAttribute serverFxDALInterfacesNamespaceAttribute;
+			if ((serverFxDALInterfacesElement = serverFxElement.Element("DALInterfaces")) != null && (serverFxDALInterfacesNamespaceAttribute = serverFxDALInterfacesElement.Attribute("NamespaceName")) != null)
+				serverFxDALInterfacesNamespaceName = serverFxDALInterfacesNamespaceAttribute.Value;
+			XElement serverFxServiceInterfacesElement;
+			XAttribute serverFxServiceInterfacesNamespaceAttribute;
+			if ((serverFxServiceInterfacesElement = serverFxElement.Element("ServiceInterfaces")) != null && (serverFxServiceInterfacesNamespaceAttribute = serverFxServiceInterfacesElement.Attribute("NamespaceName")) != null)
+				serverFxServiceInterfacesNamespaceName = serverFxServiceInterfacesNamespaceAttribute.Value;
+		}
+		XElement serverEntitiesElement;
+		if ((serverEntitiesElement = serverElement.Element("Entities")) != null)
+		{
+			var serverEntitiesNamespaceNameNameAttribute = serverEntitiesElement.Attribute("NamespaceName");
+			if (serverEntitiesNamespaceNameNameAttribute != null)
+				serverEntitiesNamespaceName = serverEntitiesNamespaceNameNameAttribute.Value;
+			serverEntitiesPath = GetSpecificationPath(serverEntitiesElement);
+		}
+	}
+
+
+
+
+	var namespaces = root.Element("Namespaces");
+	var namespacesParameterSB = new StringBuilder();
+	namespacesParameterSB.Append("new Dictionary<string, string>()");
+	if (namespaces != null)
+	{
+		namespacesParameterSB.Append("{");
+		var namespacesEnumerator = namespaces.Elements("Namespace").GetEnumerator();
+		if (namespacesEnumerator.MoveNext())
+			for(;;)
+			{
+				var @namespace = namespacesEnumerator.Current;
+				namespacesParameterSB.AppendFormat("{{ \"{0}\", \"{1}\" }}", @namespace.Attribute("ServerNamespace").Value, @namespace.Attribute("ClientNamespace").Value);
+				if (namespacesEnumerator.MoveNext())
+					namespacesParameterSB.Append(", ");
+				else
+					break;
+			}
+		namespacesParameterSB.Append("}");
+	}
+	var namespacesParameterString = namespacesParameterSB.ToString();
+
+	var specificationPathes = GetSpecificationsPathes(root.Element("Specifications"));
+
+	var dtos = root.Element("DTOs");
+	string dtoWCFNamespace = null;
+	var dtoSB = new StringBuilder();
+	if (dtos == null)
+		dtoSB.Append("null");
+	else
+	{
+		var dtoNamespaceNameAttribute = dtos.Attribute("NamespaceName");
+		if (dtoNamespaceNameAttribute == null)
+			dtoNamespaceName = namespaceName + ".DTO";
+		else
+			dtoNamespaceName = dtoNamespaceNameAttribute.Value;
+		var dtoWCFNamespaceAttribute = dtos.Attribute("WCFNamespace");
+		if (dtoWCFNamespaceAttribute == null)
+			dtoWCFNamespace = string.Concat("http://", edmxName, "/DTO");
+		else
+			dtoWCFNamespace = dtoWCFNamespaceAttribute.Value;
+		fileManager.StartNewFile(string.Format("{0}.Client.{1}.DTO.tt", edmxName, clientType));
+		var sb = new StringBuilder();
+		sb.Append("<");
+		sb.Append("#@ include file=\"");
+		sb.Append(relativePath);
+		sb.Append("WCFAsyncQueryableServices.");
+		sb.Append(vsVersion);
+		sb.Append(".");
+		sb.Append(netVersion);
+		sb.Append(".Client.");
+		sb.Append(clientType);
+		sb.Append(".DTO");
+		sb.Append(merge);
+		sb.Append(".ttinclude\"#");
+		sb.Append("><");
+		sb.Append("#WriteClientDTOs(");
+		dtoSB.Append("new SpecificationPath[] { ");
+		var dtosEnumerator = dtos.Elements("DTO").GetEnumerator();
+		if (dtosEnumerator.MoveNext())
+			for(;;)
+			{
+				var dto = dtosEnumerator.Current;
+				dtoSB.Append("new SpecificationPath { Sln = @\"");
+				dtoSB.Append(dto.Attribute("SlnFilePath").Value);
+				dtoSB.Append("\", Csproj = @\"");
+				dtoSB.Append(dto.Attribute("CsprojPath").Value);
+				dtoSB.Append("\", Folder = @\"");
+				dtoSB.Append(dto.Attribute("FolderPath").Value);
+				dtoSB.Append("\"}");
+				if (! dtosEnumerator.MoveNext())
+					break;
+				dtoSB.Append(", ");
+			}
+		dtoSB.Append(" }");
+		sb.Append(dtoSB.ToString());
+		sb.Append(", \"");
+		sb.Append(dtoWCFNamespace);
+		sb.Append("\", ");
+		sb.Append(namespacesParameterString);
+		sb.Append(", @\"");
+		sb.Append(dtoNamespaceName);
+		sb.Append("\");#");
+		sb.Append(">");
+#>
+<#=sb.ToString()#>
+<#+		
+		var withSpecifications = dtos.Attribute("WithSpecifications");
+		if (specificationPathes.Count != 0 && (withSpecifications == null || withSpecifications.Value == "true"))
+		{
+			fileManager.StartNewFile(string.Format("{0}.Client.{1}.DTO.Specifications.tt", edmxName, clientType));
+			sb = new StringBuilder();
+			sb.Append("<");
+			sb.Append("#@ include file=\"");
+			sb.Append(relativePath);
+			sb.Append("WCFAsyncQueryableServices.");
+			sb.Append(vsVersion);
+			sb.Append(".");
+			sb.Append(netVersion);
+			sb.Append(".Client.");
+			sb.Append(clientType);
+			sb.Append(".DTO.Specifications");
+			sb.Append(merge);
+			sb.Append(".ttinclude\"#");
+			sb.Append("><");
+			sb.Append("#WriteClientDTOSpecifications(");
+			FillSpecifications(specificationPathes, sb);
+			sb.Append(", ");
+			sb.Append(dtoSB.ToString());
+			sb.Append(", @\"");
+			sb.Append(serverFxSpecificationsNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxDALInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxServiceInterfacesNamespaceName);
+			sb.Append("\", ");
+			sb.Append(namespacesParameterString);
+			sb.Append(", @\"");
+			sb.Append(dtoNamespaceName);
+			sb.Append("\");#");
+			sb.Append(">");
+#>
+<#=sb.ToString()#>
+<#+
+		}
+	}
+
+	var entities = root.Element("Entities");
+	string utc = "false";
+	if (entities != null)
+	{
+		var entitiesNamespaceNameAttribute = entities.Attribute("NamespaceName");
+		if (entitiesNamespaceNameAttribute == null)
+			entitiesNamespaceName = namespaceName;
+		else
+			entitiesNamespaceName = entitiesNamespaceNameAttribute.Value;
+		var utcAttribute = entities.Attribute("UTC");
+		if (utcAttribute != null)
+			utc = utcAttribute.Value;
+		var defaultTakeAttribute = entities.Attribute("DefaultTake");
+		var entitiesGenerateAttribute = entities.Attribute("Generate");
+		if (entitiesGenerateAttribute == null || entitiesGenerateAttribute.Value != "false")
+		{
+			if (fxClientContextNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContext can't be null");
+			if (fxClientContextInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContextInterfaces can't be null");
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			if (fxEntitiesNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\Entities can't be null");
+			if (fxEntitiesTrackingNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\EntitiesTracking can't be null");
+			if (serverFxDALInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"WCFAsyncQueryableServices.Server\Framework\DALInterfaces can't be null");
+			if (serverFxServiceInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"WCFAsyncQueryableServices.Server\Framework\ServiceInterfaces can't be null");
+			var entityTypesBaseTypeAttribute = entities.Attribute("EntityTypesBaseType");
+			var complexTypesBaseTypeAttribute = entities.Attribute("ComplexTypesBaseType");
+			var propertyAttributesAttribute = entities.Attribute("PropertyAttributes");
+			fileManager.StartNewFile(string.Format("{0}.Client.{1}.Entities.tt", edmxName, clientType));
+			var sb = new StringBuilder();
+			sb.Append("<");
+			sb.Append("#@ include file=\"");
+			sb.Append(relativePath);
+			sb.Append("WCFAsyncQueryableServices.");
+			sb.Append(vsVersion);
+			sb.Append(".");
+			sb.Append(netVersion);
+			sb.Append(".Client.");
+			sb.Append(clientType);
+			sb.Append(".Entities");
+			sb.Append(merge);
+			sb.Append(".ttinclude\"#");
+			sb.Append("><");
+			sb.Append("#WriteClientEntities(@\"");
+			sb.Append(edmxPath);
+			sb.Append("\", ");
+			FillSpecifications(specificationPathes, sb);
+			sb.Append(", ");
+			sb.Append(dtoSB);
+			sb.Append(", @\"");
+			sb.Append(dtoNamespaceName);
+			sb.Append("\", ");
+			FillSpecification(serverEntitiesPath, sb);
+			sb.Append(", @\"");
+			sb.Append(fxClientContextInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxClientContextNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxComponentModelNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxEntitiesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxEntitiesTrackingNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxCommonNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxSpecificationsNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxDALInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxServiceInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverEntitiesNamespaceName);
+			sb.Append("\", ");
+			sb.Append(namespacesParameterString);
+			sb.Append(", @\"");
+			sb.Append(entitiesNamespaceName);
+			sb.Append("\", ");
+			sb.Append(entityTypesBaseTypeAttribute == null ? "null" : "\"" + entityTypesBaseTypeAttribute.Value + "\"");
+			sb.Append(", ");
+			sb.Append(complexTypesBaseTypeAttribute == null ? "null" : "\"" + complexTypesBaseTypeAttribute.Value + "\"");
+			sb.Append(", ");
+			sb.Append(propertyAttributesAttribute == null ? "null" : "\"" + propertyAttributesAttribute.Value.Replace("\"", "\\\"") + "\"");
+			if (defaultTakeAttribute != null)
+			{
+				sb.Append(", defaultTake: ");
+				sb.Append(defaultTakeAttribute.Value);
+			}
+			sb.Append(");#");
+			sb.Append(">");
+#>
+<#=sb.ToString()#>
+<#+
+		}
+	}
+
+	var clientContextInterfaces = root.Element("ClientContextInterfaces");
+	if (clientContextInterfaces != null)
+	{
+		var clientContextInterfacesNamespaceNameAttribute = clientContextInterfaces.Attribute("NamespaceName");
+		if (clientContextInterfacesNamespaceNameAttribute == null)
+			clientContextInterfacesNamespaceName = namespaceName + ".ClientContext.Interfaces";
+		else
+			clientContextInterfacesNamespaceName = clientContextInterfacesNamespaceNameAttribute.Value;
+		var clientContextInterfacesGenerateAttribute = clientContextInterfaces.Attribute("Generate");
+		if (clientContextInterfacesGenerateAttribute == null || clientContextInterfacesGenerateAttribute.Value != "false")
+		{
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			if (fxEntitiesNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\Entities can't be null");
+			if (fxEntitiesTrackingNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\EntitiesTracking can't be null");
+			if (fxClientContextInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContextInterfaces can't be null");
+			if (fxClientContextNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContext can't be null");
+			if (serverFxDALInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"WCFAsyncQueryableServices.Server\Framework\DALInterfaces can't be null");
+			if (serverFxServiceInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"WCFAsyncQueryableServices.Server\Framework\ServiceInterfaces can't be null");
+			if (entitiesNamespaceName == null)
+				throw new InvalidOperationException(@"Entities can't be null");
+
+			fileManager.StartNewFile(string.Format("{0}.Client.{1}.ClientContext.Interfaces.tt", edmxName, clientType));
+			var sb = new StringBuilder();
+			sb.Append("<");
+			sb.Append("#@ include file=\"");
+			sb.Append(relativePath);
+			sb.Append("WCFAsyncQueryableServices.");
+			sb.Append(vsVersion);
+			sb.Append(".");
+			sb.Append(netVersion);
+			sb.Append(".Client.");
+			sb.Append(clientType);
+			sb.Append(".ClientContext.Interfaces");
+			sb.Append(merge);
+			sb.Append(".ttinclude\"#");
+			sb.Append("><");
+			sb.Append("#WriteClientClientContextInterfaces(@\"");
+			sb.Append(edmxPath);
+			sb.Append("\", ");
+			FillSpecifications(specificationPathes, sb);
+			sb.Append(", ");
+			sb.Append(dtoSB);
+			sb.Append(", @\"");
+			sb.Append(dtoNamespaceName);
+			sb.Append("\", ");
+			FillSpecification(serverEntitiesPath, sb);
+			sb.Append(", @\"");
+			sb.Append(fxComponentModelNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxEntitiesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxEntitiesTrackingNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxClientContextInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxClientContextNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxClientContextNamespaceName + ".QueryResult");
+			sb.Append("\", @\"");
+			sb.Append(entitiesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverEntitiesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxSpecificationsNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxDALInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxServiceInterfacesNamespaceName);
+			sb.Append("\", ");
+			sb.Append(namespacesParameterString);
+			sb.Append(", @\"");
+			sb.Append(clientContextInterfacesNamespaceName);
+			sb.Append("\", ");
+			sb.Append(asyncSuffix);
+			sb.Append(");#");
+			sb.Append(">");
+#>
+<#=sb.ToString()#>
+<#+
+		}
+	}
+
+	
+	var clientContext = root.Element("ClientContext");
+	if (clientContext != null)
+	{
+		var clientContextNamespaceNameAttribute = clientContext.Attribute("NamespaceName");
+		if (clientContextNamespaceNameAttribute == null)
+			clientContextNamespaceName = namespaceName + ".ClientContext";
+		else
+			clientContextNamespaceName = clientContextNamespaceNameAttribute.Value;
+		var clientContextGenerateAttribute = clientContext.Attribute("Generate");
+		if (clientContextGenerateAttribute == null || clientContextGenerateAttribute.Value != "false")
+		{
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			if (fxEntitiesNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\Entities can't be null");
+			if (fxEntitiesTrackingNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\EntitiesTracking can't be null");
+			if (fxClientContextNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContext can't be null");
+			if (serverFxDALInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"WCFAsyncQueryableServices.Server\Framework\DALInterfaces can't be null");
+			if (serverFxServiceInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"WCFAsyncQueryableServices.Server\Framework\ServiceInterfaces can't be null");
+			if (entitiesNamespaceName == null)
+				throw new InvalidOperationException(@"Entities can't be null");
+			var wsdlAttribute = clientContext.Attribute("WSDL");
+			if (wsdlAttribute == null)
+				throw new InvalidOperationException("WSDL must be defined on ClientContext");
+
+			var nbRetryOnTimeoutAttribute = clientContext.Attribute("NbRetryOnTimeout");
+
+			fileManager.StartNewFile(string.Format("{0}.Client.{1}.ClientContext.tt", edmxName, clientType));
+			var sb = new StringBuilder();
+			sb.Append("<");
+			sb.Append("#@ include file=\"");
+			sb.Append(relativePath);
+			sb.Append("WCFAsyncQueryableServices.");
+			sb.Append(vsVersion);
+			sb.Append(".");
+			sb.Append(netVersion);
+			sb.Append(".Client.");
+			sb.Append(clientType);
+			sb.Append(".ClientContext");
+			sb.Append(merge);
+			sb.Append(".ttinclude\"#");
+			sb.Append("><");
+			sb.Append("#WriteClientClientContext(@\"");
+			sb.Append(edmxPath);
+			sb.Append("\", ");
+			FillSpecifications(specificationPathes, sb);
+			sb.Append(", ");
+			sb.Append(dtoSB);
+			sb.Append(", @\"");
+			sb.Append(dtoNamespaceName);
+			sb.Append("\", ");
+			FillSpecification(serverEntitiesPath, sb);
+			sb.Append(", @\"");
+			sb.Append(fxComponentModelNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxEntitiesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxEntitiesTrackingNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxClientContextInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxClientContextNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(fxClientContextNamespaceName + ".QueryResult");
+			sb.Append("\", @\"");
+			sb.Append(entitiesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(clientContextNamespaceName + ".ServiceReference");
+			sb.Append("\", @\"");
+			sb.Append(clientContextInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxCommonNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxSpecificationsNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxDALInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverFxServiceInterfacesNamespaceName);
+			sb.Append("\", @\"");
+			sb.Append(serverEntitiesNamespaceName);
+			sb.Append("\", ");
+			sb.Append(utc);
+			sb.Append(", ");
+			sb.Append(namespacesParameterString);
+			sb.Append(", ");
+			sb.Append(nbRetryOnTimeoutAttribute == null ? "0" : nbRetryOnTimeoutAttribute.Value);
+			sb.Append(", @\"");
+			sb.Append(clientContextNamespaceName);
+			sb.Append("\", ");
+			sb.Append(asyncSuffix);
+			if (string.IsNullOrEmpty(relativePath))
+				sb.Append(", null");
+			else
+			{
+				sb.Append(", @\"");
+				sb.Append(relativePath);
+				sb.Append("\"");
+			}
+			sb.Append(");#");
+			sb.Append(">");
+#>
+<#=sb.ToString()#>
+<#+
+			fileManager.StartNewFile(string.Format("{0}.Client.{1}.ServiceProxy.tt", edmxName, clientType));
+			var sbProxyAdditionalNamespaces = new StringBuilder();
+			var proxyAdditionalNamespaces = clientContext.Element("ProxyAdditionalNamespaces");
+			if (proxyAdditionalNamespaces != null)
+			{
+				foreach (var proxyAdditionalNamespace in proxyAdditionalNamespaces.Elements("ProxyAdditionalNamespace"))
+				{
+					sbProxyAdditionalNamespaces.Append(", {\"");
+					sbProxyAdditionalNamespaces.Append(proxyAdditionalNamespace.Attribute("Namespace").Value);
+					sbProxyAdditionalNamespaces.Append("\", \"");
+					sbProxyAdditionalNamespaces.Append(proxyAdditionalNamespace.Attribute("WCFNamespace").Value);
+					sbProxyAdditionalNamespaces.Append("\"}");
+				}
+			}
+#>
+<#=string.Format("{0}#@ include file=\"{18}WCFAsyncQueryableServices.{16}.{15}.Client.{17}.WCFServiceProxy{19}.ttinclude\"#{1}{0}#WriteClientWCFServiceProxy(\"{4}\", new Dictionary<string, string>(){2}{2}\"System\", \"http://schemas.datacontract.org/2004/07/System\"{3}, {2}\"{10}\", \"http://{5}/Entities\"{3}, {2}\"{7}.QueryResult\", \"http://{5}/QueryResult\"{3}, {2}\"{11}\", \"http://{6}/EntityTracking\"{3}, {2}\"{8}.Errors\", \"http://{6}/Errors\"{3}, {2}\"{14}.Serialization\", \"http://{5}/SerializableContext\"{3}, {2}\"{9}.QueryResult\", \"http://{6}/QueryResult\"{3}, {2}\"{8}.Query\", \"http://{6}/Query\"{3}, {2}\"{9}.Fault\", \"http://{6}/Fault\"{3}, {2}\"{7}.Fault\", \"http://{5}/Fault\"{3}, {2}\"{8}.ExpressionSerialization\", \"http://{6}/QuerySerialization\"{3}, {2}\"{8}.Querying\", \"http://{6}/Querying\"{3}, {2}\"{12}\", \"http://{5}/DTO\"{3}, {2}\"{7}.Query.Include\", \"http://{5}/QueryInclude\"{3}{13}{3}, \"{7}.ServiceReference\");#{1}", "<", ">", "{", "}", wsdlAttribute.Value, edmxName, "WCFAsyncQueryableServices", clientContextNamespaceName, fxClientContextInterfacesNamespaceName, fxClientContextNamespaceName, entitiesNamespaceName, fxEntitiesTrackingNamespaceName, dtoNamespaceName, sbProxyAdditionalNamespaces, clientContextInterfacesNamespaceName, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+		}
+	}
+
+	fileManager.Process();
+}
+#>

@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<WCFAsyncQueryableServices.Client EdmxPath="$edmxPath$">
+  <Entities NamespaceName="$EntitiesNamespace$" Generate="false" />
+  <ClientContext NamespaceName="$ClientContextNamespace$" Generate="false" />
+  <ClientContextInterfaces NamespaceName="$ClientContextInterfacesNamespace$" Generate="false" />
+  <Framework>
+    <ComponentModel NamespaceName="WCFAsyncQueryableServices.ComponentModel" Generate="false" />
+    <EntitiesTracking  NamespaceName="WCFAsyncQueryableServices.EntitiesTracking" Generate="false"/>
+    <ClientContext NamespaceName="WCFAsyncQueryableServices.ClientContext" Generate="false" />
+    <ClientContextInterfaces NamespaceName="WCFAsyncQueryableServices.ClientContext.Interfaces" Generate="false" />
+    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="false" />
+    <Controls NamespaceName="WCFAsyncQueryableServices.Controls" Generate="false" />
+  </Framework>
+</WCFAsyncQueryableServices.Client>

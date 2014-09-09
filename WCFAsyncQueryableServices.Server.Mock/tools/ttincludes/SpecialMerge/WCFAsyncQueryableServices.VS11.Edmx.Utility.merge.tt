@@ -1,0 +1,2 @@
+﻿<#@ include file="MergeT4Files.ttinclude"#>
+<# LocalTTIncludesMerge("WCFAsyncQueryableServices.VS11.Edmx.Utility.ttinclude"); #>

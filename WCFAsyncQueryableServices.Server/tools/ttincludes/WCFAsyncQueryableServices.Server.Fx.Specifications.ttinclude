@@ -1,0 +1,387 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxSpecifications(string namespaceName = null)
+{
+CodeGenerationTools code = new CodeGenerationTools(this);
+MetadataLoader loader = new MetadataLoader(this);
+CodeRegion region = new CodeRegion(this, 1);
+if (namespaceName == null)
+	namespaceName = code.VsNamespaceSuggestion();
+
+EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+fileManager.StartNewFile("SpecificationsAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class SpecificationsAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IEntityAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class IEntityAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("NotApplicableOnClientAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class NotApplicableOnClientAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("AbstractAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class AbstractAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("VirtualAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class VirtualAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("OverrideAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class OverrideAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("ValidateOnServerAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class ValidateOnServerAttribute : Attribute
+{
+	public ValidateMode Mode { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("ValidateOnClientAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class ValidateOnClientAttribute : Attribute
+{
+	public ValidateMode Mode { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("ValidateMode.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+[Flags]
+public enum ValidateMode
+{
+	OnInsert = 1,
+	OnUpdate = 2,
+	OnDelete = 4
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("ExposeAsServiceAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class ExposeAsServiceAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("CustomAttribute.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class CustomAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("Metadata.cs");
+WriteHeader(namespaceName, code, "System", "System.Linq");
+#>
+public class Metadata<T>
+{
+	public static void DefineMinValue(Func<T, byte> getProp, Func<T, byte?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, byte?> getProp, Func<T, byte?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, byte> getProp, byte getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, byte?> getProp, byte getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, byte> getProp, int getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, byte?> getProp, int getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, short> getProp, Func<T, short?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, short?> getProp, Func<T, short?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, short> getProp, short getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, short?> getProp, short getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, short> getProp, int getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, short?> getProp, int getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, int> getProp, Func<T, int?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, int?> getProp, Func<T, int?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, int> getProp, int getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, int?> getProp, int getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, float> getProp, Func<T, float?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, float?> getProp, Func<T, float?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, float> getProp, float getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, float?> getProp, float getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, decimal> getProp, Func<T, decimal?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, decimal?> getProp, Func<T, decimal?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, decimal> getProp, decimal getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, decimal?> getProp, decimal getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, double> getProp, Func<T, double?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, double?> getProp, Func<T, double?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, double> getProp, double getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, double?> getProp, double getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, DateTime> getProp, Func<T, DateTime?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, DateTime?> getProp, Func<T, DateTime?> getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, DateTime> getProp, DateTime getValue)
+	{
+	}
+	public static void DefineMinValue(Func<T, DateTime?> getProp, DateTime getValue)
+	{
+	}
+
+	public static void DefineMaxValue(Func<T, byte> getProp, Func<T, byte?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, byte?> getProp, Func<T, byte?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, byte> getProp, byte getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, byte?> getProp, byte getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, byte> getProp, int getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, byte?> getProp, int getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, short> getProp, Func<T, short?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, short?> getProp, Func<T, short?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, short> getProp, short getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, short?> getProp, short getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, short> getProp, int getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, short?> getProp, int getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, int> getProp, Func<T, int?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, int?> getProp, Func<T, int?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, int> getProp, int getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, int?> getProp, int getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, float> getProp, Func<T, float?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, float?> getProp, Func<T, float?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, float> getProp, float getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, float?> getProp, float getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, decimal> getProp, Func<T, decimal?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, decimal?> getProp, Func<T, decimal?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, decimal> getProp, decimal getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, decimal?> getProp, decimal getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, double> getProp, Func<T, double?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, double?> getProp, Func<T, double?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, double> getProp, double getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, double?> getProp, double getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, DateTime> getProp, Func<T, DateTime?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, DateTime?> getProp, Func<T, DateTime?> getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, DateTime> getProp, DateTime getValue)
+	{
+	}
+	public static void DefineMaxValue(Func<T, DateTime?> getProp, DateTime getValue)
+	{
+	}
+
+	public static void DefineMinLength(Func<T, string> getProp, Func<T, int?> getValue)
+	{
+	}
+	public static void DefineMinLength(Func<T, string> getProp, int? getValue)
+	{
+	}
+
+	public static void DefineMaxLength(Func<T, string> getProp, Func<T, int?> getValue)
+	{
+	}
+	public static void DefineMaxLength(Func<T, string> getProp, int? getValue)
+	{
+	}
+
+	public static void IsNullable(Func<T, object> getProp, Func<T, bool> isNullable)
+	{
+	}
+	public static void IsNullable(Func<T, object> getProp, bool isNullable)
+	{
+	}
+
+	public static void DefinePattern(Func<T, string> getProp, Func<T, string> getPattern)
+	{
+	}
+	public static void DefinePattern(Func<T, string> getProp, string getPattern)
+	{
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("PropertyDependence.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq");
+#>
+public static class PropertyDependence
+{
+	public static void DefinePropertyDependences<T>(Func<T, object> definePropertyDependences)
+	{
+	}
+
+	public static T DefinePropertyDependences<T>(this T source, Func<T, object> definePropertyDependences)
+	{
+		return source;
+	}
+
+	public static IEnumerable<T> DefinePropertyDependences<T>(this IEnumerable<T> source, Func<T, object> definePropertyDependences)
+	{
+		return source;
+	}
+
+	public static T DefinePropertyDependences<T, T2>(this T source, Func<T2, object> definePropertyDependences)
+		where T2 : T
+	{
+		return source;
+	}
+
+	public static IEnumerable<T> DefinePropertyDependences<T, T2>(this IEnumerable<T> source, Func<T2, object> definePropertyDependences)
+		where T2 : T
+	{
+		return source;
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.Process();
+}
+#>

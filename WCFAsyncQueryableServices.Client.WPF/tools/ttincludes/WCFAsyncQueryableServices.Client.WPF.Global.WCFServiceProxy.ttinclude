@@ -1,0 +1,53 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Global.ClientContext.Base.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClientGlobalClientContextProxy(ClientContext[] clientContexts, string wsdlUrl, string wcfNamespace, string namespaceName)
+{
+	var namespacesMapping = new Dictionary<string, string>(){ { namespaceName + ".Serialization", wcfNamespace + "/SerializableContext" } };
+	foreach (var clientContext in clientContexts)
+	{
+		var waqs = XElement.Load(Path.Combine(Path.GetDirectoryName(Host.TemplateFile), clientContext.WAQS));
+
+		var clientContextElement = waqs.Element("ClientContext");
+		var clientContextNamespace = clientContextElement.Attribute("NamespaceName").Value;
+		var clientContextWCFNamespaceAttribute = clientContextElement.Attribute("WCFNamespace");
+		namespacesMapping.Add(clientContextNamespace + ".Serialization", (clientContextWCFNamespaceAttribute == null ? "http://" + clientContext.Name : clientContextWCFNamespaceAttribute.Value) + "/SerializableContext");
+		namespacesMapping.Add(clientContextNamespace + ".Fault", (clientContextWCFNamespaceAttribute == null ? "http://" + clientContext.Name : clientContextWCFNamespaceAttribute.Value) + "/Fault");
+
+		var entitiesElement = waqs.Element("Entities");
+		var entitiesNamespace = entitiesElement.Attribute("NamespaceName").Value;
+		var entitiesWCFNamespaceAttribute = entitiesElement.Attribute("WCFNamespace");
+		namespacesMapping.Add(entitiesNamespace, (entitiesWCFNamespaceAttribute == null ? string.Concat("http://", clientContext.Name, "/Entities") : entitiesWCFNamespaceAttribute.Value));
+
+		var framework = waqs.Element("Framework");
+
+		var fxEntitiesTrackingElement = framework.Element("EntitiesTracking");
+		var fxEntitiesTrackingNamespace = fxEntitiesTrackingElement.Attribute("NamespaceName").Value;
+		if (! namespacesMapping.ContainsKey(fxEntitiesTrackingNamespace))
+		{
+			var fxEntitiesTrackingWCFNamespaceAttribute = fxEntitiesTrackingElement.Attribute("WCFNamespace");
+			namespacesMapping.Add(fxEntitiesTrackingNamespace, (fxEntitiesTrackingWCFNamespaceAttribute == null ? string.Concat("http://WCFAsyncQueryableServices/EntityTracking") : fxEntitiesTrackingWCFNamespaceAttribute.Value));
+		}
+
+		var fxClientContextInterfacesElement = framework.Element("ClientContextInterfaces");
+		var fxClientContextInterfacesElementNamespace = fxClientContextInterfacesElement.Attribute("NamespaceName").Value;
+		var fxClientContextInterfacesElementErrorsNamespace = fxClientContextInterfacesElementNamespace + ".Errors";
+		if (! namespacesMapping.ContainsKey(fxClientContextInterfacesElementErrorsNamespace))
+		{
+			var fxClientContextInterfacesWCFNamespaceAttribute = fxClientContextInterfacesElement.Attribute("WCFNamespace");
+			namespacesMapping.Add(fxClientContextInterfacesElementErrorsNamespace, (fxClientContextInterfacesWCFNamespaceAttribute == null ? "http://WCFAsyncQueryableServices" : fxClientContextInterfacesWCFNamespaceAttribute.Value) + "/Errors");
+		}
+
+		var fxClientContextElement = framework.Element("ClientContext");
+		var fxClientContextElementNamespace = fxClientContextElement.Attribute("NamespaceName").Value;
+		var fxClientContextElementErrorsNamespace = fxClientContextElementNamespace + ".Fault";
+		if (! namespacesMapping.ContainsKey(fxClientContextElementErrorsNamespace))
+		{
+			var fxClientContextWCFNamespaceAttribute = fxClientContextElement.Attribute("WCFNamespace");
+			namespacesMapping.Add(fxClientContextElementErrorsNamespace, (fxClientContextWCFNamespaceAttribute == null ? "http://WCFAsyncQueryableServices" : fxClientContextWCFNamespaceAttribute.Value) + "/Fault");
+		}
+	}
+	WriteClientWCFServiceProxy(wsdlUrl, namespacesMapping, namespaceName + ".ServiceReference");
+}
+#>

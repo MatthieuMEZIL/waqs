@@ -1,0 +1,363 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteClientFxControls(string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxComponentModelNamespace, string clientFxConvertersNamespace, string namespaceName = null)
+{
+CodeGenerationTools code = new CodeGenerationTools(this);
+MetadataLoader loader = new MetadataLoader(this);
+CodeRegion region = new CodeRegion(this, 1);
+if (namespaceName == null)
+	namespaceName = code.VsNamespaceSuggestion();
+
+EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+fileManager.StartNewFile("PaginatedActions.cs");
+WriteHeader(namespaceName, code, "System", "System.Windows", "System.ComponentModel", "System.Windows.Controls.Primitives", clientFxClientContextInterfacesNamespace);
+#>
+public class PaginatedActions
+{
+	public static readonly DependencyProperty GoFirstProperty =
+		DependencyProperty.RegisterAttached("GoFirst", typeof(IPaginatedQuery), typeof(PaginatedActions), new PropertyMetadata(OnGoFirstChanged));
+		
+	public static IPaginatedQuery GetGoFirst(DependencyObject obj)
+	{
+		return (IPaginatedQuery)obj.GetValue(GoFirstProperty);
+	}
+		
+	public static void SetGoFirst(DependencyObject obj, IPaginatedQuery value)
+	{
+		obj.SetValue(GoFirstProperty, value);
+	}
+	
+	private static void OnGoFirstChanged(DependencyObject o, DependencyPropertyChangedEventArgs e)
+	{
+		Create(o, GetGoFirst(o), paginatedQuery => paginatedQuery.PageIndex = 1, paginatedQuery => paginatedQuery.PageIndex > 1);
+	}
+		
+	public static readonly DependencyProperty GoLastProperty =
+		DependencyProperty.RegisterAttached("GoLast", typeof(IPaginatedQuery), typeof(PaginatedActions), new PropertyMetadata(OnGoLastChanged));
+		
+	public static IPaginatedQuery GetGoLast(DependencyObject obj)
+	{
+		return (IPaginatedQuery)obj.GetValue(GoLastProperty);
+	}
+		
+	public static void SetGoLast(DependencyObject obj, IPaginatedQuery value)
+	{
+		obj.SetValue(GoLastProperty, value);
+	}
+	
+	private static void OnGoLastChanged(DependencyObject o, DependencyPropertyChangedEventArgs e)
+	{
+		Create(o, GetGoLast(o), paginatedQuery => paginatedQuery.PageIndex = paginatedQuery.MaxPage, paginatedQuery => paginatedQuery.PageIndex < paginatedQuery.MaxPage);
+	}
+		
+	public static readonly DependencyProperty GoPreviousProperty =
+		DependencyProperty.RegisterAttached("GoPrevious", typeof(IPaginatedQuery), typeof(PaginatedActions), new PropertyMetadata(OnGoPreviousChanged));
+		
+	public static IPaginatedQuery GetGoPrevious(DependencyObject obj)
+	{
+		return (IPaginatedQuery)obj.GetValue(GoPreviousProperty);
+	}
+		
+	public static void SetGoPrevious(DependencyObject obj, IPaginatedQuery value)
+	{
+		obj.SetValue(GoPreviousProperty, value);
+	}
+	
+	private static void OnGoPreviousChanged(DependencyObject o, DependencyPropertyChangedEventArgs e)
+	{
+		Create(o, GetGoPrevious(o), paginatedQuery => paginatedQuery.PageIndex--, paginatedQuery => paginatedQuery.PageIndex > 1);
+	}
+		
+	public static readonly DependencyProperty GoNextProperty =
+		DependencyProperty.RegisterAttached("GoNext", typeof(IPaginatedQuery), typeof(PaginatedActions), new PropertyMetadata(OnGoNextChanged));
+		
+	public static IPaginatedQuery GetGoNext(DependencyObject obj)
+	{
+		return (IPaginatedQuery)obj.GetValue(GoNextProperty);
+	}
+		
+	public static void SetGoNext(DependencyObject obj, IPaginatedQuery value)
+	{
+		obj.SetValue(GoNextProperty, value);
+	}
+		
+	private static void OnGoNextChanged(DependencyObject o, DependencyPropertyChangedEventArgs e)
+	{
+		Create(o, GetGoNext(o), paginatedQuery => paginatedQuery.PageIndex++, paginatedQuery => paginatedQuery.PageIndex < paginatedQuery.MaxPage);
+	}
+			
+	private static void Create(DependencyObject button, IPaginatedQuery paginatedQuery, Action<IPaginatedQuery> action, Func<IPaginatedQuery, bool> canAction)
+	{
+		ButtonBase buttonBase = button as ButtonBase;
+		if (buttonBase == null)
+			throw new InvalidOperationException();
+		if (paginatedQuery == null)
+		{
+			buttonBase.IsEnabled = false;
+			return;
+		}
+		Action enableButton = () => buttonBase.IsEnabled = canAction(paginatedQuery);
+		enableButton();
+		RoutedEventHandler buttonClick = null;
+		buttonClick = delegate { action(paginatedQuery); };
+		buttonBase.Click += buttonClick;
+		Action paginatedQueryPageIndexChanged = delegate { enableButton(); };
+		paginatedQuery.PageIndexChanged += paginatedQueryPageIndexChanged;
+		PropertyChangedEventHandler paginatedQueryPropertyChanged = delegate { enableButton(); };
+		paginatedQuery.PropertyChanged += paginatedQueryPropertyChanged;
+		RoutedEventHandler buttonBaseUnloaded = null;
+		buttonBaseUnloaded = delegate
+		{
+			buttonBase.Click -= buttonClick;
+			paginatedQuery.PageIndexChanged -= paginatedQueryPageIndexChanged;
+			paginatedQuery.PropertyChanged -= paginatedQueryPropertyChanged;
+			buttonBase.Unloaded -= buttonBaseUnloaded;
+		};
+		buttonBase.Unloaded += buttonBaseUnloaded;
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("NavigationPanel.xaml");
+#>
+<UserControl x:Class="<#=namespaceName#>.NavigationPanel"
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:interactivity="clr-namespace:System.Windows.Interactivity;assembly=System.Windows.Interactivity"
+			 xmlns:converters="clr-namespace:<#=clientFxConvertersNamespace#>"
+			 xmlns:local="clr-namespace:<#=namespaceName#>"
+			 mc:Ignorable="d"
+			 d:DesignHeight="48"
+			 d:DesignWidth="400">
+
+	<UserControl.Resources>
+		<converters:IntToVisibilityCollapsedIfZeroConverter x:Key="IntToVisibilityCollapsedIfZeroConverter" />
+	</UserControl.Resources>
+
+	<StackPanel x:Name="LayoutRoot"
+				Background="White"
+				Orientation="Horizontal"
+				Visibility="{Binding Source.PageIndex, Converter={StaticResource ResourceKey=IntToVisibilityCollapsedIfZeroConverter}}">
+		<Button Margin="10"
+				Content="&lt;&lt;"
+				Width="40"
+				local:PaginatedActions.GoFirst="{Binding Source}" />
+		<Button Margin="0,10,10,10"
+				Content="&lt;"
+				Width="40"
+				local:PaginatedActions.GoPrevious="{Binding Source}" />
+		<TextBox Margin="0,10,10,10"
+				 Width="40"
+				 TextAlignment="Right"
+				 Text="{Binding Source.PageIndex, Mode=TwoWay}">
+			<interactivity:Interaction.Behaviors>
+				<local:ValidateBindingOnEnterBehavior />
+			</interactivity:Interaction.Behaviors>
+		</TextBox>
+		<TextBlock Text="/" Margin="5,10" VerticalAlignment="Center" />
+		<TextBlock Text="{Binding Source.MaxPage}"
+				   VerticalAlignment="Center"
+				   Margin="0,10,10,10" />
+		<Button Margin="0,10,10,10"
+				Content="&gt;"
+				Width="40"
+				local:PaginatedActions.GoNext="{Binding Source}" />
+		<Button Margin="0,10,10,10"
+				Content="&gt;&gt;"
+				Width="40"
+				local:PaginatedActions.GoLast="{Binding Source}" />
+	</StackPanel>
+</UserControl>
+<#+
+
+fileManager.StartNewFile("NavigationPanel.cs");
+WriteHeader(namespaceName, code, "System.Windows", "System.Windows.Controls", clientFxClientContextNamespace, clientFxClientContextInterfacesNamespace);
+#>
+public partial class NavigationPanel : UserControl
+{
+	public NavigationPanel()
+	{
+		InitializeComponent();
+		LayoutRoot.DataContext = this;
+	}
+	
+	public IPaginatedQuery Source
+	{
+		get { return (IPaginatedQuery)GetValue(SourceProperty); }
+		set { SetValue(SourceProperty, value); }
+	}
+	public static readonly DependencyProperty SourceProperty = DependencyProperty.Register("Source", typeof(IPaginatedQuery), typeof(NavigationPanel), new PropertyMetadata((s, e) => ((NavigationPanel)s).Source = (IPaginatedQuery)e.NewValue));
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("ValidateBindingOnEnterBehavior.cs");
+WriteHeader(namespaceName, code, "System.Windows.Controls", "System.Windows.Data", "System.Windows.Input", "System.Windows.Interactivity");
+#>
+public class ValidateBindingOnEnterBehavior : Behavior<TextBox>
+{
+	protected override void OnAttached()
+	{
+		base.OnAttached();
+		AssociatedObject.KeyDown += AssociatedObjectKeyDown;
+	}
+
+	private void AssociatedObjectKeyDown(object sender, KeyEventArgs e)
+	{
+		BindingExpression textBinding;
+		if (e.Key == Key.Enter && (textBinding = AssociatedObject.GetBindingExpression(TextBox.TextProperty)) != null)
+			textBinding.UpdateSource();
+	}
+
+	protected override void OnDetaching()
+	{
+		base.OnDetaching();
+		AssociatedObject.KeyDown -= AssociatedObjectKeyDown;
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("MessageBoxService.cs");
+WriteHeader(namespaceName, code, "System.Windows");
+#>
+public class MessageBoxService : <#=clientFxComponentModelNamespace#>.IMessageBoxService
+{
+	public void ShowError(string message)
+	{
+		MessageBox.Show(message);
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+string clientFxClientContextInterfacesNamespaceErrors = clientFxClientContextInterfacesNamespace + ".Errors";
+string convertersNamespace = namespaceName + ".Converters";
+
+fileManager.StartNewFile("ErrorsBehaviors.cs");
+WriteHeader(namespaceName, code, "System.Collections.ObjectModel", "System.Collections.Specialized", "System.ComponentModel", "System.IO", "System.Linq", "System.Reflection", "System.Windows", "System.Windows.Controls", "System.Windows.Data", "System.Windows.Markup", "System.Windows.Media", "System.Xml", clientFxClientContextInterfacesNamespaceErrors);
+#>
+public partial class ErrorsBehaviors
+{
+	public static ObservableCollection<Error> GetErrors(DependencyObject obj)
+	{
+		return (ObservableCollection<Error>)obj.GetValue(ErrorsProperty);
+	}
+
+	public static void SetErrors(DependencyObject obj, ObservableCollection<Error> value)
+	{
+		obj.SetValue(ErrorsProperty, value);
+	}
+
+	// Using a DependencyProperty as the backing store for Errors.  This enables animation, styling, binding, etc...
+	public static readonly DependencyProperty ErrorsProperty =
+		DependencyProperty.RegisterAttached("Errors", typeof(ObservableCollection<Error>), typeof(ErrorsBehaviors), new PropertyMetadata((d, e) =>
+		{
+			var control = d as Control;
+			var errors = e.NewValue as ObservableCollection<Error>;
+			if (control == null || errors == null)
+				return;
+
+			var errorsListBox = (ListBox)XamlReader.Load(new XmlTextReader(new StringReader(string.Concat("<ListBox xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' ><ListBox.ItemTemplate><DataTemplate xmlns:errorsConveters='clr-namespace:<#=convertersNamespace#>;assembly=", Assembly.GetExecutingAssembly().GetName().Name, "'><DataTemplate.Resources><errorsConveters:CritityConverter x:Key='CriticityConverter' /></DataTemplate.Resources><Grid><Grid.ColumnDefinitions><ColumnDefinition Width='15' /><ColumnDefinition Width='5' /><ColumnDefinition /></Grid.ColumnDefinitions><Image Source='{Binding Criticity, Converter={StaticResource CriticityConverter}}'/><TextBlock Grid.Column='2' Text='{Binding Message}' /></Grid></DataTemplate></ListBox.ItemTemplate></ListBox>"))));
+			var errorsCollectionViewSource = new CollectionViewSource { Source = errors };
+			errorsCollectionViewSource.SortDescriptions.Add(new SortDescription("Criticity", ListSortDirection.Descending));
+			errorsListBox.SetBinding(ListBox.ItemsSourceProperty, new Binding { Source = errorsCollectionViewSource });
+			var toolTip = new ToolTip { Content = errorsListBox };
+			ToolTipService.SetToolTip(control, toolTip);
+			ToolTipService.SetIsEnabled(control, false);
+
+			var oldBorderThickness = control.BorderThickness;
+			var oldBorderBrush = control.BorderBrush;
+			NotifyCollectionChangedEventHandler errorsCollectionChanged = (_, __) =>
+				{
+					var maxCriticity = errors.Select(er => er.Criticity).OrderByDescending(c => c).FirstOrDefault();
+					bool done = false;
+					SetControlStyle(control, errors, maxCriticity, ref done);
+					if (!done)
+					{
+						switch (maxCriticity)
+						{
+							case Criticity.Error:
+							case Criticity.Mandatory:
+								if (control.BorderThickness.Left == 0 && control.BorderThickness.Right == 0 && control.BorderThickness.Top == 0 && control.BorderThickness.Bottom == 0)
+									control.BorderThickness = new Thickness(3);
+								control.BorderBrush = Brushes.Red;
+								ToolTipService.SetIsEnabled(control, true);
+								break;
+							case Criticity.Warning:
+								if (control.BorderThickness.Left == 0 && control.BorderThickness.Right == 0 && control.BorderThickness.Top == 0 && control.BorderThickness.Bottom == 0)
+									control.BorderThickness = new Thickness(3);
+								control.BorderBrush = Brushes.Orange;
+								ToolTipService.SetIsEnabled(control, true);
+								break;
+							case Criticity.Information:
+								control.BorderThickness = oldBorderThickness;
+								control.BorderBrush = oldBorderBrush;
+								ToolTipService.SetIsEnabled(control, true);
+								break;
+							case Criticity.None:
+								control.BorderThickness = oldBorderThickness;
+								control.BorderBrush = oldBorderBrush;
+								ToolTipService.SetIsEnabled(control, false);
+								break;
+						}
+					}
+				};
+			errors.CollectionChanged += errorsCollectionChanged;
+			RoutedEventHandler controlUnloaded = null;
+			controlUnloaded = (_, __) =>
+				{
+					control.Unloaded -= controlUnloaded;
+					errors.CollectionChanged -= errorsCollectionChanged;
+				};
+			control.Unloaded += controlUnloaded;
+		}));
+
+	static partial void SetControlStyle(Control control, ObservableCollection<Error> errors, Criticity maxCriticity, ref bool done);
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("CritityConverter.cs");
+WriteHeader(convertersNamespace, code, "System", "System.Drawing", "System.Globalization", "System.Windows", "System.Windows.Data", "System.Windows.Interop", "System.Windows.Media.Imaging", clientFxClientContextInterfacesNamespaceErrors);
+#>
+public class CritityConverter : IValueConverter
+{
+	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		Icon icon;
+		switch ((Criticity)value)
+		{
+			case Criticity.Error:
+			case Criticity.Mandatory:
+				icon = SystemIcons.Error;
+				break;
+			case Criticity.Warning:
+				icon = SystemIcons.Warning;
+				break;
+			case Criticity.Information:
+				icon = SystemIcons.Information;
+				break;
+			default:
+				return null;
+		}
+		return Imaging.CreateBitmapSourceFromHIcon(icon.Handle, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+	}
+
+	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		throw new NotImplementedException();
+	}
+}
+<#+
+WriteFooter(convertersNamespace);
+
+fileManager.Process();
+}
+#>

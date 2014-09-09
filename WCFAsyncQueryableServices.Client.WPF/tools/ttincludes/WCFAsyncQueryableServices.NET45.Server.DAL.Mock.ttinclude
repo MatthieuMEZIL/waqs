@@ -1,0 +1,19 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+private void CompleteContextMockUsings(List<string> contextMockUsings)
+{
+    contextMockUsings.Add("System.Threading.Tasks");
+}
+
+private void CompleteContextMock()
+{
+#>
+
+    Task IDataContext.SaveChangesAsync(bool acceptChanges)
+    {
+        return Task.Run(() => SaveChanges(acceptChanges));
+    }
+<#+
+}
+#>

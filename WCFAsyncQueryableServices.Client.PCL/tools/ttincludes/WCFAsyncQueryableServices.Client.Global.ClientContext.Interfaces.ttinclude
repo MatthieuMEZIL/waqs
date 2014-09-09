@@ -1,0 +1,29 @@
+<#@ template language="C#" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#@ include file="WCFAsyncQueryableServices.Client.Global.ClientContext.Base.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClientGlobalClientContextInterfaces(string clientFxClientContextInterfacesNamespace, string namespaceName = null, bool useAsyncPrefix = true)
+{
+    string asyncSuffix = useAsyncPrefix ? "Async" : "";
+    CodeGenerationTools code = new CodeGenerationTools(this);
+
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    fileManager.StartNewFile("IGlobalClientContext.cs");
+    WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Threading.Tasks", clientFxClientContextInterfacesNamespace);
+#>
+public partial interface IGlobalClientContext
+{
+    Task SaveChanges<#=asyncSuffix#>(IEnumerable<IClientContext> clientContexts, bool validate = false);
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.Process();
+}
+#>

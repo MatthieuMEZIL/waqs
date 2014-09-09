@@ -1,0 +1,211 @@
+<#@ include file="WCFAsyncQueryableServices.Service.Base.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerWCFService(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath entitiesPath, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxWCFServiceContractNamespace, string serverFxServiceInterfacesNamespace, string serverFxWCFServiceNamespace, string serverFxSerializableExpressionsNamespace, string serverEntitiesNamespace, string serverServiceInterfacesNamespace, string serverWCFServiceContractNamespace, string namespaceName = null)
+{
+	var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+	var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+	var code = edmxElements.Code;
+	var dtoTypes = GetClasses(dtoPathes).ToList();
+	var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Server);
+	var edmxName = edmxElements.EdmxName;
+
+	IEnumerable<string> usings = new string[] { "System", "System.Collections.Generic", "System.Linq", "System.ServiceModel.Activation", serverFxCommonNamespace, serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxWCFServiceNamespace, serverFxWCFServiceContractNamespace, serverEntitiesNamespace, serverServiceInterfacesNamespace, serverWCFServiceContractNamespace };
+	List<string> specificationMethodsUsings;
+	if (specificationsElements.Usings.TryGetValue("@ServiceContract", out specificationMethodsUsings))
+		usings = usings.Union(specificationMethodsUsings);
+	fileManager.StartNewFile(edmxName + "WCFService.cs");
+	WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
+#>
+[AspNetCompatibilityRequirements(RequirementsMode = AspNetCompatibilityRequirementsMode.Required)]
+public partial class <#=edmxName#>WCFService : I<#=edmxName#>WCFService
+{	
+	private Func<I<#=edmxName#>Service> _serviceFactory;
+	private Dictionary<Type, IExceptionDetailFactory> _exceptionDetailFactories;
+
+	public <#=edmxName#>WCFService(Func<I<#=edmxName#>Service> serviceFactory, <#=serverFxCommonNamespace#>.IExceptionDetailFactory[] exceptionDetailFactories)
+	{
+		_serviceFactory = serviceFactory;
+		_exceptionDetailFactories = exceptionDetailFactories.ToDictionary(ed => ed.Type);
+	}
+	
+	private void TryRethrowFault(Action action)
+	{
+		Action<Action> metaRethrow = null;
+		TryMetaRethrow(ref metaRethrow);
+		if (metaRethrow == null)
+			<#=serverFxWCFServiceNamespace#>.WCFService.TryRethrowFault(action, _exceptionDetailFactories, CreateFaultDetail, fd => DefineFaultDetail(fd));
+		else
+			metaRethrow(() => <#=serverFxWCFServiceNamespace#>.WCFService.TryRethrowFault(action, _exceptionDetailFactories, CreateFaultDetail, fd => DefineFaultDetail(fd)));
+	}
+	partial void TryMetaRethrow(ref Action<Action> action);
+	
+	private T TryRethrowFault<T>(Func<T> action)
+	{
+		Func<Func<T>, T> metaRethrow = null;
+		TryMetaRethrow(ref metaRethrow);
+		if (metaRethrow == null)
+			return <#=serverFxWCFServiceNamespace#>.WCFService.TryRethrowFault(action, _exceptionDetailFactories, CreateFaultDetail, fd => DefineFaultDetail(fd));
+		return metaRethrow(() => <#=serverFxWCFServiceNamespace#>.WCFService.TryRethrowFault(action, _exceptionDetailFactories, CreateFaultDetail, fd => DefineFaultDetail(fd)));
+	}
+	partial void TryMetaRethrow<T>(ref Func<Func<T>, T> action);
+
+	private FaultDetail CreateFaultDetail(<#=serverFxCommonNamespace#>.IExceptionDetail exceptionDetail)
+	{
+		var entities = exceptionDetail.Entities.ToList();
+		if (entities.Count == 0)
+			return new FaultDetail { ErrorMessage = exceptionDetail.Message };
+		return new <#=edmxName#>FaultDetailEntities { ErrorMessage = exceptionDetail.Message, Entities = entities };
+	}
+
+	partial void DefineFaultDetail(FaultDetail faultDetail);
+
+<#+
+	foreach (EdmFunction edmFunction in edmxElements.Container.FunctionImports.Where(f => IsPublic(f)))
+	{
+		TypeUsage returnType;
+		var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+		if (returnType == null)
+			continue;
+		FunctionImportParameter[] parameters;
+		var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+#>
+	public List<<#=returnTypeName#>> <#=code.Escape(edmFunction)#>(<#=parametersAsString#>)
+	{
+		return TryRethrowFault(() => 
+			{
+				using (var service = _serviceFactory())
+				{
+					return service.<#=code.Escape(edmFunction)#>(<#=String.Join(", ", parameters.Select(p => p.FunctionParameterName).ToArray())#>);
+				}
+			});
+	}
+
+<#+
+	}
+#>
+
+	public <#=edmxName#>QueryResult Execute(QuerySerialization query)
+	{
+		Executing(query);
+		return TryRethrowFault(() => 
+			{
+				using (var service = _serviceFactory())
+				{
+					return service.Execute(query);
+				}
+			});
+	}
+	partial void Executing(QuerySerialization query);
+
+	public <#=edmxName#>QueriesResult ExecuteMany(QueriesSerialization queries)
+	{
+		Executing(queries);
+		return TryRethrowFault(() => 
+			{
+				using (var service = _serviceFactory())
+				{
+					return service.ExecuteMany(queries);
+				}
+			});
+	}
+	partial void Executing(QueriesSerialization queries);
+
+	public <#=edmxName#>QueryResultPage LoadPage(int pageSize, SerializableExpression queryExpression, string[] withSpecificationsProperties, LoadPageParameter[] identifiers)
+	{
+		LoadingPage(pageSize, queryExpression, withSpecificationsProperties, identifiers);
+		return TryRethrowFault(() =>
+		{
+			using (var service = _serviceFactory())
+			{
+				return service.LoadPage(pageSize, queryExpression, withSpecificationsProperties, identifiers);
+			}
+		});
+	}
+	partial void LoadingPage(int pageSize, SerializableExpression queryExpression, string[] withSpecificationsProperties, LoadPageParameter[] identifiers);
+
+	public DateTime GetDbDateTime()
+	{
+		return TryRethrowFault(() => 
+			{
+				using (var service = _serviceFactory())
+				{
+					return service.GetDbDateTime();
+				}
+			});
+	}
+
+	public <#=edmxName#>SerializableContext SaveChanges(<#=edmxName#>SerializableContext clientContext)
+	{
+		SavingChanges(clientContext);
+		return TryRethrowFault(() => 
+			{
+				using (var service = _serviceFactory())
+				{
+<#+
+	foreach (EntitySet entitySet in edmxElements.EntitySets.Where(es => IsPublic(es.ElementType)))
+	{
+		EntityType entity = entitySet.ElementType;
+#>
+					foreach (var entity in clientContext.<#=code.Escape(entitySet)#>)
+						service.ApplyChanges(entity);
+<#+
+	}
+#>
+					service.SaveChanges();
+					return clientContext;
+				}
+			});
+	}
+	partial void SavingChanges(<#=edmxName#>SerializableContext clientContext);
+<#+
+	foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+	{
+		string typeName = edmxElements.Code.Escape(edmType);
+#>
+
+	public List<Error> Validate(<#=typeName#> entity)
+	{
+		return TryRethrowFault(() => 
+			{
+				using (var service = _serviceFactory())
+				{
+					return service.Validate(entity).ToList();
+				}
+			});
+	}
+<#+
+	}
+	foreach (var specificationServiceMethod in specificationsElements.AllServiceMethods)
+		WriteServiceMethod(specificationServiceMethod, specificationsElements, edmxElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, WriteServiceMethod, dtoTypes: dtoTypes);
+#>
+}
+
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+	fileManager.Process();
+}
+
+void WriteServiceMethod(MethodDeclarationSyntax specificationServiceMethod, IEnumerable<ParameterSyntax> parameters, TypeSyntax returnType, ISemanticModel semanticModel, SpecificationsElements specificationsElements, EdmxElements edmxElements, string contextName, string serviceName, List<MethodSymbol> addedSubMethods, List<MethodDeclarationSyntax> methods, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, IEnumerable<TypeSymbol> dtos, DTOAndInterfacesTypesRewriter dtoAndInterfacesTypesRewriter)
+{
+#>
+
+	public <#=SyntaxFactory.MethodDeclaration(returnType, specificationServiceMethod.Identifier.ValueText)
+	.WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList<ParameterSyntax>(parameters.Select(p => SyntaxFactory.Parameter(p.Identifier).WithType(p.Type)), parameters.Skip(1).Select(v => SyntaxFactory.Token(SyntaxKind.CommaToken))))).NormalizeWhitespace().ToString()#>
+	{
+<#+
+		PredefinedTypeSyntax pts = specificationServiceMethod.ReturnType as PredefinedTypeSyntax;
+		bool returnVoid = pts != null && GetKind(pts.Keyword) == SyntaxKind.VoidKeyword;
+#>
+		<#=returnVoid ? "" : "return "#>TryRethrowFault(() => 
+			{
+				using (var service = _serviceFactory())
+				{
+					<#=returnVoid ? "" : "return "#>service.<#=specificationServiceMethod.Identifier.ValueText#>(<#=parameters.Any() ? parameters.Select(p => p.Identifier.ValueText).Aggregate((p1, p2) => string.Concat(p1, ", ", p2)) : ""#>)<#=Regex.IsMatch(semanticModel.GetSymbolInfo(specificationServiceMethod.ReturnType).Symbol.ToString(), "^System.Collections.Generic.IEnumerable<.*?>$") ? ".ToList()" : ""#>;
+				}
+			});
+	}
+<#+
+}
+#>

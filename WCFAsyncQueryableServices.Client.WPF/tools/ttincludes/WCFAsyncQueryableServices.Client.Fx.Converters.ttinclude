@@ -1,0 +1,92 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteClientFxConverters(string namespaceName = null)
+{
+CodeGenerationTools code = new CodeGenerationTools(this);
+MetadataLoader loader = new MetadataLoader(this);
+CodeRegion region = new CodeRegion(this, 1);
+if (namespaceName == null)
+	namespaceName = code.VsNamespaceSuggestion();
+
+EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+fileManager.StartNewFile("BoolToVisibilityConverter.cs");
+WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows", "System.Windows.Data");
+#>
+public class BoolToVisibilityConverter : IValueConverter
+{
+	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		bool boolValue = (bool)value;
+		if (parameter != null && ((string)parameter).ToLower() == "false")
+			boolValue = !boolValue;
+		return boolValue ? Visibility.Visible : Visibility.Collapsed;
+	}
+
+	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		throw new NotImplementedException();
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("DateConverter.cs");
+WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows.Data");
+#>
+public class DateConverter : IValueConverter
+{
+	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		return ((DateTime)value).ToShortDateString();
+	}
+
+	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		return DateTime.Parse((string)value);
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("TimeConverter.cs");
+WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows.Data");
+#>
+public class TimeConverter : IValueConverter
+{
+	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		return ((DateTime)value).TimeOfDay;
+	}
+
+	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		throw new NotImplementedException();
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IntToVisibilityCollapsedIfZeroConverter.cs");
+WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows", "System.Windows.Data");
+#>
+public class IntToVisibilityCollapsedIfZeroConverter : IValueConverter
+{
+	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		return (int)value == 0 ? Visibility.Collapsed : Visibility.Visible;
+	}
+
+	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		throw new NotImplementedException();
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.Process();
+}
+#>

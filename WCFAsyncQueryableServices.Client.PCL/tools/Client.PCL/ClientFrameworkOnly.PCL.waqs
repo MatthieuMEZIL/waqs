@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<WCFAsyncQueryableServices.Client>
+  <Framework>
+    <ComponentModel NamespaceName="WCFAsyncQueryableServices.ComponentModel" Generate="true" />
+    <EntitiesTracking NamespaceName="WCFAsyncQueryableServices.EntitiesTracking" Generate="true"/>
+    <ClientContext NamespaceName="WCFAsyncQueryableServices.ClientContext" Generate="true" />
+    <ClientContextInterfaces NamespaceName="WCFAsyncQueryableServices.ClientContext.Interfaces" Generate="true" />
+    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="true" />
+    <System NamespaceName="WCFAsyncQueryableServices.Fx.System" Generate="true" />
+  </Framework>
+</WCFAsyncQueryableServices.Client>

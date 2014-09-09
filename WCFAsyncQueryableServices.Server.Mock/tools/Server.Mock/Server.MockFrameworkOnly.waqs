@@ -1,0 +1,9 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<WCFAsyncQueryableServices.Server EdmxPath="$edmxPath$">
+  <Framework>
+    <Common NamespaceName="WCFAsyncQueryableServices.Common" Generate="false" />
+    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="false" />
+    <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" Generate="false" />
+    <DALMock NamespaceName="WCFAsyncQueryableServices.DAL.Mock" />
+  </Framework>
+</WCFAsyncQueryableServices.Server>

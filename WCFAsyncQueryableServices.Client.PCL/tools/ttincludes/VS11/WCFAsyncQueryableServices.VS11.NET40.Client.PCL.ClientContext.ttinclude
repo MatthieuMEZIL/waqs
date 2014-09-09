@@ -1,0 +1,19 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Client.PCL.ClientContext.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void ApplyBackground(string @delegate)
+{
+#><#=@delegate#><#+
+}
+
+void DispatcherInvoke(string body, bool addSemiColon = true, string delegateType = "Action")
+{
+#>UIThread.Dispatcher.Invoke((<#=delegateType#>)(() => <#=body#>))<#=addSemiColon ? ";" : ""#><#+
+}
+
+void DispatcherCatchInvoke(string body, bool addSemiColon = true, string delegateType = "Action")
+{
+#>UIThread.Dispatcher.Invoke((<#=delegateType#>)(() => <#=body#>))<#=addSemiColon ? ";" : ""#><#+
+}
+#>

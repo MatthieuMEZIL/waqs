@@ -1,0 +1,64 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string clientType = "PCL";
+
+string fxSystemNamespaceName;
+bool generateFxClientContextInterfaces = false;
+
+void SetFxClientContextInterfaces()
+{
+    generateFxClientContextInterfaces = true;
+}
+
+void WriteFxControls(EntityFrameworkTemplateFileManager fileManager, XElement fx, string relativePath, string merge)
+{
+}
+
+void WriteCustomFxClientBeginning(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, XElement fx, string relativePath, string merge)
+{
+    var fxSystem = fx.Element("System");
+    if (fxSystem != null)
+    {
+        var fxSystemGenerateAttribute = fxSystem.Attribute("Generate");
+        var fxSystemNamespaceAttribute = fxSystem.Attribute("NamespaceName");
+        if (fxSystemNamespaceAttribute == null)
+            fxSystemNamespaceName = "WCFAsyncQueryableServices.Fx.System";
+        else
+        {
+            fxSystemNamespaceName = fxSystemNamespaceAttribute.Value;
+            expressionVisitorNamespace = string.Concat("\"", fxSystemNamespaceName, ".Linq.Expressions\"");
+        }
+        if (fxSystemGenerateAttribute == null || fxSystemGenerateAttribute.Value != "false")
+        {
+            fileManager.StartNewFile("WCFAsyncQueryableServices.Client.PCL.Fx.System.tt");
+#>
+<#=string.Format("{0}#@ include file=\"{5}WCFAsyncQueryableServices.{4}.{3}.Client.PCL.Fx.System{6}.ttinclude\"#{1}{0}#WriteClientPCLFxSystem(\"{2}\");#{1}", "<", ">", fxSystemNamespaceName,  netVersion, vsVersion, relativePath, merge)#>
+<#+
+        }
+    }
+}
+
+void WriteCustomFxClientEnding(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, XElement fx, string relativePath, string merge)
+{
+    if (fxSystemNamespaceName != null && generateFxClientContextInterfaces && fxClientContextInterfacesNamespaceName != null)
+    {
+        fileManager.StartNewFile("SerializableType.PCL.cs");
+        string expressionSerializationNamespace = fxClientContextInterfacesNamespaceName + ".ExpressionSerialization";
+        WriteHeader(expressionSerializationNamespace, code, "System", "System.Linq", fxSystemNamespaceName);
+#>
+partial class SerializableType
+{
+    partial void ReplaceType(ref Type type)
+    {
+        var equivalentTypeAttribute = type.GetCustomAttributes(typeof(EquivalentTypeAttribute), false).OfType<EquivalentTypeAttribute>().FirstOrDefault();
+        if (equivalentTypeAttribute != null)
+            type = equivalentTypeAttribute.Type;
+    }    
+}
+<#+
+        WriteFooter(expressionSerializationNamespace);
+    }
+}
+#>

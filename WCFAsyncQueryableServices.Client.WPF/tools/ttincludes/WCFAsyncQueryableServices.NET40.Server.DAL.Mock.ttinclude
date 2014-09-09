@@ -1,0 +1,11 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+private void CompleteContextMockUsings(List<string> contextMockUsings)
+{
+}
+
+private void CompleteContextMock()
+{
+}
+#>

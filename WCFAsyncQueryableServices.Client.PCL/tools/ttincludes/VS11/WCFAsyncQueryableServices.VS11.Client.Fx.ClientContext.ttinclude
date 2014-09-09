@@ -1,0 +1,13 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.Fx.ClientContext.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void GetSerializableConstantExpressionCustomValueConversion()
+{
+#>
+			if (_value is Enum)
+				return (int)_value;
+<#+
+}
+#>

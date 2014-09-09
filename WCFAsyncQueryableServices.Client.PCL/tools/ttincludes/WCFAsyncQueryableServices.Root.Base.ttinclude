@@ -1,0 +1,49 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+List<SpecificationPath> GetSpecificationsPathes(XElement specifications)
+{
+	var specificationPathes = new List<SpecificationPath>();
+	if (specifications != null)
+		foreach (var specification in specifications.Elements("Specification"))
+		{
+			var specificationPath = GetSpecificationPath(specification);
+			if (specificationPath != null)
+				specificationPathes.Add(specificationPath);
+		}
+	return specificationPathes;
+}
+
+SpecificationPath GetSpecificationPath(XElement element)
+{
+	var slnPathAttribute = element.Attribute("SlnFilePath");
+	var csprojPathAttribute = element.Attribute("CsprojPath");
+	var folderPathAttribute = element.Attribute("FolderPath");
+	if (! (slnPathAttribute == null || csprojPathAttribute == null || folderPathAttribute == null))
+		return new SpecificationPath { Sln = slnPathAttribute.Value, Csproj = csprojPathAttribute.Value, Folder = folderPathAttribute.Value };
+	return null;
+}
+
+void FillSpecifications(List<SpecificationPath> specificationPathes, StringBuilder sb)
+{
+	sb.Append("new SpecificationPath[] { ");
+	foreach (var specificationPath in specificationPathes)
+	{
+		FillSpecification(specificationPath, sb);
+		sb.Append(", ");
+	}
+	sb.Append(" }");
+}
+
+void FillSpecification(SpecificationPath specificationPath, StringBuilder sb)
+{
+	sb.Append("new SpecificationPath { Sln = @\"");
+	sb.Append(specificationPath.Sln);
+	sb.Append("\", Csproj = @\"");
+	sb.Append(specificationPath.Csproj);
+	sb.Append("\", Folder = @\"");
+	sb.Append(specificationPath.Folder);
+	sb.Append("\"}");
+}
+#>

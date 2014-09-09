@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Client.PCL.Global.WCFServiceProxy.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.VS11.NET45.Client.PCL.WCFServiceProxy.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

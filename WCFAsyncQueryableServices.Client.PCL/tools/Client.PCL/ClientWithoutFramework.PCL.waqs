@@ -1,0 +1,29 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<WCFAsyncQueryableServices.Client EdmxPath="$edmxPath$">
+  <Specifications>
+    <Specification SlnFilePath="$SpecificationsSlnFilePath$" CsprojPath="$SpecificationsCsprojPath$" FolderPath="$SpecificationsFolderPath$" />
+  </Specifications>
+  <DTOs>
+    <DTO SlnFilePath="$DTOSlnFilePath$" CsprojPath="$DTOCsprojPath$" FolderPath="$DTOFolderPath$" />
+  </DTOs>
+  <Entities UTC="false" />
+  <ClientContext WSDL="$svcUrl$?wsdl" />
+  <ClientContextInterfaces />
+  <Framework>
+    <ComponentModel NamespaceName="WCFAsyncQueryableServices.ComponentModel" Generate="false" />
+    <EntitiesTracking NamespaceName="WCFAsyncQueryableServices.EntitiesTracking" Generate="false"/>
+    <ClientContext NamespaceName="WCFAsyncQueryableServices.ClientContext" Generate="false" />
+    <ClientContextInterfaces NamespaceName="WCFAsyncQueryableServices.ClientContext.Interfaces" Generate="false" />
+    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="false" />
+    <System NamespaceName="WCFAsyncQueryableServices.Fx.System" Generate="false" />
+  </Framework>
+  <WCFAsyncQueryableServices.Server>
+    <Entities SlnFilePath="$ServerEntitiesSlnFilePath$" CsprojPath="$ServerEntitiesCsprojPath$" FolderPath="$ServerEntitiesFolderPath$" NamespaceName="$ServerEntitiesNamespace$" />
+    <Framework>
+      <Common NamespaceName="WCFAsyncQueryableServices.Common" />
+      <Specifications NamespaceName="WCFAsyncQueryableServices.Specifications" />
+      <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" />
+      <ServiceInterfaces NamespaceName="WCFAsyncQueryableServices.Service.Interfaces" />
+    </Framework>
+  </WCFAsyncQueryableServices.Server>
+</WCFAsyncQueryableServices.Client>

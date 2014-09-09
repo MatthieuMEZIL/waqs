@@ -1,0 +1,690 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteSerializableExpressions(string serverFxEntitiesNamespace, string serverFxDALnterfacesNamespace, string namespaceName = null)
+{
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    MetadataLoader loader = new MetadataLoader(this);
+    CodeRegion region = new CodeRegion(this, 1);
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    fileManager.StartNewFile("ISerializableExpressionConverter.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq.Expressions", "System.Reflection", serverFxDALnterfacesNamespace);
+#>
+public interface ISerializableExpressionConverter
+{
+    IDataContext Context { get; }
+    Type DataContextType { get; }
+    Type GetTypeFromWCFNamespace(SerializableType serializableType, string typeName);
+    Type GetTypeInLINQ(Type type);
+    Expression GetEntitySetExpression(string entitySetName);
+    Expression GetCustomPropertyExpression(Expression expression, PropertyInfo propertyInfo);
+    Type GetInheritedType(Type type);
+    Type GetWithType(Type type);
+    Type GetBaseType(Type type);
+    object GetBaseObject(object inheritedObject);
+    Expression GetWithBaseExpression(Type parameterType, IEnumerable<string> withSpecificationsProperties);
+    IEnumerable<Type> GetEntityOrComplexTypes();
+    IEnumerable<PropertyInfo> GetScalarAndComplexProperties(Type type);
+    IEnumerable<NavigationProperty> GetNavigationProperties(Type type);
+    Expression GetSpecificationLINQExpression(PropertyInfo property, Type type = null);
+    Expression GetSpecificationLINQExpression(MethodInfo method, List<Expression> arguments, Type type = null);
+    IEnumerable<IEnumerable<PropertyInfo>> GetDependentProperties(PropertyInfo property);
+    IEnumerable<IEnumerable<PropertyInfo>> GetDependentProperties(MethodInfo method);
+    PropertyInfo GetProperty(Type type, string propertyName);
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("NavigationProperty.cs");
+    WriteHeader(namespaceName, code, "System.Reflection");
+#>
+public class NavigationProperty
+{
+    public NavigationProperty(PropertyInfo property, Multiplicity multiplicity)
+    {
+        Property = property;
+        Multiplicity = multiplicity;
+    }
+    public PropertyInfo Property { get; private set; }
+    public Multiplicity Multiplicity { get; private set; }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("Multiplicity.cs");
+    WriteHeader(namespaceName, code);
+#>
+public enum Multiplicity
+{
+    ZeroOne,
+    One,
+    Many	
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("SerializableExpressionVisitor.cs");
+    WriteHeader(namespaceName, code);
+#>
+public class SerializableExpressionVisitor
+{
+    public virtual void Visit(SerializableExpression expression)
+    {
+        if (expression == null)
+            return;
+        expression.Visit(this);
+    }
+
+    protected internal virtual void VisitTypeBinary(SerializableTypeBinaryExpression expression)
+    {
+        Visit(expression.Expression);
+    }
+
+    protected internal virtual void VisitBinary(SerializableBinaryExpression expression)
+    {
+        Visit(expression.Left);
+        Visit(expression.Right);
+    }
+
+    protected internal virtual void VisitConstant(SerializableConstantExpression expression)
+    {
+    }
+
+    protected internal virtual void VisitConstructor(SerializableConstructorExpression expression)
+    {
+        foreach (var arg in expression.Arguments)
+            Visit(arg);
+    }
+
+    protected internal virtual void VisitEntitySet(SerializableEntitySetExpression expression)
+    {
+    }
+
+    protected internal virtual void VisitLambda(SerializableLambdaExpression expression)
+    {
+        foreach (var parameter in expression.Parameters)
+            Visit(parameter);
+        Visit(expression.Body);
+    }
+
+    protected internal virtual void VisitMethodCall(SerializableMethodCallExpression expression)
+    {
+        Visit(expression.Source);
+        foreach (var parameter in expression.Parameters)
+            Visit(parameter);
+    }
+
+    protected internal virtual void VisitPropertyGetter(SerializablePropertyGetterExpression expression)
+    {
+        Visit(expression.Source);
+    }
+
+    protected internal virtual void VisitPropertySetter(SerializablePropertySetterExpression expression)
+    {
+        Visit(expression.Source);
+        Visit(expression.Value);
+    }
+
+    protected internal virtual void VisitMemberInit(SerializableMemberInitExpression expression)
+    {
+        Visit(expression.Constructor);
+        foreach (var setter in expression.Setters)
+            Visit(setter);
+    }
+
+    protected internal virtual void VisitParameter(SerializableParameterExpression expression)
+    {
+    }
+
+    protected internal virtual void VisitUnary(SerializableUnaryExpression expression)
+    {
+        Visit(expression.Operand);
+    }
+
+    protected internal virtual void VisitConditional(SerializableConditionalExpression expression)
+    {
+        Visit(expression.TestExpression);
+        Visit(expression.IfTrueExpression);
+        Visit(expression.IfFalseExpression);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableTypeBinaryExpression.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableTypeBinaryExpression : SerializableExpression
+{
+    [DataMember]
+    public SerializableExpression Expression { get; set; }
+    [DataMember]
+    public SerializableType TypeOperand { get; set; }
+    [DataMember]
+    public string NodeType { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitTypeBinary(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableBinaryExpression.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableBinaryExpression : SerializableExpression
+{
+    [DataMember]
+    public SerializableExpression Left { get; set; }
+    [DataMember]
+    public SerializableExpression Right { get; set; }
+    [DataMember]
+    public string NodeType { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitBinary(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableConstantExpression.cs");
+WriteHeader(namespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+[KnownType(typeof(int))]
+[KnownType(typeof(uint))]
+[KnownType(typeof(short))]
+[KnownType(typeof(ushort))]
+[KnownType(typeof(byte))]
+[KnownType(typeof(long))]
+[KnownType(typeof(ulong))]
+[KnownType(typeof(decimal))]
+[KnownType(typeof(double))]
+[KnownType(typeof(char))]
+[KnownType(typeof(DateTime))]
+[KnownType(typeof(DateTimeOffset))]
+[KnownType(typeof(TimeSpan))]
+[KnownType(typeof(int?))]
+[KnownType(typeof(uint?))]
+[KnownType(typeof(short?))]
+[KnownType(typeof(ushort?))]
+[KnownType(typeof(byte?))]
+[KnownType(typeof(long?))]
+[KnownType(typeof(ulong?))]
+[KnownType(typeof(decimal?))]
+[KnownType(typeof(double?))]
+[KnownType(typeof(char?))]
+[KnownType(typeof(DateTime?))]
+[KnownType(typeof(DateTimeOffset?))]
+[KnownType(typeof(TimeSpan?))]
+[KnownType(typeof(string))]
+[KnownType(typeof(int[]))]
+[KnownType(typeof(uint[]))]
+[KnownType(typeof(short[]))]
+[KnownType(typeof(ushort[]))]
+[KnownType(typeof(byte[]))]
+[KnownType(typeof(long[]))]
+[KnownType(typeof(ulong[]))]
+[KnownType(typeof(decimal[]))]
+[KnownType(typeof(double[]))]
+[KnownType(typeof(char[]))]
+[KnownType(typeof(DateTime[]))]
+[KnownType(typeof(DateTimeOffset[]))]
+[KnownType(typeof(TimeSpan[]))]
+[KnownType(typeof(int?[]))]
+[KnownType(typeof(uint?[]))]
+[KnownType(typeof(short?[]))]
+[KnownType(typeof(ushort?[]))]
+[KnownType(typeof(byte?[]))]
+[KnownType(typeof(long?[]))]
+[KnownType(typeof(ulong?[]))]
+[KnownType(typeof(decimal?[]))]
+[KnownType(typeof(double?[]))]
+[KnownType(typeof(char?[]))]
+[KnownType(typeof(DateTime?[]))]
+[KnownType(typeof(DateTimeOffset?[]))]
+[KnownType(typeof(TimeSpan?[]))]
+[KnownType(typeof(string[]))]
+public class SerializableConstantExpression : SerializableExpression
+{
+    [DataMember]
+    public object Value { get; set; }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitConstant(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableConstructorExpression.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Linq", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableConstructorExpression : SerializableExpression
+{
+    [DataMember]
+    public SerializableType Type { get; set; }
+    [DataMember]
+    public List<SerializableType> ArgumentTypes { get; set; }
+    [DataMember]
+    public List<SerializableExpression> Arguments { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitConstructor(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableEntitySetExpression.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableEntitySetExpression : SerializableExpression
+{
+    [DataMember]
+    public string EntitySetName { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitEntitySet(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableExpression.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+[KnownType(typeof(SerializableBinaryExpression))]
+[KnownType(typeof(SerializableUnaryExpression))]
+[KnownType(typeof(SerializableEntitySetExpression))]
+[KnownType(typeof(SerializableMemberExpression))]
+[KnownType(typeof(SerializableMethodCallExpression))]
+[KnownType(typeof(SerializablePropertyGetterExpression))]
+[KnownType(typeof(SerializablePropertySetterExpression))]
+[KnownType(typeof(SerializableConstructorExpression))]
+[KnownType(typeof(SerializableLambdaExpression))]
+[KnownType(typeof(SerializableParameterExpression))]
+[KnownType(typeof(SerializableConstantExpression))]
+[KnownType(typeof(SerializableMemberInitExpression))]
+[KnownType(typeof(SerializableConditionalExpression))]
+[KnownType(typeof(SerializableTypeBinaryExpression))]
+public abstract class SerializableExpression
+{
+    protected internal abstract void Visit(SerializableExpressionVisitor visitor);
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableExpressionReference.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+internal class SerializableExpressionReference
+{
+    public SerializableExpression Expression { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableLambdaExpression.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableLambdaExpression : SerializableExpression
+{
+    [DataMember]
+    public List<SerializableParameterExpression> Parameters { get; set; }
+    [DataMember]
+    public SerializableType ReturnType { get; set; }
+    [DataMember]
+    public SerializableExpression Body { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitLambda(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableMemberExpression.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization", "System.Reflection");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+[KnownType(typeof(SerializableMethodCallExpression))]
+[KnownType(typeof(SerializablePropertySetterExpression))]
+[KnownType(typeof(SerializablePropertySetterExpression))]
+public abstract class SerializableMemberExpression : SerializableExpression
+{
+    public SerializableMemberExpression()
+    {
+    }
+
+    [DataMember]
+    public SerializableExpression Source { get; set; }
+    [DataMember]
+    public SerializableType MemberDeclaringType { get; set; }
+    [DataMember]
+    public string MemberName { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableMemberInitExpression.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Linq", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableMemberInitExpression : SerializableExpression
+{
+    [DataMember]
+    public SerializableConstructorExpression Constructor { get; set; }
+    [DataMember]
+    public List<SerializablePropertySetterExpression> Setters { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitMemberInit(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableMethodCallExpression.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Linq", "System.Reflection", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableMethodCallExpression : SerializableMemberExpression
+{
+    [DataMember]
+    public string Signature { get; set; }
+    [DataMember]
+    public List<SerializableExpression> Parameters { get; set; }
+    [DataMember]
+    public List<SerializableType> GenericArguments { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitMethodCall(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableParameterExpression.cs");
+WriteHeader(namespaceName, code, "System.Linq.Expressions", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableParameterExpression : SerializableExpression
+{
+    [DataMember]
+    public string Name { get; set; }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitParameter(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializablePropertyExpression.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializablePropertyExpression
+{
+    public SerializablePropertyExpression()
+    {
+    }
+
+    [DataMember]
+    public SerializableType Type { get; set; }
+    [DataMember]
+    public string Name { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializablePropertyGetterExpression.cs");
+WriteHeader(namespaceName, code, "System.Reflection", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializablePropertyGetterExpression : SerializableMemberExpression
+{
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitPropertyGetter(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializablePropertySetterExpression.cs");
+WriteHeader(namespaceName, code, "System.Reflection", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializablePropertySetterExpression : SerializableMemberExpression
+{
+    [DataMember]
+    public SerializableExpression Value { get; set; }
+    [DataMember]
+    public int Type { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitPropertySetter(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableConditionalExpression.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableConditionalExpression : SerializableExpression
+{
+    [DataMember]
+    public SerializableExpression TestExpression { get; set; }
+    [DataMember]
+    public SerializableExpression IfTrueExpression { get; set; }
+    [DataMember]
+    public SerializableExpression IfFalseExpression { get; set; }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitConditional(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableType.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.Runtime.CompilerServices", "System.Runtime.Serialization", "System.Text", "System.Text.RegularExpressions");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableType
+{
+    public SerializableType()
+    {
+    }
+    
+    [DataMember]
+    public string TypeName { get; set; }
+    [DataMember]
+    public string NamespaceName { get; set; }
+    [DataMember]
+    public string WCFNamespaceName { get; set; }
+    [DataMember]
+    public List<SerializableType> GenericArguments { get; set; }
+    [DataMember]
+    public SerializableType ArrayOf { get; set; }
+    [DataMember]
+    public bool IsKnownByServer { get; set; }
+    [DataMember]
+    public List<SerializablePropertyExpression> Properties { get; set; }
+    
+    public override int GetHashCode()
+    {
+        unchecked
+        {
+            return (Properties == null || Properties.Count == 0) ? string.Format("{0}.{1}", NamespaceName, TypeName).GetHashCode() : Properties.Select((p, i) => (p.Name.GetHashCode() ^ p.Type.GetHashCode()) * (i + 1)).Aggregate((p1, p2) => p1 ^ p2);
+        }
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableUnaryExpression.cs");
+WriteHeader(namespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableUnaryExpression : SerializableExpression
+{
+    [DataMember]
+    public SerializableExpression Operand { get; set; }
+    [DataMember]
+    public string NodeType { get; set; }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override void Visit(SerializableExpressionVisitor visitor)
+    {
+        visitor.VisitUnary(this);
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("SerializableTypeConverter.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Concurrent", "System.Collections.Generic", "System.Collections.ObjectModel", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Reflection.Emit", "System.Text.RegularExpressions", "System.Threading", serverFxEntitiesNamespace);
+#>
+public static partial class SerializableTypeConverter
+{
+    private static ConcurrentDictionary<long, Lazy<WeakReference>> _anonymousTypesCache;
+    private static ConcurrentDictionary<long, Lazy<WeakReference>> AnonymousTypesCache
+    {
+        get { return _anonymousTypesCache ?? (_anonymousTypesCache = new ConcurrentDictionary<long, Lazy<WeakReference>>()); }
+    }
+        
+    public static Type ToType(this SerializableType serializableType, ISerializableExpressionConverter serializableExpressionConverter, bool getTypeInLinq = true)
+    {
+        Type value = null;
+        ToType(serializableType, serializableExpressionConverter, ref value);
+        if (value != null)
+            return value;
+        
+        string typeName = serializableType.TypeName;
+        typeName = Regex.Replace(typeName, @"<(,*)>$", m => "`" + (m.Groups[1].Length + 1).ToString());
+        typeName = typeName.Replace(@"\[\]", "[]");
+        if (serializableType.ArrayOf != null)
+            return serializableExpressionConverter.GetTypeInLINQ(serializableType.ArrayOf.ToType(serializableExpressionConverter, getTypeInLinq).MakeArrayType());
+        if (serializableType.IsKnownByServer)
+        {
+            string fullTypeName = string.Format("{0}.{1}", serializableType.NamespaceName, typeName);
+            value = Type.GetType(fullTypeName);
+            if (value == null && Regex.IsMatch(serializableType.NamespaceName, "^System.Linq(.?|$)"))
+                value = typeof(Expression).Assembly.GetType(fullTypeName);
+            if (value == null && Regex.IsMatch(serializableType.NamespaceName, "^System.Collections.ObjectModel(.?|$)"))
+                value = typeof(ObservableCollection<>).Assembly.GetType(fullTypeName);
+            if (value == null && typeName == "TrackableCollection`1")
+                value = typeof(TrackableCollection<>);
+            GetType(fullTypeName, serializableType, ref value);
+            if (value == null)
+            {
+                if (serializableType.WCFNamespaceName != null)
+                {
+                    value = serializableExpressionConverter.GetTypeFromWCFNamespace(serializableType, typeName);
+                    if (value != null)
+                        return serializableExpressionConverter.GetTypeInLINQ(value);
+                }
+                throw new NotImplementedException();
+            }
+            else if (serializableType.GenericArguments != null && serializableType.GenericArguments.Count != 0)
+                value = value.MakeGenericType(serializableType.GenericArguments.Select(ga => ga.ToType(serializableExpressionConverter, getTypeInLinq)).ToArray());
+            return (getTypeInLinq && serializableExpressionConverter != null) ? serializableExpressionConverter.GetTypeInLINQ(value) : value;
+        }
+        else
+            return GetAnonymousType(serializableType, serializableExpressionConverter, typeName, getTypeInLinq);
+    }
+
+    static partial void GetType(string fullTypeName, SerializableType serializableType, ref Type value);
+        
+    static partial void ToType(SerializableType serializableType, ISerializableExpressionConverter serializableExpressionConverter, ref Type value);
+
+    private static Type GetAnonymousType(SerializableType serializableType, ISerializableExpressionConverter serializableExpressionConverter, string typeName, bool getTypeInLinq)
+    {
+        Func<SerializableType, Type> buildType = st =>
+            {
+                typeName = (typeName ?? st.TypeName).Replace("<>", "");
+                typeName = typeName.Replace("`", "");
+                var assemblyName = new AssemblyName(typeName + Guid.NewGuid().ToString());
+                var appDomain = Thread.GetDomain();
+                var assemblyBuilder = appDomain.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+                var moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name);
+                var typeBuilder = moduleBuilder.DefineType(typeName, TypeAttributes.Public);
+                Dictionary<string, Type> propertiesDefinition = new Dictionary<string, Type>();
+                foreach (var prop in st.Properties)
+                {
+                    Type propType = prop.Type.ToType(serializableExpressionConverter, getTypeInLinq);
+                    propType = serializableExpressionConverter.GetTypeInLINQ(propType);
+                    propertiesDefinition.Add(prop.Name, propType);
+                    var fieldBuilder = typeBuilder.DefineField("_" + prop.Name, propType, FieldAttributes.Private);
+                    var propBuilder = typeBuilder.DefineProperty(prop.Name, PropertyAttributes.None, propType, null);
+                    MethodAttributes getSetAttr = MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig;
+                    MethodBuilder propGetBuilder = typeBuilder.DefineMethod("get_" + prop.Name, getSetAttr, propType, Type.EmptyTypes);
+                    ILGenerator propGetIL = propGetBuilder.GetILGenerator();
+                    propGetIL.Emit(OpCodes.Ldarg_0);
+                    propGetIL.Emit(OpCodes.Ldfld, fieldBuilder);
+                    propGetIL.Emit(OpCodes.Ret);
+                    MethodBuilder propSetBuilder = typeBuilder.DefineMethod("set_" + prop.Name, getSetAttr, null, new Type[] { propType });
+                    ILGenerator propSetIL = propSetBuilder.GetILGenerator();
+                    propSetIL.Emit(OpCodes.Ldarg_0);
+                    propSetIL.Emit(OpCodes.Ldarg_1);
+                    propSetIL.Emit(OpCodes.Stfld, fieldBuilder);
+                    propSetIL.Emit(OpCodes.Ret);
+                    propBuilder.SetGetMethod(propGetBuilder);
+                    propBuilder.SetSetMethod(propSetBuilder);
+                }
+                return typeBuilder.CreateType();
+            };
+        for (; ; )
+        {
+            WeakReference weakReference = AnonymousTypesCache.GetOrAdd(serializableType.GetHashCode(), hash => new Lazy<WeakReference>(() => new WeakReference(buildType(serializableType)))).Value;
+            var value = (Type)weakReference.Target;
+            if (value != null)
+                return value;
+            Lazy<WeakReference> dummy;
+            AnonymousTypesCache.TryRemove(serializableType.GetHashCode(), out dummy);
+        }
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.Process();
+}
+#>

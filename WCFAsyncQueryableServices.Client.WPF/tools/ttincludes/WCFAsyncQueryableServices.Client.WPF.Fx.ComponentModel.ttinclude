@@ -1,0 +1,389 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Fx.ComponentModel.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string dataAnnotationNamespace = "System.ComponentModel.DataAnnotations";
+string iDataErrorInfoTypeName = ", IDataErrorInfo";
+string bindableObjectErrorCode =
+@"	public string Error
+	{
+		get { return DataErrorInfo.Error; }
+	}
+
+	public string this[string columnName]
+	{
+		get { return DataErrorInfo[columnName]; }
+	}
+
+	private DataErrorInfo _dataErrorInfo;
+	protected DataErrorInfo DataErrorInfo
+	{
+		get { return _dataErrorInfo ?? (_dataErrorInfo = new DataErrorInfo()); }
+	}";
+
+void WriteSpecificClasses(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string namespaceName)
+{
+	fileManager.StartNewFile("UIThread.cs");
+	WriteHeader(namespaceName, code, "System.Threading.Tasks", "System.Windows.Threading");
+#>
+public static partial class UIThread
+{
+	public static Dispatcher Dispatcher { get; set; }
+	public static TaskScheduler TaskScheduler { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("CustomPropertyDescriptor.cs");
+	WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.ComponentModel");
+#>
+public abstract class CustomPropertyDescriptor : PropertyDescriptor
+{
+	public CustomPropertyDescriptor(string name)
+		: base(name, new Attribute[0])
+	{
+	}
+
+	public IEnumerable<string> Properties { get; protected set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("IDynamicType.cs");
+	WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.ComponentModel");
+#>
+public interface IDynamicType
+{
+	IEnumerable<PropertyDescriptor> GetCustomPropertyDescriptors();
+	void AddPropertyDescriptor(PropertyDescriptor propertyDescriptor);
+	void AddOrReplacePropertyDescriptor(PropertyDescriptor propertyDescriptor);
+	void RemovePropertyDescriptor(PropertyDescriptor propertyDescriptor);
+	void RemovePropertyDescriptor(string propertyName);
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("DynamicType.cs");
+	WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.ComponentModel", "System.Linq", "System.Runtime.Serialization");
+#>
+[DataContract(IsReference=true)]
+public abstract class DynamicType : BindableObject, ICustomTypeDescriptor, IDynamicType
+{
+	protected abstract ICustomTypeDescriptor CustomTypeDescriptor { get; }
+	protected abstract IEnumerable<CustomPropertyDescriptor> CustomPropertyDescriptors { get; }
+
+	AttributeCollection ICustomTypeDescriptor.GetAttributes()
+	{
+		return CustomTypeDescriptor.GetAttributes();
+	}
+	string ICustomTypeDescriptor.GetClassName()
+	{
+		return CustomTypeDescriptor.GetClassName();
+	}
+	string ICustomTypeDescriptor.GetComponentName()
+	{
+		return CustomTypeDescriptor.GetComponentName();
+	}
+	TypeConverter ICustomTypeDescriptor.GetConverter()
+	{
+		return CustomTypeDescriptor.GetConverter();
+	}
+	EventDescriptor ICustomTypeDescriptor.GetDefaultEvent()
+	{
+		return CustomTypeDescriptor.GetDefaultEvent();
+	}
+	PropertyDescriptor ICustomTypeDescriptor.GetDefaultProperty()
+	{
+		return CustomTypeDescriptor.GetDefaultProperty();
+	}
+	object ICustomTypeDescriptor.GetEditor(Type editorBaseType)
+	{
+		return CustomTypeDescriptor.GetEditor(editorBaseType);
+	}
+	EventDescriptorCollection ICustomTypeDescriptor.GetEvents(Attribute[] attributes)
+	{
+		return CustomTypeDescriptor.GetEvents(attributes);
+	}
+	EventDescriptorCollection ICustomTypeDescriptor.GetEvents()
+	{
+		return CustomTypeDescriptor.GetEvents();
+	}
+	PropertyDescriptorCollection ICustomTypeDescriptor.GetProperties(Attribute[] attributes)
+	{
+		return CustomTypeDescriptor.GetProperties(attributes);
+	}
+	PropertyDescriptorCollection ICustomTypeDescriptor.GetProperties()
+	{
+		return CustomTypeDescriptor.GetProperties();
+	}
+	object ICustomTypeDescriptor.GetPropertyOwner(PropertyDescriptor pd)
+	{
+		return CustomTypeDescriptor.GetPropertyOwner(pd);
+	}
+
+	private List<PropertyDescriptor> _customPropertyDescriptors;
+	IEnumerable<PropertyDescriptor> IDynamicType.GetCustomPropertyDescriptors()
+	{
+		if (_customPropertyDescriptors == null)
+			return new PropertyDescriptor[0];
+		return _customPropertyDescriptors;
+	}
+	void IDynamicType.AddPropertyDescriptor(PropertyDescriptor propertyDescriptor)
+	{
+		(_customPropertyDescriptors ?? (_customPropertyDescriptors = new List<PropertyDescriptor>())).Add(propertyDescriptor);
+	}
+	void IDynamicType.RemovePropertyDescriptor(PropertyDescriptor propertyDescriptor)
+	{
+		if (_customPropertyDescriptors != null && _customPropertyDescriptors.Contains(propertyDescriptor))
+			_customPropertyDescriptors.Remove(propertyDescriptor);
+	}
+	void IDynamicType.RemovePropertyDescriptor(string propertyName)
+	{
+		PropertyDescriptor propertyDescriptor;
+		if (_customPropertyDescriptors != null && (propertyDescriptor = _customPropertyDescriptors.FirstOrDefault(pd => pd.Name == propertyName)) != null)
+			_customPropertyDescriptors.Remove(propertyDescriptor);
+	}
+
+	void IDynamicType.AddOrReplacePropertyDescriptor(PropertyDescriptor propertyDescriptor)
+	{
+		if (_customPropertyDescriptors == null)
+			(_customPropertyDescriptors = new List<PropertyDescriptor>()).Add(propertyDescriptor);
+		else if (!_customPropertyDescriptors.Contains(propertyDescriptor))
+			_customPropertyDescriptors.Add(propertyDescriptor);
+	}
+
+	public void SetDynamicPropertyValue<T>(string propertyName, T propertyValue)
+	{
+		var property = ((IDynamicType)this).GetCustomPropertyDescriptors().FirstOrDefault(prop => prop.Name.Equals(propertyName) && prop.PropertyType == typeof(T));
+		if (property == null)
+			throw new Exception("The property with this name doesn't exist: " + propertyName);
+		property.SetValue(this, propertyValue);
+		NotifyPropertyChanged.RaisePropertyChanged(propertyName);
+	}
+
+	public T GetDynamicPropertyValue<T>(string propertyName)
+	{
+		var property = ((IDynamicType)this).GetCustomPropertyDescriptors().FirstOrDefault(prop => prop.Name.Equals(propertyName) && prop.PropertyType == typeof(T));
+		if (property == null)
+			throw new Exception("The property with this name doesn't exist: " + propertyName);
+		return (T)property.GetValue(this);
+	}
+}
+
+public class DynamicType<T> : ICustomTypeDescriptor
+	where T : IBindableObject
+{
+	private T _component;
+	private IEnumerable<CustomPropertyDescriptor> _customPropertyDescriptors;
+
+	public DynamicType(T component, IEnumerable<CustomPropertyDescriptor> customPropertyDescriptors)
+	{
+		_component = component;
+		_customPropertyDescriptors = customPropertyDescriptors;
+	}
+
+	private static List<CustomPropertyDescriptor> _customProperties = new List<CustomPropertyDescriptor>();
+	public static List<CustomPropertyDescriptor> CustomProperties
+	{
+		get { return _customProperties; }
+	}
+
+	AttributeCollection ICustomTypeDescriptor.GetAttributes()
+	{
+		return TypeDescriptor.GetAttributes(_component, true);
+	}
+
+	string ICustomTypeDescriptor.GetClassName()
+	{
+		return TypeDescriptor.GetClassName(_component);
+	}
+
+	string ICustomTypeDescriptor.GetComponentName()
+	{
+		return TypeDescriptor.GetComponentName(_component);
+	}
+
+	TypeConverter ICustomTypeDescriptor.GetConverter()
+	{
+		return TypeDescriptor.GetConverter(_component);
+	}
+
+	EventDescriptor ICustomTypeDescriptor.GetDefaultEvent()
+	{
+		return TypeDescriptor.GetDefaultEvent(_component);
+	}
+
+	PropertyDescriptor ICustomTypeDescriptor.GetDefaultProperty()
+	{
+		return TypeDescriptor.GetDefaultProperty(_component);
+	}
+
+	object ICustomTypeDescriptor.GetEditor(Type editorBaseType)
+	{
+		return TypeDescriptor.GetEditor(_component, editorBaseType);
+	}
+
+	EventDescriptorCollection ICustomTypeDescriptor.GetEvents(Attribute[] attributes)
+	{
+		return TypeDescriptor.GetEvents(attributes);
+	}
+
+	EventDescriptorCollection ICustomTypeDescriptor.GetEvents()
+	{
+		return TypeDescriptor.GetEvents(_component);
+	}
+
+	PropertyDescriptorCollection ICustomTypeDescriptor.GetProperties(Attribute[] attributes)
+	{
+		IDynamicType dynamicType = _component as IDynamicType;
+		var propertyDescriptors = ((IEnumerable<PropertyDescriptor>)TypeDescriptor.GetProperties(_component, attributes, true).Cast<PropertyDescriptor>().Select(pd => new EncapsulatedPropertyDescriptor(pd, name =>
+		{
+			var customPropertyDescriptors = _customPropertyDescriptors;
+			if (dynamicType != null)
+				customPropertyDescriptors = customPropertyDescriptors.Union(dynamicType.GetCustomPropertyDescriptors().OfType<CustomPropertyDescriptor>());
+			foreach (var prop in customPropertyDescriptors.Where(cpd => cpd.Properties != null && cpd.Properties.Contains(name)))
+				_component.NotifyPropertyChanged.RaisePropertyChanged(prop.Name);
+		}))).Union(_customPropertyDescriptors);
+		if (dynamicType != null)
+			propertyDescriptors = propertyDescriptors.Union(dynamicType.GetCustomPropertyDescriptors());
+		return new PropertyDescriptorCollection(propertyDescriptors.ToArray());
+	}
+
+	PropertyDescriptorCollection ICustomTypeDescriptor.GetProperties()
+	{
+		return ((ICustomTypeDescriptor)_component).GetProperties(null);
+	}
+
+	object ICustomTypeDescriptor.GetPropertyOwner(PropertyDescriptor pd)
+	{
+		return _component;
+	}
+
+	public static void AddProperty(string name, object value)
+	{
+		if (!CheckIfNameExists(name))
+			CustomProperties.Add(new CustomPropertyDescriptor<object>(name, value));
+	}
+
+	public static void AddProperty<PropertyT>(string name, Func<T, PropertyT> get, Action<T, PropertyT> set = null, string[] properties = null)
+	{
+		if (!CheckIfNameExists(name))
+			CustomProperties.Add(new CustomPropertyDescriptor<PropertyT>(name, get, set, properties));
+	}
+
+	private static bool CheckIfNameExists(string name)
+	{
+		if (CustomProperties.Select(p => p.Name).Contains(name) || typeof(T).GetProperties().Select(p => p.Name).Contains(name))
+			throw new Exception("The property with this name already exists: " + name);
+		return false;
+	}
+
+	public static void RemoveProperty(string name)
+	{
+		var property = CustomProperties.FirstOrDefault(p => p.Name == name);
+		CustomProperties.Remove(property);
+	}
+
+	private class EncapsulatedPropertyDescriptor : PropertyDescriptor
+	{
+		private PropertyDescriptor _propertyDescriptor;
+		private Action<string> _setAction;
+
+		public EncapsulatedPropertyDescriptor(PropertyDescriptor propertyDescriptor, Action<string> setAction)
+			: base(propertyDescriptor)
+		{
+			_propertyDescriptor = propertyDescriptor;
+			_setAction = setAction;
+		}
+
+		public override bool CanResetValue(object component)
+		{
+			return _propertyDescriptor.CanResetValue(component);
+		}
+		public override Type ComponentType
+		{
+			get { return _propertyDescriptor.ComponentType; }
+		}
+		public override object GetValue(object component)
+		{
+			return _propertyDescriptor.GetValue(component);
+		}
+		public override bool IsReadOnly
+		{
+			get { return _propertyDescriptor.IsReadOnly; }
+		}
+		public override Type PropertyType
+		{
+			get { return _propertyDescriptor.PropertyType; }
+		}
+		public override void ResetValue(object component)
+		{
+			_propertyDescriptor.ResetValue(component);
+		}
+		public override void SetValue(object component, object value)
+		{
+			_propertyDescriptor.SetValue(component, value);
+			_setAction(Name);
+		}
+		public override bool ShouldSerializeValue(object component)
+		{
+			return _propertyDescriptor.ShouldSerializeValue(component);
+		}
+	}
+	public class CustomPropertyDescriptor<PropertyT> : CustomPropertyDescriptor
+	{
+		private string _name;
+		private Func<T, PropertyT> _get;
+		private Action<T, PropertyT> _set;
+
+		public CustomPropertyDescriptor(string name, Func<T, PropertyT> get, Action<T, PropertyT> set = null, string[] properties = null)
+			: base(name)
+		{
+			_name = name;
+			_get = get;
+			_set = set;
+			Properties = properties;
+		}
+		public CustomPropertyDescriptor(string name, PropertyT value)
+			: this(name, _ => value)
+		{
+		}
+
+		public override bool CanResetValue(object component)
+		{
+			return _set != null;
+		}
+		public override Type ComponentType
+		{
+			get { return typeof(T); }
+		}
+		public override object GetValue(object component)
+		{
+			return _get((T)component);
+		}
+		public override bool IsReadOnly
+		{
+			get { return _set == null; }
+		}
+		public override Type PropertyType
+		{
+			get { return typeof(PropertyT); }
+		}
+		public override void ResetValue(object component)
+		{
+			_set((T)component, default(PropertyT));
+		}
+		public override void SetValue(object component, object value)
+		{
+			_set((T)component, (PropertyT)value);
+		}
+		public override bool ShouldSerializeValue(object component)
+		{
+			return false;
+		}
+	}
+}
+<#+
+	WriteFooter(namespaceName);
+}
+#>

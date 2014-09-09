@@ -1,0 +1,42 @@
+<#@ template language="C#" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerGlobalWCFServiceContract(string wcfNamespace, string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+
+		if (wcfNamespace == null)
+			wcfNamespace = "http://Global.net";
+
+	var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	fileManager.StartNewFile("IGlobalWCFService.cs");
+	WriteHeader(namespaceName, code, "System.ServiceModel");
+#>
+[ServiceContract(Namespace = "<#=wcfNamespace#>", Name = "IGlobalWCFService")]
+public partial interface IGlobalWCFService
+{
+	[OperationContract]
+	GlobalSerializedContexts SaveChanges(GlobalSerializedContexts clientContexts);
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("GlobalSerializedContexts.cs");
+	WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "<#=wcfNamespace#>/SerializableContext")]
+public partial class GlobalSerializedContexts
+{
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.Process();
+}
+#>

@@ -1,0 +1,50 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string clientType = "WPF";
+string fxControlsNamespaceName = null;
+
+void SetFxClientContextInterfaces()
+{
+}
+
+void WriteFxControls(EntityFrameworkTemplateFileManager fileManager, XElement fx, string relativePath, string merge)
+{
+	var fxControls = fx.Element("Controls");
+	if (fxControls != null)
+	{
+		var fxControlsNamespaceNameAttribute = fxControls.Attribute("NamespaceName");
+		if (fxControlsNamespaceNameAttribute == null)
+			fxControlsNamespaceName = "WCFAsyncQueryableServices.Controls";
+		else
+			fxControlsNamespaceName = fxControlsNamespaceNameAttribute.Value;
+		var fxControlsGenerateAttribute = fxControls.Attribute("Generate");
+		if (fxControlsGenerateAttribute == null || fxControlsGenerateAttribute.Value != "false")
+		{
+			if (fxClientContextNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContext can't be null");
+			if (fxComponentModelNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ComponentModel can't be null");
+			if (fxClientContextInterfacesNamespaceName == null)
+				throw new InvalidOperationException(@"Framework\ClientContextInterfaces can't be null");
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Fx.Controls.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{10}WCFAsyncQueryableServices.{8}.{7}.Client.{9}.Fx.Controls{11}.ttinclude\"#{1}{0}#WriteClientFxControls(\"{2}\", \"{3}\", \"{4}\", \"{5}\", \"{6}\");#{1}", "<", ">", fxClientContextInterfacesNamespaceName, fxClientContextNamespaceName, fxComponentModelNamespaceName, fxControlsNamespaceName + ".Converters", fxControlsNamespaceName, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Fx.Controls.Converters.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{6}WCFAsyncQueryableServices.{4}.{3}.Client.{5}.Fx.Converters{7}.ttinclude\"#{1}{0}#WriteClientFxConverters(\"{2}.Converters\");#{1}", "<", ">", fxControlsNamespaceName, netVersion, vsVersion, clientType, relativePath, merge)#>
+<#+
+		}
+	}
+}
+
+void WriteCustomFxClientBeginning(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, XElement fx, string relativePath, string merge)
+{
+}
+
+void WriteCustomFxClientEnding(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, XElement fx, string relativePath, string merge)
+{
+}
+#>

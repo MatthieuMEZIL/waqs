@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.PCL.Fx.System.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

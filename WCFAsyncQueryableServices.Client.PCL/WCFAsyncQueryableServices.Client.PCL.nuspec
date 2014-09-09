@@ -1,0 +1,21 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+    <metadata>
+        <id>WCFAsyncQueryableServices.Client.PCL</id>
+        <version>1.9.2.3</version>
+        <authors>Matthieu MEZIL</authors>
+        <owners>Matthieu MEZIL</owners>
+        <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
+        <projectUrl>https://waqs.codeplex.com/</projectUrl>
+        <requireLicenseAcceptance>true</requireLicenseAcceptance>
+        <description>https://waqs.codeplex.com/documentation</description>
+        <summary>http://msmvps.com/blogs/matthieu/archive/2014/04/14/waqs-write-your-code-faster-and-better.aspx</summary>
+        <copyright>Matthieu MEZIL</copyright>
+        <tags>WAQS</tags>
+        <dependencies>
+            <dependency id="T4.Helper" version="1.0.10" />
+            <dependency id="EnvDTE.Helper" version="1.0.0" />
+            <dependency id="RoslynGACDeploy" version="1.0.12" />
+        </dependencies>
+    </metadata>
+</package>

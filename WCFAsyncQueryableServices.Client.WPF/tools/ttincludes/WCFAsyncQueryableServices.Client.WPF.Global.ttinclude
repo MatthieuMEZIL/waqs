@@ -1,0 +1,6 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Global.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string clientType = "WPF";
+#>

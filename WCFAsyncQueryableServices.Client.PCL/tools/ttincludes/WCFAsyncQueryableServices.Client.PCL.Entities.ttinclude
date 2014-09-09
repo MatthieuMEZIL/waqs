@@ -1,0 +1,172 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Entities.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+partial class ClientEntities
+{
+string dataAnnotationsNamespace = null;
+string dynamicType = null;
+string iCustomTypeDescriptorTypeName = "ICustomTypeDescriptor";
+string customTypeDescriptorPropertyName = "CustomTypeDescriptor";
+string dynamicTypeParameters = "this, CustomPropertyDescriptors";
+string customPropertyDescriptorTypeName = "CustomPropertyDescriptor";
+string customPropertyDescriptorsName = "CustomPropertyDescriptors";
+string dataErrorInfoTypeName = "DataErrorInfo";
+
+void WriteDynamicTypeMethods(CodeGenerationTools code, EntityType entityType)
+{
+}
+
+void DisplayAutoGenerateFilterAutoGenerateField(bool autoGenerateFilter, bool autoGenerateField)
+{
+}
+
+void AddPropertyDescriptorsOnType(CodeGenerationTools code, EdmType edmType, IEnumerable<EdmProperty> properties, IEnumerable<NavigationProperty> navigationProperties, List<MethodDeclarationSyntax> getMethods)
+{
+    var className = code.Escape(edmType);
+    var entityType = edmType as EntityType;
+    foreach (var edmProperty in properties)
+    {
+        string propertyName = code.Escape(edmProperty);
+#>
+        public bool <#=propertyName#>IsMandatory
+        {
+            get { return UISpecifications.Get<#=propertyName#>IsMandatory(this); }
+        }
+
+<#+
+        if (edmProperty.TypeUsage.ToString() == "Edm.String" || edmProperty.TypeUsage.ToString() == "Edm.Binary")
+        {
+            var maxLength = MaxLength(edmProperty).HasValue;
+#>
+        public int? <#=propertyName#>MaxLength
+        {
+            get { return UISpecifications.Get<#=propertyName#>MaxLength(this); }
+        }
+
+        public int? <#=propertyName#>MinLength
+        {
+            get { return UISpecifications.Get<#=propertyName#>MinLength(this); }
+        }
+
+<#+
+            if (edmProperty.TypeUsage.ToString() == "Edm.String")
+            {
+#>
+        public string <#=propertyName#>Pattern
+        {
+            get { return UISpecifications.Get<#=propertyName#>Pattern(this); }
+        }
+
+<#+
+            }
+        }
+        else
+        {
+            if (IsStruct(edmProperty))
+            {
+                string propTypeName = code.Escape(edmProperty.TypeUsage);
+                if (! edmProperty.Nullable)
+                    propTypeName += "?";
+#>
+        public <#=propTypeName#> <#=propertyName#>MinValue
+        {
+            get { return UISpecifications.Get<#=propertyName#>MinValue(this); }
+        }
+
+        public <#=propTypeName#> <#=propertyName#>MaxValue
+        {
+            get { return UISpecifications.Get<#=propertyName#>MaxValue(this); }
+        }
+
+<#+
+            }
+        }
+    }
+    foreach (var navigationProperty in navigationProperties.Where(np => np.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many))
+    {
+        string propertyName = code.Escape(navigationProperty);
+#>
+        public bool <#=propertyName#>IsMandatory
+        {
+            get { return UISpecifications.Get<#=propertyName#>IsMandatory(this); }
+        }
+
+<#+
+    }
+    if (entityType.BaseType == null)
+    {
+#>
+        public ObservableCollection<Error> AllErrors
+        {
+            get { return Errors.AllErrors; }
+        }
+
+<#+
+    }
+    foreach (var edmProperty in properties)
+    {
+        string propertyName = code.Escape(edmProperty);
+#>
+        public ObservableCollection<Error> Errors<#=propertyName#>
+        {
+            get { return Errors.<#=propertyName#>; }
+        }
+
+<#+
+    }
+    foreach (var navigationProperty in navigationProperties.Where(np => np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.One))
+    {
+        string propertyName = code.Escape(navigationProperty);
+#>
+        public ObservableCollection<Error> Errors<#=propertyName#>
+        {
+            get { return Errors.<#=propertyName#>; }
+        }
+
+<#+
+    }
+    if (getMethods != null)
+        foreach (var getMethod in getMethods)
+        {
+            string getPropertyName = SpecificationMethods.GetPropertyNameFromMethod(getMethod);
+#>
+        public ObservableCollection<Error> Errors<#=getPropertyName#>
+        {
+            get { return Errors.<#=getPropertyName#>; }
+        }
+
+<#+
+        }
+}
+
+
+}
+
+partial class SpecificationGetMethodBodyRewriterClient
+{
+    partial void Init()
+    {
+        TransformInvocationExpression = n => new PCLRewriter(SemanticModel).Visit(n);
+    }
+}
+
+public class PCLRewriter : SyntaxRewriter
+{
+    private ISemanticModel _semanticModel;
+
+    public PCLRewriter(ISemanticModel semanticModel)
+    {
+        _semanticModel = semanticModel;
+    }
+
+    public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        var mae = node.Expression as MemberAccessExpressionSyntax;
+        ITypeSymbol typeSymbol;
+        if (mae != null && (typeSymbol = _semanticModel.GetSymbolInfo(mae.Expression).Symbol as ITypeSymbol) != null && typeSymbol.ToString() == "System.Math" && mae.Name.Identifier.ValueText == "Round" && node.ArgumentList.Arguments.Last().ToString().Contains("MidpointRounding"))
+            return ((InvocationExpressionSyntax)SyntaxFactory.ParseExpression("MathExtensions.Round()")).WithArgumentList((ArgumentListSyntax)Visit(node.ArgumentList));
+        return base.VisitInvocationExpression(node);
+    }
+}
+#>

@@ -1,0 +1,150 @@
+<#@ include file="WCFAsyncQueryableServices.Service.Base.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerWCFServiceContract(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath entitiesPath, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxWCFServiceContractNamespace, string serverFxSerializableExpressionsNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, string serverServiceInterfacesNamespace, string namespaceName = null)
+{
+	var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+	var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+	var code = edmxElements.Code;
+	var dtoTypes = GetClasses(dtoPathes).ToList();
+	var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Server, isInterface:true);
+	var edmxName = edmxElements.EdmxName;
+
+	IEnumerable<string> usings = new string[] { "System", "System.Collections.Generic", "System.ServiceModel", serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxWCFServiceContractNamespace, serverServiceInterfacesNamespace, serverEntitiesNamespace };
+	List<string> specificationMethodsUsings;
+	if (specificationsElements.Usings.TryGetValue("@ServiceContract", out specificationMethodsUsings))
+		usings = usings.Union(specificationMethodsUsings);
+	fileManager.StartNewFile(string.Concat("I", edmxName, "WCFService.cs"));
+	WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
+#>
+[ServiceContract(Namespace="http://<#=edmxName#>.net", Name="I<#=edmxName#>Service")]
+[<#=edmxName#>Faults]
+public partial interface I<#=edmxName#>WCFService
+{	
+<#+
+	foreach (EdmFunction edmFunction in edmxElements.FunctionImports.Where(f => IsPublic(f)))
+	{
+		TypeUsage returnType;
+		var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+		if (returnType == null)
+			continue;
+		FunctionImportParameter[] parameters;
+		var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+#>
+	[OperationContract]
+	List<<#=returnTypeName#>> <#=code.Escape(edmFunction)#>(<#=parametersAsString#>);
+
+<#+
+	}
+#>
+	[OperationContract]
+	<#=edmxName#>QueryResult Execute(QuerySerialization query);
+
+	[OperationContract]
+	<#=edmxName#>QueriesResult ExecuteMany(QueriesSerialization queries);
+
+	[OperationContract]
+	<#=edmxName#>QueryResultPage LoadPage(int pageSize, SerializableExpression queryExpression, string[] withSpecificationsProperties, LoadPageParameter[] identifiers);
+
+	[OperationContract]
+	DateTime GetDbDateTime();
+	
+	[OperationContract]
+	<#=edmxName#>SerializableContext SaveChanges(<#=edmxName#>SerializableContext context);
+<#+
+	foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+	{
+		string typeName = edmxElements.Code.Escape(edmType);
+#>
+
+	[OperationContract(Name="Validate<#=typeName#>")]
+	List<Error> Validate(<#=typeName#> entity);
+<#+
+	}
+	foreach (var specificationServiceMethod in specificationsElements.AllServiceMethods)
+		WriteServiceMethod(specificationServiceMethod, specificationsElements, edmxElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, WriteServiceMethod, dtoTypes: dtoTypes);
+#>
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	fileManager.StartNewFile(edmxName + "FaultDetailEntities.cs");
+	WriteHeader(edmxElements.NamespaceName, code, "System", "System.Collections.Generic", "System.Runtime.Serialization", "System.ServiceModel", serverFxWCFServiceContractNamespace);
+#>
+[DataContract(Namespace = "http://<#=edmxName#>/Fault")]
+[KnownType("GetKnownTypes")]
+public partial class <#=edmxName#>FaultDetailEntities : FaultDetail
+{
+	[DataMember]
+	public List<object> Entities { get; set; }
+
+	public static IEnumerable<Type> GetKnownTypes()
+	{
+		var value = new List<Type>();
+<#+
+	foreach (EntityType entity in edmxElements.EntityTypes.OrderBy(e => e.Name).Where(e => GetEntitySet(edmxElements.Container, e) != null && IsPublic(e)))
+	{
+#>
+		value.Add(typeof(<#=serverEntitiesNamespace#>.<#=code.Escape(entity)#>));
+<#+
+	}
+#>
+		AddKnownTypes(value);
+		return value;
+	}
+	static partial void AddKnownTypes(List<Type> types);
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	fileManager.StartNewFile(edmxName + "FaultsAttribute.cs");
+	WriteHeader(edmxElements.NamespaceName, code, "System", "System.Collections.Generic", "System.Linq", serverFxWCFServiceContractNamespace);
+#>
+public partial class <#=edmxName#>FaultsAttribute : StandardFaultsAttribute
+{
+	protected override List<Type> GetFaultTypes()
+	{
+		var value = base.GetFaultTypes();
+		value.Add(typeof(<#=edmxName#>FaultDetailEntities));
+		GetFaultTypes(ref value);
+		return value;
+	}
+
+	partial void GetFaultTypes(ref List<Type> types);
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	fileManager.StartNewFile(edmxName + "SerializableContext.cs");
+	WriteHeader(edmxElements.NamespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(IsReference = true, Namespace = "http://<#=edmxName#>/SerializableContext")]
+public class <#=edmxName#>SerializableContext
+{
+<#+
+	foreach (EntitySet entitySet in edmxElements.Container.BaseEntitySets.OfType<EntitySet>().Where(es => IsPublic(es.ElementType)))
+	{
+#>
+	[DataMember]
+	public List<<#=serverEntitiesNamespace#>.<#=code.Escape(entitySet.ElementType)#>> <#=code.Escape(entitySet)#> { get; set; }
+<#+
+	}
+#>
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	fileManager.Process();
+}
+
+void WriteServiceMethod(MethodDeclarationSyntax specificationServiceMethod, IEnumerable<ParameterSyntax> parameters, TypeSyntax returnType, ISemanticModel semanticModel, SpecificationsElements specificationsElements, EdmxElements edmxElements, string contextName, string serviceName, List<MethodSymbol> addedSubMethods, List<MethodDeclarationSyntax> methods, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, IEnumerable<TypeSymbol> dtos, DTOAndInterfacesTypesRewriter dtoAndInterfacesTypesRewriter)
+{
+#>
+
+	[OperationContract]
+	<#=SyntaxFactory.MethodDeclaration(returnType, specificationServiceMethod.Identifier.ValueText)
+	.WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList<ParameterSyntax>(parameters.Select(p => SyntaxFactory.Parameter(p.Identifier).WithType(p.Type)), parameters.Skip(1).Select(v => SyntaxFactory.Token(SyntaxKind.CommaToken))))).NormalizeWhitespace().ToString()#>;
+<#+
+}
+#>

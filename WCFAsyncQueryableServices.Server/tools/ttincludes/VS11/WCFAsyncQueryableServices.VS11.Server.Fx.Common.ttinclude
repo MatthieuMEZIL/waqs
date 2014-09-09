@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Server.Fx.Common.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

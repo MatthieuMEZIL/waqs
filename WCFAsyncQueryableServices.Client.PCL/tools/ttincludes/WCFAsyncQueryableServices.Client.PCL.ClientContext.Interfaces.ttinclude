@@ -1,0 +1,32 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ClientContext.Interfaces.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string GetEnumValues(string typeName)
+{
+	return string.Concat("EnumExtensions.GetValues<", typeName, ">()");
+}
+
+void WriteSpecificClasses(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string contextName, string dtoNamespace, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxQueryResultNamespace, string clientEntitiesNamespace, string serverEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string namespaceName)
+{
+	fileManager.StartNewFile(contextName + "Factory.cs");
+	WriteHeader(namespaceName, code, "System");
+#>
+public class <#=contextName#>Factory
+{
+	private Func<I<#=contextName#>> _contextFactory;
+
+	public <#=contextName#>Factory(Func<I<#=contextName#>> contextFactory)
+	{
+		_contextFactory = contextFactory;
+	}
+
+	public I<#=contextName#> GetNewContext()
+	{
+		return _contextFactory();
+	}
+}
+<#+
+	WriteFooter(namespaceName);
+}
+#>

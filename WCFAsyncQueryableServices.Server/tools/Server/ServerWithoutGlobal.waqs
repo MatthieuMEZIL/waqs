@@ -1,0 +1,28 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<WCFAsyncQueryableServices.Server EdmxPath="$edmxPath$">
+  <Specifications>
+    <Specification SlnFilePath="$SpecificationsSlnFilePath$" CsprojPath="$SpecificationsCsprojPath$" FolderPath="$SpecificationsFolderPath$" />
+  </Specifications>
+  <DTOs>
+    <DTO SlnFilePath="$DTOSlnFilePath$" CsprojPath="$DTOCsprojPath$" FolderPath="$DTOFolderPath$" />
+  </DTOs>
+  <Entities SlnFilePath="$EntitiesSlnFilePath$" CsprojPath="$EntitiesCsprojPath$" FolderPath="$EntitiesFolderPath$" />
+  <DAL />
+  <DALInterfaces />
+  <Service Parallel="true" />
+  <ServiceInterfaces />
+  <WCFService />
+  <WCFServiceContract />
+  <Framework>
+    <Common NamespaceName="WCFAsyncQueryableServices.Common" />
+    <Specifications NamespaceName="WCFAsyncQueryableServices.Specifications" />
+    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" />
+    <DAL NamespaceName="WCFAsyncQueryableServices.DAL" />
+    <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" />
+    <Expressions NamespaceName="WCFAsyncQueryableServices.SerializableExpressions" />
+    <Service NamespaceName="WCFAsyncQueryableServices.Service" />
+    <ServiceInterfaces NamespaceName="WCFAsyncQueryableServices.Service.Interfaces" />
+    <WCFService NamespaceName="WCFAsyncQueryableServices.WCFService" />
+    <WCFServiceContract NamespaceName="WCFAsyncQueryableServices.WCFService.Contract" />
+  </Framework>
+</WCFAsyncQueryableServices.Server>

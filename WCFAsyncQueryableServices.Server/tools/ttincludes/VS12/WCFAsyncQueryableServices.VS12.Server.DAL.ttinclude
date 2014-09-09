@@ -1,0 +1,68 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.Specifications.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.VS12.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Server.DAL.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteEdmFunction(CodeGenerationTools code, EntityContainer container, string icontextName, IEnumerable<FunctionImportParameter> parameters, TypeUsage returnType, string returnTypeFullName, EdmFunction edmFunction, string paramList)
+{
+	string functionName = code.Escape(edmFunction);
+	if (edmFunction.IsComposableAttribute)
+	{
+#>
+	[EdmFunction("<#=edmFunction.NamespaceName#>", "<#=edmFunction.Name#>")]
+	public IQueryable<<#=returnTypeFullName#>> <#=functionName#>(<#=paramList#>)
+	{
+<#+
+		WriteFunctionParameters(parameters);
+#>
+		return base.CreateQuery<<#=returnTypeFullName#>>("[<#=edmFunction.NamespaceName#>].[<#=edmFunction.Name#>](<#=string.Join(", ", parameters.Select(p => "@" + p.EsqlParameterName).ToArray())#>)"<#=code.StringBefore(", ", string.Join(", ", parameters.Select(p => p.ExecuteParameterName).ToArray()))#>);
+	}
+	IQueryable<<#=returnTypeFullName#>> <#=icontextName#>.<#=functionName#>(<#=paramList#>)	
+	{
+		return <#=functionName#>(<#=String.Join(", ", parameters.Select(p => p.FunctionParameterName).ToArray())#>);
+	}
+	Expression <#=icontextName#>.<#=functionName#>Expression(<#=paramList#>)
+	{
+		Expression<Func<IQueryable<<#=returnTypeFullName#>>>> <#=code.CamelCase(functionName)#> = () => <#=functionName#>(<#=String.Join(", ", parameters.Select(p => p.FunctionParameterName).ToArray())#>);
+		var callExpression = (MethodCallExpression)<#=code.CamelCase(functionName)#>.Body;
+		return Expression.Call(((Expression<Func<<#=code.Escape(container)#>>>)(() => this)).Body, callExpression.Method, callExpression.Arguments);
+	}
+<#+
+	}
+	else
+	{
+#>
+	public <#=returnType == null ? "int" : "ObjectResult<" + returnTypeFullName + ">"#> <#=functionName#>(<#=paramList#>)
+	{
+<#+
+		WriteFunctionParameters(parameters);
+#>
+		return base.ExecuteFunction<#=returnType == null ? "" : "<" + returnTypeFullName + ">"#>("<#=edmFunction.Name#>"<#=code.StringBefore(", ", String.Join(", ", parameters.Select(p => p.ExecuteParameterName).ToArray()))#>);
+	}
+<#+
+		bool mergeOption = false;
+		if(returnType != null && returnType.EdmType.BuiltInTypeKind == BuiltInTypeKind.EntityType)
+		{
+			mergeOption = true;
+#>
+
+	public <#=returnType == null ? "int" : "ObjectResult<" + returnTypeFullName + ">"#> <#=functionName#>(<#=code.StringAfter(paramList, ", ")#>MergeOption mergeOption)
+	{
+<#+
+			WriteFunctionParameters(parameters);
+#>
+		return base.<#=returnType == null ? "ExecuteFunction" : "ExecuteFunction<" + returnTypeFullName + ">"#>("<#=edmFunction.Name#>", mergeOption<#=code.StringBefore(", ", string.Join(", ", parameters.Select(p => p.ExecuteParameterName).ToArray()))#>);
+	}
+<#+
+		}
+#>
+
+	<#=returnType == null ? "int" : "IEnumerable<" + returnTypeFullName + ">"#> <#=icontextName#>.<#=functionName#>(<#=paramList#>)
+	{
+		return <#=functionName#>(<#=String.Join(", ", parameters.Select(p => p.FunctionParameterName).ToArray())#><#=mergeOption ? ", MergeOption.NoTracking" : ""#>);
+	}
+<#+
+	}
+}
+#>

@@ -1,0 +1,45 @@
+<#@ include file="WCFAsyncQueryableServices.Server.DAL.CSharp.Views.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.VS12.Edmx.Utility.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+Version SetXmlNamespaces(XDocument edmxDoc, out XElement edmxNode, out XNamespace edmxns, out XNamespace csdlns, out XNamespace mslns, out XNamespace ssdlns)
+{
+	XNamespace edmxns_V1 = "http://schemas.microsoft.com/ado/2007/06/edmx";
+	XNamespace edmxns_V2 = "http://schemas.microsoft.com/ado/2008/10/edmx";
+	XNamespace edmxns_V3 = "http://schemas.microsoft.com/ado/2009/11/edmx";
+
+	edmxNode = edmxDoc.Element(edmxns_V1 + "Edmx");
+	if (edmxNode == null)
+	{
+		edmxNode = edmxDoc.Element(edmxns_V2 + "Edmx");
+		if (edmxNode == null)
+		{
+			edmxNode = edmxDoc.Element(edmxns_V3 + "Edmx");
+			edmxns = "http://schemas.microsoft.com/ado/2009/11/edmx";
+			csdlns = "http://schemas.microsoft.com/ado/2009/11/edm";
+			mslns = "http://schemas.microsoft.com/ado/2009/11/mapping/cs";
+			ssdlns = "http://schemas.microsoft.com/ado/2009/11/edm/ssdl";
+			return new Version(3,0,0,0);
+		}
+		else
+		{
+			edmxNode = edmxDoc.Element(edmxns_V2 + "Edmx");
+			edmxns = "http://schemas.microsoft.com/ado/2008/10/edmx";
+			csdlns = "http://schemas.microsoft.com/ado/2008/09/edm";
+			mslns = "http://schemas.microsoft.com/ado/2008/09/mapping/cs";
+			ssdlns = "http://schemas.microsoft.com/ado/2009/02/edm/ssdl";
+			return new Version(2,0,0,0);
+		}
+	}
+	else
+	{
+		// the Edmx file is in V1 namespace
+		edmxns = "http://schemas.microsoft.com/ado/2007/06/edmx";
+		csdlns = "http://schemas.microsoft.com/ado/2006/04/edm";
+		mslns = "urn:schemas-microsoft-com:windows:storage:mapping:CS";
+		ssdlns = "http://schemas.microsoft.com/ado/2006/04/edm/ssdl";
+		return new Version(1,0,0,0);
+	}
+}
+#>

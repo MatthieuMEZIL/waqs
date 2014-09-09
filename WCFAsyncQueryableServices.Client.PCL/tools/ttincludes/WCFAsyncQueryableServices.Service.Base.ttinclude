@@ -1,0 +1,21 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.DTO.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServiceMethod(MethodDeclarationSyntax specificationServiceMethod, SpecificationsElements specificationsElements, EdmxElements edmxElements, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, Action<MethodDeclarationSyntax, IEnumerable<ParameterSyntax>, TypeSyntax, ISemanticModel, SpecificationsElements, EdmxElements, string, string, List<MethodSymbol>, List<MethodDeclarationSyntax>, string, string, string, IEnumerable<TypeSymbol>, DTOAndInterfacesTypesRewriter> writeServiceMethod, List<MethodSymbol> addedSubMethods = null, List<MethodDeclarationSyntax> methods = null, string entitiesNamespace = null, IEnumerable<TypeSymbol> dtoTypes = null)
+{
+	var semanticModel = specificationsElements.SemanticModelPerMethods[specificationServiceMethod];
+	if (specificationsElements.OverrideMethods.Contains(specificationServiceMethod))
+		return;
+	var dtoAndInterfacesTypesRewriter = new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes);
+	var returnType = (TypeSyntax)dtoAndInterfacesTypesRewriter.Visit(specificationServiceMethod.ReturnType);
+	bool hasContext;
+	string contextName;
+	bool hasService;
+	string serviceName;
+	IEnumerable<ParameterSyntax> parameters = specificationServiceMethod.ParameterList.Parameters;
+	parameters = specificationsElements.GetParametersWithoutContextAndService(specificationServiceMethod, parameters, dtoTypes, out hasContext, out contextName, out hasService, out serviceName, null, p => p.WithType((TypeSyntax)dtoAndInterfacesTypesRewriter.Visit(p.Type)));
+	writeServiceMethod(specificationServiceMethod, parameters, returnType, semanticModel, specificationsElements, edmxElements, contextName, serviceName, addedSubMethods, methods, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, dtoTypes, dtoAndInterfacesTypesRewriter);
+}
+#>

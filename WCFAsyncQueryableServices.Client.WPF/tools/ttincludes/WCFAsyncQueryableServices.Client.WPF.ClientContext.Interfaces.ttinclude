@@ -1,0 +1,13 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ClientContext.Interfaces.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string GetEnumValues(string typeName)
+{
+	return string.Format("Enum.GetValues(typeof({0})).OfType<{0}>()", typeName);
+}
+
+void WriteSpecificClasses(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string contextName, string dtoNamespace, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxQueryResultNamespace, string clientEntitiesNamespace, string serverEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string namespaceName)
+{
+}
+#>

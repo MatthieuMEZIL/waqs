@@ -1,0 +1,141 @@
+<#@ template language="C#" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#@ include file="WCFAsyncQueryableServices.Client.Global.ClientContext.Base.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClientGlobalClientContext(ClientContext[] clientContexts, string wcfNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string globalClientContextInterfacesNamespace, string namespaceName = null, bool useAsyncPrefix = true)
+{
+    string asyncSuffix = useAsyncPrefix ? "Async" : "";
+    CodeGenerationTools code = new CodeGenerationTools(this);
+
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    var usings = new [] {"System", "System.Collections.Generic", "System.Linq", "System.ServiceModel", "System.Threading.Tasks", clientFxClientContextInterfacesNamespace, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxClientContextInterfacesNamespace + ".Errors", clientFxClientContextNamespace + ".Fault", namespaceName + ".Serialization", namespaceName + ".ServiceReference"}.Union(clientContexts.SelectMany(clientContext => 
+    {
+        var clientContextWAQSElement = XElement.Load(Path.Combine(Path.GetDirectoryName(Host.TemplateFile), clientContext.WAQS));
+        var clientContextInterfaceNamespace = clientContextWAQSElement.Element("ClientContextInterfaces").Attribute("NamespaceName").Value;
+        var clientContextNamespace = clientContextWAQSElement.Element("ClientContext").Attribute("NamespaceName").Value;
+        return new [] { clientContextInterfaceNamespace, clientContextInterfaceNamespace + ".Serialization", clientContextNamespace + ".Fault" };
+    }));
+
+    fileManager.StartNewFile("GlobalClientContext.cs");
+    WriteHeader(namespaceName, code, usings.ToArray());
+#>
+public partial class GlobalClientContext : IGlobalClientContext
+{
+    private Func<IGlobalWCFService> _serviceFactory;
+
+    public GlobalClientContext(Func<IGlobalWCFService> serviceFactory)
+    {
+        _serviceFactory = serviceFactory;
+    }
+
+    public async Task SaveChanges<#=asyncSuffix#>(IEnumerable<IClientContext> clientContexts, bool validate)
+    {
+        if (! clientContexts.Any())
+            return;
+        foreach (var clientContext in clientContexts)
+            clientContext.SavingChanges(validate);
+        var globalSerializedContexts = new GlobalSerializedContexts();
+<#+
+    foreach (var clientContext in clientContexts)
+    {
+        var clientContextName = clientContext.Name;
+        var clientContextCamelName = code.CamelCase(clientContextName);
+#>
+        var <#=clientContextCamelName#>ClientContexts = clientContexts.OfType<I<#=clientContextName#>ClientContext>().ToList();
+        var <#=clientContextCamelName#>ModifiedEntities = new List<<#=clientContextName#>SerializableContext>();
+        var <#=clientContextCamelName#>SentContexts = new List<<#=clientContextName#>SerializableContext>();
+        foreach (var clientContext in <#=clientContextCamelName#>ClientContexts)
+        {
+            var modifiedEntities = clientContext.GetModifiedEntities();
+            <#=clientContextCamelName#>ModifiedEntities.Add(modifiedEntities);
+            <#=clientContextCamelName#>SentContexts.Add(clientContext.GetSerializableContext(modifiedEntities));
+        }
+        globalSerializedContexts.<#=clientContextName#>SerializableContexts = <#=clientContextCamelName#>SentContexts;
+<#+
+    }
+#>
+        try
+        {
+            globalSerializedContexts = await ProxyHelper.ExecuteFunc<#=asyncSuffix#>(_serviceFactory, service => Task.Factory.FromAsync(service.BeginSaveChanges(globalSerializedContexts, null, null), ar => service.EndSaveChanges(ar)), 0);
+<#+
+    foreach (var clientContext in clientContexts)
+    {
+        var clientContextName = clientContext.Name;
+        var clientContextCamelName = code.CamelCase(clientContextName);
+#>
+            for (int i = 0 ; i < <#=clientContextCamelName#>ClientContexts.Count ; i ++)
+            {
+                <#=clientContextCamelName#>ClientContexts[i].Refresh(<#=clientContextCamelName#>ModifiedEntities[i], globalSerializedContexts.<#=clientContextName#>SerializableContexts[i]);
+                <#=clientContextCamelName#>ClientContexts[i].SavedChanges();
+            }
+<#+
+    }
+#>
+        }
+        catch (FaultException<ErrorCollection> e)
+        {
+            ErrorException.Throw(e.Detail.Errors, ErrorSource.FromServer); 
+        }
+<#+
+    foreach (var edmxName in clientContexts.Select(cc => cc.Name))
+    {
+#>
+        catch (FaultException<<#=edmxName#>FaultDetailEntities> e)
+        {
+            SavingException.Throw(e.Detail.ErrorType, e.Detail.ErrorMessage);
+        }
+<#+
+    }
+#>
+        catch (FaultException<FaultDetail> e)
+        {
+            ServerException.Throw(e.Detail.ErrorType, e.Detail.ErrorMessage);
+        }
+        catch(Exception e)
+        {
+            bool catched = false;
+            CatchException(e, ref catched);
+            if (! catched)
+                throw e;
+        }
+    }
+
+    partial void CustomCatchException(Exception e, ref bool catched);
+    protected virtual void CatchException(Exception e, ref bool catched)
+    {
+        CustomCatchException(e, ref catched);
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("GlobalSerializedContexts.cs");
+    WriteHeader(namespaceName + ".Serialization", code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "<#=wcfNamespace#>/SerializableContext")]
+public partial class GlobalSerializedContexts
+{
+<#+
+    foreach (var clientContext in clientContexts)
+    {
+        var clientContextInterfacesNamespace = XElement.Load(Path.Combine(Path.GetDirectoryName(Host.TemplateFile), clientContext.WAQS)).Element("ClientContextInterfaces").Attribute("NamespaceName").Value;
+#>
+    [DataMember]
+    public List<<#=clientContextInterfacesNamespace#>.Serialization.<#=clientContext.Name#>SerializableContext> <#=clientContext.Name#>SerializableContexts { get; set; }
+
+<#+
+    }
+#>
+}
+<#+	
+    WriteFooter(namespaceName + ".Serialization");
+
+    fileManager.Process();
+}
+#>

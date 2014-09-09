@@ -1,0 +1,4 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.Server.Fx.Service.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

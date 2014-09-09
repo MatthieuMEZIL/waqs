@@ -1,0 +1,205 @@
+<#@ include file="WCFAsyncQueryableServices.Service.Base.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerServiceInterfaces(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath entitiesPath, string serverFxSpecificationsNamespace, string serverFxServiceInterfacesNamespace, string serverFxSerializableExpressionsNamespace, string serverFxDALInterfacesNamespace, string serverEntitiesNamespace, string namespaceName, string relativePath)
+{
+	var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+	var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+	var code = edmxElements.Code;
+	var dtoTypes = GetClasses(dtoPathes).ToList();
+	var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Server, isInterface:true);
+
+	IEnumerable<string> usings = new string[] { "System", "System.Collections.Generic", serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverFxSerializableExpressionsNamespace, serverEntitiesNamespace };
+	List<string> specificationMethodsUsings;
+	if (specificationsElements.Usings.TryGetValue("@ServiceContract", out specificationMethodsUsings))
+		usings = usings.Union(specificationMethodsUsings);
+	if (specificationsElements.Usings.TryGetValue("@Service", out specificationMethodsUsings))
+		usings = usings.Union(specificationMethodsUsings);
+	fileManager.StartNewFile(string.Concat("I", edmxElements.EdmxName, "Service.cs"));
+	WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
+#>
+public partial interface I<#=edmxElements.EdmxName#>Service : <#=serverFxServiceInterfacesNamespace#>.IService, IDisposable
+{	
+<#+
+	foreach (EntitySet entitySet in edmxElements.EntitySets)
+	{
+		var entityType = entitySet.ElementType;
+#>
+	IEntitySet<<#=serverEntitiesNamespace#>.<#=code.Escape(entitySet.ElementType)#>> <#=code.Escape(entitySet)#> { get; }
+	void ApplyChanges(<#=serverEntitiesNamespace#>.<#=code.Escape(entitySet.ElementType)#> entity);
+ 
+<#+
+	}
+
+	foreach (EdmFunction edmFunction in edmxElements.FunctionImports.Where(fi => IsPublicOrInternal(fi)))
+	{
+		TypeUsage returnType;
+		var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+		if (returnType == null)
+			continue;
+		FunctionImportParameter[] parameters;
+		var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+#>
+	List<<#=returnTypeName#>> <#=code.Escape(edmFunction)#>(<#=parametersAsString#>);
+
+<#+
+	}
+#>	<#=edmxElements.EdmxName#>QueryResult Execute(QuerySerialization query);
+
+	<#=edmxElements.EdmxName#>QueriesResult ExecuteMany(QueriesSerialization queries);
+
+	<#=edmxElements.EdmxName#>QueryResultPage LoadPage(int pageSize, SerializableExpression queryExpression, IEnumerable<string> withSpecificationsProperties, LoadPageParameter[] identifiers);
+
+	DateTime GetDbDateTime();
+	
+	void SaveChanges();
+<#+
+	foreach (var edmType in edmxElements.EdmTypes)
+	{
+		string typeName = edmxElements.Code.Escape(edmType);
+#>
+
+	IEnumerable<Error> Validate(<#=typeName#> entity);
+<#+
+	}
+	foreach (var specificationServiceMethod in specificationsElements.AllServiceMethods.Union(specificationsElements.SubMethods))
+		WriteServiceMethod(specificationServiceMethod, specificationsElements, edmxElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, WriteServiceMethod, dtoTypes:dtoTypes);
+#>
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	fileManager.StartNewFile(edmxElements.EdmxName + "QueryResult.cs");
+	WriteHeader(edmxElements.NamespaceName, code, "System", "System.Runtime.Serialization", serverEntitiesNamespace, serverFxServiceInterfacesNamespace);
+#>
+[DataContract(Namespace = "http://<#= edmxElements.EdmxName#>/QueryResult")]
+[KnownType(typeof(int))]
+[KnownType(typeof(uint))]
+[KnownType(typeof(short))]
+[KnownType(typeof(ushort))]
+[KnownType(typeof(byte))]
+[KnownType(typeof(long))]
+[KnownType(typeof(ulong))]
+[KnownType(typeof(decimal))]
+[KnownType(typeof(double))]
+[KnownType(typeof(char))]
+[KnownType(typeof(DateTime))]
+[KnownType(typeof(DateTimeOffset))]
+[KnownType(typeof(TimeSpan))]
+[KnownType(typeof(int?))]
+[KnownType(typeof(uint?))]
+[KnownType(typeof(short?))]
+[KnownType(typeof(ushort?))]
+[KnownType(typeof(byte?))]
+[KnownType(typeof(long?))]
+[KnownType(typeof(ulong?))]
+[KnownType(typeof(decimal?))]
+[KnownType(typeof(double?))]
+[KnownType(typeof(char?))]
+[KnownType(typeof(DateTime?))]
+[KnownType(typeof(DateTimeOffset?))]
+[KnownType(typeof(TimeSpan?))]
+[KnownType(typeof(string))]
+[KnownType(typeof(int[]))]
+[KnownType(typeof(uint[]))]
+[KnownType(typeof(short[]))]
+[KnownType(typeof(ushort[]))]
+[KnownType(typeof(byte[]))]
+[KnownType(typeof(long[]))]
+[KnownType(typeof(ulong[]))]
+[KnownType(typeof(decimal[]))]
+[KnownType(typeof(double[]))]
+[KnownType(typeof(char[]))]
+[KnownType(typeof(DateTime[]))]
+[KnownType(typeof(DateTimeOffset[]))]
+[KnownType(typeof(TimeSpan[]))]
+[KnownType(typeof(int?[]))]
+[KnownType(typeof(uint?[]))]
+[KnownType(typeof(short?[]))]
+[KnownType(typeof(ushort?[]))]
+[KnownType(typeof(byte?[]))]
+[KnownType(typeof(long?[]))]
+[KnownType(typeof(ulong?[]))]
+[KnownType(typeof(decimal?[]))]
+[KnownType(typeof(double?[]))]
+[KnownType(typeof(char?[]))]
+[KnownType(typeof(DateTime?[]))]
+[KnownType(typeof(DateTimeOffset?[]))]
+[KnownType(typeof(TimeSpan?[]))]
+[KnownType(typeof(string[]))]
+<#+
+	foreach (var type in GetAllTypes(edmxElements.ItemCollection).OrderBy(e => e.Name).Where(e => IsPublic(e)))
+	{
+#>
+[KnownType(typeof(<#=code.Escape(type)#>))]
+[KnownType(typeof(<#=code.Escape(type)#>[]))]
+<#+
+	}
+	foreach (var type in GetClasses(dtoPathes))
+	{
+#>
+[KnownType(typeof(<#=dtoNamespace#>.<#=type.Name#>))]
+[KnownType(typeof(<#=dtoNamespace#>.<#=type.Name#>[]))]
+<#+
+	}
+	foreach (var includeKeysType in GetKeysTypes(edmxElements))
+	{
+#>
+[KnownType(typeof(<#=edmxElements.NamespaceName#>.Query.Include.<#=includeKeysType#>))]
+[KnownType(typeof(<#=edmxElements.NamespaceName#>.Query.Include.<#=includeKeysType#>[]))]
+<#+
+	}
+#>
+public partial class <#=edmxElements.EdmxName#>QueryResult : QueryResult
+{
+	[DataMember]
+	public object Values { get; set; }
+
+	[DataMember]
+	public object Value { get; set; }
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	fileManager.StartNewFile(edmxElements.EdmxName + "QueriesResult.cs");
+	WriteHeader(edmxElements.NamespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://<#=edmxElements.EdmxName#>/QueryResult")]
+public class <#=edmxElements.EdmxName#>QueriesResult
+{
+	[DataMember]
+	public <#=edmxElements.EdmxName#>QueryResult[] QueryResults { get; set; }
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	fileManager.StartNewFile(edmxElements.EdmxName + "QueryResultPage.cs");
+	WriteHeader(edmxElements.NamespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://<#=edmxElements.EdmxName#>/QueryResult")]
+public partial class <#=edmxElements.EdmxName#>QueryResultPage
+{
+	[DataMember]
+	public int PageIndex { get; set; }
+
+	[DataMember]
+	public <#=edmxElements.EdmxName#>QueryResult Result { get; set; }
+}
+<#+
+	WriteFooter(edmxElements.NamespaceName);
+
+	foreach (var _ in WriteKeysTypes(edmxElements, fileManager, serverEntitiesNamespace, edmxElements.EdmxName, relativePath));
+
+	fileManager.Process();
+}
+
+void WriteServiceMethod(MethodDeclarationSyntax specificationServiceMethod, IEnumerable<ParameterSyntax> parameters, TypeSyntax returnType, ISemanticModel semanticModel, SpecificationsElements specificationsElements, EdmxElements edmxElements, string contextName, string serviceName, List<MethodSymbol> addedSubMethods, List<MethodDeclarationSyntax> methods, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, IEnumerable<ITypeSymbol> dtos, DTOAndInterfacesTypesRewriter dtoAndInterfacesTypesRewriter)
+{
+#>
+
+	<#=SyntaxFactory.MethodDeclaration(returnType, specificationServiceMethod.Identifier.ValueText)
+	.WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList<ParameterSyntax>(parameters.Select(p => SyntaxFactory.Parameter(p.Identifier).WithType(p.Type).WithDefault(p.Default)), parameters.Skip(1).Select(v => SyntaxFactory.Token(SyntaxKind.CommaToken))))).WithTypeParameterList(specificationServiceMethod.TypeParameterList).WithConstraintClauses(SyntaxFactory.List(specificationServiceMethod.ConstraintClauses.Select(cc =>  (TypeParameterConstraintClauseSyntax)dtoAndInterfacesTypesRewriter.Visit(cc)))).NormalizeWhitespace().ToString()#>;
+<#+
+}
+#>

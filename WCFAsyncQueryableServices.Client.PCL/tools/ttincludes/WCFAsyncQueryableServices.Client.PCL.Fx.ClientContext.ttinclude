@@ -1,0 +1,115 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Fx.ClientContext.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string ExpressionCall(string method, string parameters)
+{
+	return string.Concat("Expression.Call(", method, ", ", parameters, ".ToArray())");
+}
+
+void AddClientEntitySetExtensionsUsings(List<string> usings)
+{
+}
+
+string GetConcurrentDictionary()
+{
+    return "Dictionary";
+}
+
+bool GetConcurrentDictionaryTry()
+{
+    return false;
+}
+
+void WriteSpecificClasses(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string clientFxComponentModelNamespace, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string namespaceName, string asyncSuffix)
+{
+	fileManager.StartNewFile("ByStepQuery.cs");
+	WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Collections.ObjectModel", "System.Threading.Tasks", clientFxComponentModelNamespace, clientFxClientContextInterfacesNamespace);
+#>
+public class ByStepQuery : BindableObject
+{
+	public const int DefaultPageSizeConst = 20;
+	private static int? _defaultPageSize;
+	public static int DefaultPageSize
+	{
+		get { return _defaultPageSize ?? DefaultPageSizeConst; }
+		set { _defaultPageSize = value; }
+	}
+}
+
+public class ByStepQuery<T> : ByStepQuery
+{
+	private IAsyncQueryable<T> _query;
+	private MergeOption? _mergeOption;
+
+	public ByStepQuery(IAsyncQueryable<T> query, int? pageSize = null, MergeOption? mergeOption = null)
+	{
+		_query = query;
+		PageSize = pageSize ?? DefaultPageSize;
+		_mergeOption = mergeOption;
+	}
+
+	public int PageSize { get; private set; }
+
+	private ObservableCollection<T> _items;
+	public ObservableCollection<T> Items
+	{
+		get { return _items ?? (_items = new ObservableCollection<T>()); }
+	}
+
+
+	public ByStepQuery<T> Load()
+	{
+		LoadInternal<#=asyncSuffix#>().ConfigureAwait(true);
+		return this;
+	}
+
+	private async Task LoadInternal<#=asyncSuffix#>()
+	{
+		int pageIndex = 0;
+		int count;
+		do
+		{
+			count = 0;
+			IEnumerable<T> values;
+			values = await _query.Skip(pageIndex * PageSize).Take(PageSize).Execute<#=asyncSuffix#>(_mergeOption);
+			if (_cancelled)
+				return;
+			foreach (var value in values)
+			{
+				Items.Add(value);
+				count++;
+			}
+			pageIndex++;
+		} while (count == PageSize);
+	}
+
+	private bool _cancelled;
+	public void Cancel()
+	{
+		_cancelled = true;
+	}
+
+	private bool _isCompleted;
+	public bool IsCompleted
+	{
+		get { return _isCompleted; }
+		set
+		{
+			_isCompleted = value;
+			NotifyPropertyChanged.RaisePropertyChanged(() => IsCompleted);
+		}
+	}
+}
+
+public static class ByStepQueryExtension
+{
+	public static ByStepQuery<T> ToByStepQuery<T>(this IAsyncQueryable<T> query, int? pageSize = null, MergeOption? mergeOption = null)
+	{
+		return new ByStepQuery<T>(query, pageSize, mergeOption);
+	}
+}
+<#+
+	WriteFooter(namespaceName);
+}
+#>

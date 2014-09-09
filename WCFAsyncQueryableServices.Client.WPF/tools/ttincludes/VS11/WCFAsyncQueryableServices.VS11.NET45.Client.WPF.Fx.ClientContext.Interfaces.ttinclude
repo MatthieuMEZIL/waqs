@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.Client.WPF.Fx.ClientContext.Interfaces.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.VS11.Client.Fx.ClientContext.Interfaces.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

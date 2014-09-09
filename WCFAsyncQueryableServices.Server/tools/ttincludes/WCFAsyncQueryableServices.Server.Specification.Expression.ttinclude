@@ -1,0 +1,42 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string ToExpression(MethodDeclarationSyntax method, Func<SyntaxNode, SyntaxNode> transformNodes, out bool isValid)
+{
+	var toExpression = new ToExpressionRewriter(method.ParameterList.Parameters[0].Identifier.GetFullText().Trim(), transformNodes);
+	SyntaxNode exp = ((ReturnStatementSyntax)((BlockSyntax)toExpression.Visit(method.Body)).Statements[0]).Expression;
+	var value = exp.NormalizeWhitespace().ToString();
+	isValid = toExpression.IsValid;
+	return value;
+}
+
+class ToExpressionRewriter : SyntaxRewriter
+{
+	private string _parameterName;
+	private Func<SyntaxNode, SyntaxNode> _transformNodes;
+
+	public ToExpressionRewriter(string parameterName, Func<SyntaxNode, SyntaxNode> transformNodes)
+	{
+		_parameterName = parameterName;
+		_transformNodes = transformNodes;
+		IsValid = true;
+	}
+
+	public bool IsValid { get; private set; }
+
+	public override SyntaxNode Visit(SyntaxNode node)
+	{
+		var newNode = _transformNodes(node);
+		if (newNode == node)
+			return base.Visit(node);
+		return newNode;
+	}
+
+	public override SyntaxNode VisitReturnStatement(ReturnStatementSyntax node)
+	{
+		return Syntax.ParseStatement(string.Concat("return ", _parameterName, " => ", Visit(node.Expression).NormalizeWhitespace().ToString(), ";"));
+	}
+}
+#>

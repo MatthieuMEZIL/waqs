@@ -1,0 +1,19 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.Client.WPF.ClientContext.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void ApplyBackground(string @delegate)
+{
+#>UIThread.Dispatcher.Invoke(() => <#=@delegate#>, System.Windows.Threading.DispatcherPriority.Background)<#+
+}
+
+void DispatcherInvoke(string body, bool addSemiColon = true, string delegateType = null)
+{
+#>UIThread.Dispatcher.Invoke(() => <#=body#>)<#=addSemiColon ? ";" : ""#><#+
+}
+
+void DispatcherCatchInvoke(string body, bool addSemiColon = true, string delegateType = null)
+{
+#>UIThread.Dispatcher.Invoke(() => <#=body#>)<#=addSemiColon ? ";" : ""#><#+
+}
+#>

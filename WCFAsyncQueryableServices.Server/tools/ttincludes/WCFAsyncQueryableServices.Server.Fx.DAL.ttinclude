@@ -1,0 +1,1368 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#@ import namespace="System.IO" #>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxDAL(string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxCommonNamespace, string namespaceName = null)
+{
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    MetadataLoader loader = new MetadataLoader(this);
+    CodeRegion region = new CodeRegion(this, 1);
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    fileManager.StartNewFile("SelfTrackingEntitiesContextExtensions.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.ComponentModel", "System.Data.Common", "System.Data.Entity", "System.Data.Entity.Core", "System.Data.Entity.Core.Metadata.Edm", "System.Data.Entity.Core.Objects", "System.Data.Entity.Core.Objects.DataClasses", "System.Globalization", "System.Linq", serverFxEntitiesNamespace);
+#>
+public static class SelfTrackingEntitiesContextExtensions
+{
+    public static void ApplyChanges<TEntity>(this ObjectSet<TEntity> objectSet, TEntity entity) where TEntity : class, IObjectWithChangeTracker
+    {
+        if (objectSet == null)
+            throw new ArgumentNullException("objectSet");
+        objectSet.Context.ApplyChanges<TEntity>(objectSet.EntitySet.EntityContainer.Name + "." + objectSet.EntitySet.Name, entity);
+    }
+
+    public static void ApplyChanges<TEntity>(this ObjectContext context, string entitySetName, TEntity entity) where TEntity : IObjectWithChangeTracker
+    {
+        if (context == null)
+            throw new ArgumentNullException("context");
+        if (String.IsNullOrEmpty(entitySetName))
+            throw new ArgumentException("String parameter cannot be null or empty.", "entitySetName");
+        if (entity == null)
+            throw new ArgumentNullException("entity");
+
+        bool lazyLoadingSetting = context.ContextOptions.LazyLoadingEnabled;
+        try
+        {
+            context.ContextOptions.LazyLoadingEnabled = false;
+
+            EntityIndex entityIndex = AddHelper.AddAllEntities(context, entitySetName, entity);
+            RelationshipSet allRelationships = new RelationshipSet(context, entityIndex.AllEntities);
+
+            #region Handle Initial Entity State
+
+            foreach (IObjectWithChangeTracker changedEntity in entityIndex.AllEntities.Where(x => x.ChangeTracker.State == ObjectState.Deleted))
+                HandleDeletedEntity(context, entityIndex, allRelationships, changedEntity);
+
+            foreach (IObjectWithChangeTracker changedEntity in entityIndex.AllEntities.Where(x => x.ChangeTracker.State != ObjectState.Deleted))
+                HandleEntity(context, entityIndex, allRelationships, changedEntity);
+
+            #endregion
+
+            #region Loop through each object state entries
+
+            foreach (IObjectWithChangeTracker changedEntity in entityIndex.AllEntities)
+            {
+                ObjectStateEntry entry = context.ObjectStateManager.GetObjectStateEntry(changedEntity);
+
+                EntityType entityType = context.MetadataWorkspace.GetCSpaceEntityType(changedEntity.GetType());
+
+                foreach (NavigationProperty navProp in entityType.NavigationProperties)
+                {
+                    RelatedEnd relatedEnd = entry.GetRelatedEnd(navProp.Name);
+                    if (!((AssociationType)relatedEnd.RelationshipSet.ElementType).IsForeignKey)
+                    {
+                        ApplyChangesToIndependentAssociation(context, (IObjectWithChangeTracker)changedEntity, entry, navProp, relatedEnd, allRelationships);
+                    }
+
+                }
+            }
+            #endregion
+
+            foreach (var relationship in allRelationships)
+            {
+                context.ObjectStateManager.ChangeRelationshipState(
+                    relationship.End0,
+                    relationship.End1,
+                    relationship.AssociationSet.ElementType.FullName,
+                    relationship.AssociationEndMembers[1].Name,
+                    relationship.State);
+            }
+        }
+        finally
+        {
+            context.ContextOptions.LazyLoadingEnabled = lazyLoadingSetting;
+        }
+    }
+
+    private static void ApplyChangesToIndependentAssociation(ObjectContext context, IObjectWithChangeTracker changedEntity, ObjectStateEntry entry, NavigationProperty navProp,
+        IRelatedEnd relatedEnd, RelationshipSet allRelationships)
+    {
+        ObjectChangeTracker changeTracker = changedEntity.ChangeTracker;
+
+        if (changeTracker.State == ObjectState.Added)
+        {
+            foreach (object relatedEntity in relatedEnd)
+            {
+                ObjectStateEntry addedRelationshipEntry =
+                            context.ObjectStateManager.ChangeRelationshipState(
+                                changedEntity,
+                                relatedEntity,
+                                navProp.Name,
+                                EntityState.Added);
+
+                allRelationships.Remove(addedRelationshipEntry);
+            }
+        }
+        else
+        {
+            if (navProp.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+                ObjectList collectionPropertyChanges = null;
+                if (changeTracker.ObjectsRemovedFromCollectionProperties.TryGetValue(navProp.Name, out collectionPropertyChanges))
+                {
+                    foreach (var removedEntityFromAssociation in collectionPropertyChanges)
+                    {
+                        ObjectStateEntry deletedRelationshipEntry =
+                            context.ObjectStateManager.ChangeRelationshipState(
+                                changedEntity,
+                                removedEntityFromAssociation,
+                                navProp.Name,
+                                EntityState.Deleted);
+
+                        allRelationships.Remove(deletedRelationshipEntry);
+                    }
+                }
+
+                if (changeTracker.ObjectsAddedToCollectionProperties.TryGetValue(navProp.Name, out collectionPropertyChanges))
+                {
+                    foreach (var addedEntityFromAssociation in collectionPropertyChanges)
+                    {
+                        ObjectStateEntry addedRelationshipEntry =
+                            context.ObjectStateManager.ChangeRelationshipState(
+                                changedEntity,
+                                addedEntityFromAssociation,
+                                navProp.Name,
+                                EntityState.Added);
+
+                        allRelationships.Remove(addedRelationshipEntry);
+                    }
+                }
+            }
+            else
+            {
+
+                object originalReferenceValue;
+                if (changeTracker.OriginalValues.TryGetValue(navProp.Name, out originalReferenceValue))
+                {
+                    if (originalReferenceValue != null)
+                    {
+                        ObjectStateEntry deletedRelationshipEntry =
+                            context.ObjectStateManager.ChangeRelationshipState(
+                                entry.Entity,
+                                originalReferenceValue,
+                                navProp.Name,
+                                EntityState.Deleted);
+
+                        allRelationships.Remove(deletedRelationshipEntry);
+                    }
+
+                    object currentReferenceValue = null;
+                    foreach (object o in relatedEnd)
+                    {
+                        currentReferenceValue = o;
+                        break;
+                    }
+                    if (currentReferenceValue != null)
+                    {
+                        ObjectStateEntry addedRelationshipEntry =
+                            context.ObjectStateManager.ChangeRelationshipState(
+                                changedEntity,
+                                currentReferenceValue,
+                                navProp.Name,
+                                EntityState.Added);
+
+                        allRelationships.Remove(addedRelationshipEntry);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void HandleRelationshipKeys(ObjectContext context, EntityIndex entityIndex, RelationshipSet allRelationships, IObjectWithChangeTracker entity)
+    {
+        ObjectChangeTracker changeTracker = entity.ChangeTracker;
+        if (changeTracker.State == ObjectState.Unchanged ||
+            changeTracker.State == ObjectState.Modified ||
+            changeTracker.State == ObjectState.Deleted)
+        {
+            ObjectStateEntry entry = context.ObjectStateManager.GetObjectStateEntry(entity);
+            EntityType entityType = context.MetadataWorkspace.GetCSpaceEntityType(entity.GetType());
+            RelationshipManager relationshipManager = context.ObjectStateManager.GetRelationshipManager(entity);
+
+            foreach (var entityReference in EnumerateSaveReferences(relationshipManager))
+            {
+                AssociationSet associationSet = ((AssociationSet)entityReference.RelationshipSet);
+                AssociationEndMember fromEnd = associationSet.AssociationSetEnds[entityReference.SourceRoleName].CorrespondingAssociationEndMember;
+                AssociationEndMember toEnd = associationSet.AssociationSetEnds[entityReference.TargetRoleName].CorrespondingAssociationEndMember;
+
+                NavigationProperty navigationProperty = entityType.NavigationProperties.
+                                            SingleOrDefault(x => x.RelationshipType == associationSet.ElementType &&
+                                                            x.FromEndMember == fromEnd &&
+                                                            x.ToEndMember == toEnd);
+
+                EntityKey currentKey = GetSavedReferenceKey(entityIndex, entityReference, entity, navigationProperty, changeTracker.ExtendedProperties);
+
+                object originalValue = null;
+                EntityKey originalKey = null;
+                bool hasOriginalValue = false;
+                if (changeTracker.OriginalValues != null)
+                {
+                    if (navigationProperty != null)
+                        hasOriginalValue = changeTracker.OriginalValues.TryGetValue(navigationProperty.Name, out originalValue);
+                    if (!hasOriginalValue || originalValue == null)
+                        originalKey = GetSavedReferenceKey(entityIndex, entityReference, entity, navigationProperty, changeTracker.OriginalValues);
+                }
+
+                if (currentKey != null)
+                {
+                    ObjectStateEntry currentEntry;
+                    if (context.ObjectStateManager.TryGetObjectStateEntry(currentKey, out currentEntry) &&
+                        currentEntry.Entity != null &&
+                        currentEntry.State == EntityState.Deleted)
+                    {
+                        entityReference.EntityKey = null;
+                        MoveSavedReferenceKey(entityReference, entity, navigationProperty, changeTracker.ExtendedProperties, changeTracker.OriginalValues);
+                        originalKey = currentKey;
+                    }
+                    else
+                        CreateRelationship(context, entityReference, entry.EntityKey, currentKey, originalKey == null ? EntityState.Unchanged : EntityState.Added);
+                }
+                else
+                    currentKey = entityReference.GetCurrentEntityKey(context);
+
+                if (originalKey != null)
+                {
+                    ObjectStateEntry originalEntry = null;
+                    ObjectStateEntry deletedRelationshipEntry = null;
+                    if (context.ObjectStateManager.TryGetObjectStateEntry(originalKey, out originalEntry) &&
+                        originalEntry.Entity != null &&
+                        originalEntry.State == EntityState.Deleted)
+                        allRelationships.Add(entityReference, entry.Entity, originalEntry.Entity, EntityState.Deleted);
+                    else
+                    {
+                        EntityState currentRelationshipState = DetachRelationship(context, entityReference, entry, currentKey);
+
+                        EntityState targetRelationshipState = EntityState.Detached;
+                        EntityReference targetReference = null;
+                        EntityKey targetKey = null;
+                        if (originalEntry != null &&
+                            originalEntry.Entity != null &&
+                            originalEntry.RelationshipManager != null &&
+                            associationSet.AssociationSetEnds[fromEnd.Name].CorrespondingAssociationEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
+                        {
+                            targetReference = originalEntry.RelationshipManager.GetRelatedEnd(entityReference.RelationshipName, entityReference.SourceRoleName) as EntityReference;
+                            targetKey = targetReference.GetCurrentEntityKey(context);
+                            if (targetKey != null)
+                                targetRelationshipState = DetachRelationship(context, targetReference, originalEntry, targetKey);
+                        }
+
+
+                        deletedRelationshipEntry = CreateRelationship(context, entityReference, entry.EntityKey, originalKey, EntityState.Deleted);
+
+                        CreateRelationship(context, entityReference, entry.EntityKey, currentKey, currentRelationshipState);
+
+                        if (targetKey != null)
+                            CreateRelationship(context, targetReference, originalEntry.EntityKey, targetKey, targetRelationshipState);
+                    }
+                    if (deletedRelationshipEntry != null)
+                        allRelationships.Remove(deletedRelationshipEntry);
+                }
+                else if (currentKey == null && originalValue != null && entityReference.IsDependentEndOfReferentialConstraint())
+                {
+                    context.ObjectStateManager.ChangeRelationshipState(
+                                                        entry.Entity,
+                                                        originalValue,
+                                                        entityReference.RelationshipName,
+                                                        entityReference.TargetRoleName,
+                                                        EntityState.Added);
+                }
+            }
+        }
+    }
+
+    private static ObjectStateEntry CreateRelationship(ObjectContext context, EntityReference entityReference, EntityKey fromKey, EntityKey toKey, EntityState state)
+    {
+        if (state != EntityState.Detached)
+        {
+            AssociationSet associationSet = ((AssociationSet)entityReference.RelationshipSet);
+            AssociationEndMember fromEnd = associationSet.AssociationSetEnds[entityReference.SourceRoleName].CorrespondingAssociationEndMember;
+            AssociationEndMember toEnd = associationSet.AssociationSetEnds[entityReference.TargetRoleName].CorrespondingAssociationEndMember;
+
+            if (toKey.IsTemporary)
+            {
+                entityReference.EntityKey = null;
+
+                ObjectStateEntry targetEntry;
+                context.ObjectStateManager.TryGetObjectStateEntry(toKey, out targetEntry);
+                ((IRelatedEnd)entityReference).Add(targetEntry.Entity);
+            }
+            else
+                entityReference.EntityKey = toKey;
+
+            ObjectStateEntry relationshipEntry;
+            bool found = context.TryGetObjectStateEntry(fromKey, toKey, associationSet, fromEnd, toEnd, out relationshipEntry);
+
+            switch (state)
+            {
+                case EntityState.Added:
+                    break;
+                case EntityState.Unchanged:
+                    relationshipEntry.AcceptChanges();
+                    break;
+                case EntityState.Deleted:
+                    relationshipEntry.AcceptChanges();
+                    entityReference.EntityKey = null;
+                    break;
+            }
+            return relationshipEntry;
+        }
+        return null;
+    }
+
+    private static EntityState DetachRelationship(ObjectContext context, EntityReference entityReference, ObjectStateEntry fromEntry, EntityKey toKey)
+    {
+        EntityState currentRelationshipState = EntityState.Detached;
+
+        if (toKey != null)
+        {
+            AssociationSet associationSet = ((AssociationSet)entityReference.RelationshipSet);
+            AssociationEndMember fromEnd = associationSet.AssociationSetEnds[entityReference.SourceRoleName].CorrespondingAssociationEndMember;
+            AssociationEndMember toEnd = associationSet.AssociationSetEnds[entityReference.TargetRoleName].CorrespondingAssociationEndMember;
+
+            ObjectStateEntry currentRelationshipEntry = null;
+
+            if (context.TryGetObjectStateEntry(fromEntry.EntityKey, toKey, associationSet, fromEnd, toEnd, out currentRelationshipEntry))
+            {
+                currentRelationshipState = currentRelationshipEntry.State;
+
+                entityReference.EntityKey = null;
+                if (currentRelationshipEntry.State == EntityState.Deleted)
+                    currentRelationshipEntry.AcceptChanges();
+            }
+        }
+        return currentRelationshipState;
+    }
+
+    private static string CreateReferenceKeyLookup(string keyMemberName, EntityReference reference, NavigationProperty navigationProperty)
+    {
+        if (navigationProperty != null)
+            return String.Format(CultureInfo.InvariantCulture, "{0}.{1}", navigationProperty.Name, keyMemberName);
+        else
+            return String.Format(CultureInfo.InvariantCulture, "Navigate({0}.{1}).{2}", reference.RelationshipSet.ElementType.FullName, reference.TargetRoleName, keyMemberName);
+    }
+
+    private static EntityKey GetSavedReferenceKey(EntityIndex entityIndex, EntityReference reference, object entity, NavigationProperty navigationProperty, IDictionary<string, object> values)
+    {
+        EntitySet entitySet = ((AssociationSet)reference.RelationshipSet).AssociationSetEnds[reference.TargetRoleName].EntitySet;
+
+        List<EntityKeyMember> foundKeyMembers = new List<EntityKeyMember>(1);
+        bool foundNone = true;
+        bool missingSome = false;
+        foreach (var keyMember in entitySet.ElementType.KeyMembers)
+        {
+            string lookupKey = CreateReferenceKeyLookup(keyMember.Name, reference, navigationProperty);
+            object value;
+            if (values.TryGetValue(lookupKey, out value))
+            {
+                foundKeyMembers.Add(new EntityKeyMember(keyMember.Name, value));
+                foundNone = false;
+            }
+            else
+                missingSome = true;
+        }
+
+        if (foundNone)
+        {
+            return null;
+        }
+        else if (missingSome)
+        {
+            throw new InvalidOperationException(
+                String.Format(
+                    "The OriginalValues or ExtendedProperties collections on the type '{0}' contained only a partial key to satisfy the relationship '{1}' targeting the role '{2}'",
+                    entity.GetType().FullName,
+                    reference.RelationshipName,
+                    reference.TargetRoleName));
+        }
+
+        EntityKey key = entityIndex.ConvertEntityKey(new EntityKey(reference.GetEntitySetName(), foundKeyMembers));
+        return key;
+    }
+
+    private static void MoveSavedReferenceKey(EntityReference reference, object entity, NavigationProperty navigationProperty, IDictionary<string, object> sourceValues, IDictionary<string, object> targetValues)
+    {
+        EntitySet entitySet = ((AssociationSet)reference.RelationshipSet).AssociationSetEnds[reference.TargetRoleName].EntitySet;
+
+        bool missingSome = false;
+        foreach (var keyMember in entitySet.ElementType.KeyMembers)
+        {
+            string lookupKey = CreateReferenceKeyLookup(keyMember.Name, reference, navigationProperty);
+            object value;
+            if (sourceValues.TryGetValue(lookupKey, out value))
+            {
+                if (targetValues.ContainsKey(lookupKey))
+                    targetValues[lookupKey] = value;
+                else
+                    targetValues.Add(lookupKey, value);
+                sourceValues.Remove(lookupKey);
+            }
+            else
+                missingSome = true;
+        }
+
+        if (missingSome)
+        {
+            throw new InvalidOperationException(
+                String.Format(
+                    "The OriginalValues or ExtendedProperties collections on the type '{0}' contained only a partial key to satisfy the relationship '{1}' targeting the role '{2}'",
+                    entity.GetType().FullName,
+                    reference.RelationshipName,
+                    reference.TargetRoleName));
+        }
+    }
+
+    private static IEnumerable<EntityReference> EnumerateSaveReferences(RelationshipManager manager)
+    {
+        return manager.GetAllRelatedEnds().OfType<EntityReference>()
+                .Where(er => er.RelationshipSet.ElementType.RelationshipEndMembers[er.SourceRoleName].RelationshipMultiplicity != RelationshipMultiplicity.One &&
+                    !((AssociationSet)er.RelationshipSet).ElementType.IsForeignKey);
+    }
+
+    public static void StoreReferenceKeyValues(this ObjectContext context, IObjectWithChangeTracker entity)
+    {
+        if (entity == null)
+            throw new ArgumentNullException("entity");
+
+        ObjectStateEntry entry;
+        if (!context.ObjectStateManager.TryGetObjectStateEntry(entity, out entry))
+            return;
+
+        var relationshipManager = entry.RelationshipManager;
+        EntityType entityType = context.MetadataWorkspace.GetCSpaceEntityType(entity.GetType());
+        foreach (EntityReference entityReference in EnumerateSaveReferences(relationshipManager))
+        {
+            NavigationProperty navigationProperty = entityType.NavigationProperties.FirstOrDefault(n => n.RelationshipType == entityReference.RelationshipSet.ElementType &&
+                    n.FromEndMember.Name == entityReference.SourceRoleName &&
+                    n.ToEndMember.Name == entityReference.TargetRoleName);
+
+            object value = entityReference.GetValue();
+            if ((navigationProperty == null || value == null) && entityReference.EntityKey != null)
+            {
+                foreach (var item in entityReference.EntityKey.EntityKeyValues)
+                {
+                    string key = CreateReferenceKeyLookup(item.Key, entityReference, navigationProperty);
+                    entity.ChangeTracker.ExtendedProperties.Add(key, item.Value);
+                }
+            }
+        }
+    }
+
+    private static void HandleEntity(ObjectContext context, EntityIndex entityIndex, RelationshipSet allRelationships, IObjectWithChangeTracker entity)
+    {
+        ChangeEntityStateBasedOnObjectState(context, entity);
+        HandleRelationshipKeys(context, entityIndex, allRelationships, entity);
+        UpdateOriginalValues(context, entity);
+    }
+
+    private static void HandleDeletedEntity(ObjectContext context, EntityIndex entityIndex, RelationshipSet allRelationships, IObjectWithChangeTracker entity)
+    {
+        HandleRelationshipKeys(context, entityIndex, allRelationships, entity);
+        ChangeEntityStateBasedOnObjectState(context, entity);
+        UpdateOriginalValues(context, entity);
+    }
+
+    private static void UpdateOriginalValues(ObjectContext context, IObjectWithChangeTracker entity)
+    {
+        if (entity.ChangeTracker.State == ObjectState.Unchanged ||
+            entity.ChangeTracker.State == ObjectState.Added ||
+            entity.ChangeTracker.OriginalValues == null)
+            return;
+
+        ObjectStateEntry entry = context.ObjectStateManager.GetObjectStateEntry(entity);
+        OriginalValueRecord originalValueRecord = entry.GetUpdatableOriginalValues();
+        EntityType entityType = context.MetadataWorkspace.GetCSpaceEntityType(entity.GetType());
+
+        foreach (EdmProperty property in entityType.Properties)
+        {
+            object value;
+            if (property.TypeUsage.EdmType is PrimitiveType && entity.ChangeTracker.OriginalValues.TryGetValue(property.Name, out value))
+                originalValueRecord.SetValue(property, value);
+            else if (property.TypeUsage.EdmType is ComplexType)
+            {
+                OriginalValueRecord complexOriginalValues = originalValueRecord.GetOriginalValueRecord(property.Name);
+                UpdateOriginalValues((ComplexType)property.TypeUsage.EdmType, entity.GetType().FullName, property.Name, entity.ChangeTracker.OriginalValues, complexOriginalValues);
+            }
+        }
+    }
+
+    private static void UpdateOriginalValues(ComplexType complexType, string entityTypeName, string propertyPathToType, IDictionary<string, object> originalValueSource, OriginalValueRecord complexOriginalValueRecord)
+    {
+        foreach (EdmProperty property in complexType.Properties)
+        {
+            object value;
+            string propertyPath = String.Format(CultureInfo.InvariantCulture, "{0}.{1}", propertyPathToType, property.Name);
+            if (property.TypeUsage.EdmType is PrimitiveType && originalValueSource.TryGetValue(propertyPath, out value))
+            {
+                if (complexOriginalValueRecord != null)
+                    complexOriginalValueRecord.SetValue(property, value);
+                else if (value != null)
+                {
+                    throw new InvalidOperationException(
+                        String.Format(
+                        "Can not set the original value on the object stored in the property '{0}' on the type '{1}' because the property is null.",
+                        propertyPathToType,
+                        entityTypeName));
+                }
+            }
+            else if (property.TypeUsage.EdmType is ComplexType)
+            {
+                OriginalValueRecord nestedOriginalValueRecord = null;
+                if (complexOriginalValueRecord != null)
+                    nestedOriginalValueRecord = complexOriginalValueRecord.GetOriginalValueRecord(property.Name);
+                UpdateOriginalValues((ComplexType)property.TypeUsage.EdmType, entityTypeName, propertyPath, originalValueSource, nestedOriginalValueRecord);
+            }
+        }
+    }
+
+    private static OriginalValueRecord GetOriginalValueRecord(this OriginalValueRecord record, string name)
+    {
+        int ordinal = record.GetOrdinal(name);
+        if (!record.IsDBNull(ordinal))
+            return record.GetDataRecord(ordinal) as OriginalValueRecord;
+        else
+            return null;
+    }
+
+    private static void SetValue(this OriginalValueRecord record, EdmProperty edmProperty, object value)
+    {
+        if (value == null)
+        {
+            Type entityClrType = ((PrimitiveType)edmProperty.TypeUsage.EdmType).ClrEquivalentType;
+            if (entityClrType.IsValueType &&
+                !(entityClrType.IsGenericType && typeof(Nullable<>) == entityClrType.GetGenericTypeDefinition()))
+                return;
+        }
+
+        int ordinal = record.GetOrdinal(edmProperty.Name);
+        record.SetValue(ordinal, value);
+    }
+
+
+    private static void ChangeEntityStateBasedOnObjectState(ObjectContext context, IObjectWithChangeTracker entity)
+    {
+        switch (entity.ChangeTracker.State)
+        {
+            case (ObjectState.Added):
+                break;
+            case (ObjectState.Unchanged):
+                context.ObjectStateManager.ChangeObjectState(entity, EntityState.Unchanged);
+                break;
+            case (ObjectState.Modified):
+                context.ObjectStateManager.ChangeObjectState(entity, EntityState.Unchanged);
+                var ose = context.ObjectStateManager.GetObjectStateEntry(entity);
+                ose.SetModified();
+                foreach (var propertyName in entity.ChangeTracker.ModifiedProperties)
+                    ose.SetModifiedProperty(propertyName);
+                break;
+            case (ObjectState.Deleted):
+                context.ObjectStateManager.ChangeObjectState(entity, EntityState.Deleted);
+                break;
+
+        }
+    }
+
+    private static EntityType GetCSpaceEntityType(this MetadataWorkspace workspace, Type type)
+    {
+        EntityType ospaceEntityType = null;
+        StructuralType cspaceEntityType = null;
+        EntityType entityType = null;
+        if (workspace.TryGetItem<EntityType>(
+            type.FullName,
+            DataSpace.OSpace,
+            out ospaceEntityType))
+        {
+            if (workspace.TryGetEdmSpaceType(
+                ospaceEntityType,
+                out cspaceEntityType))
+                entityType = cspaceEntityType as EntityType;
+        }
+        if (entityType == null)
+            throw new ArgumentException(String.Format("Unable to find a CSpace type for type {0}", type.FullName));
+        return entityType;
+    }
+
+    private static object GetValue(this EntityReference entityReference)
+    {
+        foreach (object value in entityReference)
+            return value;
+        return null;
+    }
+
+    private static EntityKey GetCurrentEntityKey(this EntityReference entityReference, ObjectContext context)
+    {
+        EntityKey currentKey = null;
+        object currentValue = entityReference.GetValue();
+        if (currentValue != null)
+        {
+            ObjectStateEntry relatedEntry = context.ObjectStateManager.GetObjectStateEntry(currentValue);
+            currentKey = relatedEntry.EntityKey;
+        }
+        else
+            currentKey = entityReference.EntityKey;
+        return currentKey;
+    }
+
+    private static RelatedEnd GetRelatedEnd(this ObjectStateEntry entry, string navigationPropertyIdentity)
+    {
+        NavigationProperty navigationProperty =
+                        GetNavigationProperty(entry.ObjectStateManager.MetadataWorkspace.GetCSpaceEntityType(entry.Entity.GetType()), navigationPropertyIdentity);
+        return entry.RelationshipManager.GetRelatedEnd(
+            navigationProperty.RelationshipType.FullName, navigationProperty.ToEndMember.Name) as RelatedEnd;
+    }
+
+    private static NavigationProperty GetNavigationProperty(this EntityType entityType, string navigationPropertyIdentity)
+    {
+        NavigationProperty navigationProperty;
+        if (!entityType.NavigationProperties.TryGetValue(navigationPropertyIdentity, false, out navigationProperty))
+        {
+            throw new InvalidOperationException(
+                String.Format(
+                    "Could not find navigation property '{0}' in EntityType '{1}'.",
+                    navigationPropertyIdentity,
+                    entityType.FullName));
+        }
+        return navigationProperty;
+    }
+
+    private static string GetEntitySetName(this RelatedEnd relatedEnd)
+    {
+        EntitySet entitySet = ((AssociationSet)relatedEnd.RelationshipSet).AssociationSetEnds[relatedEnd.TargetRoleName].EntitySet;
+        return entitySet.EntityContainer.Name + "." + entitySet.Name;
+    }
+
+    private static bool IsDependentEndOfReferentialConstraint(this RelatedEnd relatedEnd)
+    {
+        if (null != relatedEnd.RelationshipSet)
+        {
+            foreach (ReferentialConstraint constraint in ((AssociationType)relatedEnd.RelationshipSet.ElementType).ReferentialConstraints)
+            {
+                if (constraint.ToRole.Name == relatedEnd.SourceRoleName)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static bool TryGetObjectStateEntry(this ObjectContext context, EntityKey from, EntityKey to, AssociationSet associationSet, AssociationEndMember fromEnd, AssociationEndMember toEnd, out ObjectStateEntry entry)
+    {
+        entry = null;
+        foreach (var relationshipEntry in (from e in context.ObjectStateManager.GetObjectStateEntries(EntityState.Added | EntityState.Unchanged)
+                                            where e.IsRelationship && e.EntitySet == associationSet
+                                            select e))
+        {
+            CurrentValueRecord currentValues = relationshipEntry.CurrentValues;
+            int fromOrdinal = currentValues.GetOrdinal(fromEnd.Name);
+            int toOrdinal = currentValues.GetOrdinal(toEnd.Name);
+            if (((EntityKey)currentValues.GetValue(fromOrdinal)) == from &&
+                ((EntityKey)currentValues.GetValue(toOrdinal)) == to)
+            {
+                entry = relationshipEntry;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private sealed class AddHelper
+    {
+        private readonly ObjectContext _context;
+        private readonly EntityIndex _entityIndex;
+
+        private readonly Queue<Tuple<string, IObjectWithChangeTracker>> _entitiesToAdd;
+        private readonly Queue<Tuple<ObjectStateEntry, string, IEnumerable<object>>> _entitiesDuringAdd;
+
+        public static EntityIndex AddAllEntities(ObjectContext context, string entitySetName, IObjectWithChangeTracker entity)
+        {
+            AddHelper addHelper = new AddHelper(context);
+
+            try
+            {
+                addHelper.QueueAdd(entitySetName, entity);
+
+                while (addHelper.HasMore)
+                {
+                    Tuple<string, IObjectWithChangeTracker> entityInSet = addHelper.NextAdd();
+                    ObjectStateEntry entry = null;
+                    if (!context.ObjectStateManager.TryGetObjectStateEntry(entityInSet.Item2, out entry))
+                    {
+                        context.AddObject(entityInSet.Item1, entityInSet.Item2);
+                    }
+                }
+            }
+            finally
+            {
+                addHelper.Detach();
+            }
+            return addHelper.EntityIndex;
+        }
+
+        private AddHelper(ObjectContext context)
+        {
+            _context = context;
+            _context.ObjectStateManager.ObjectStateManagerChanged += this.HandleStateManagerChange;
+
+            _entityIndex = new EntityIndex(context);
+            _entitiesToAdd = new Queue<Tuple<string, IObjectWithChangeTracker>>();
+            _entitiesDuringAdd = new Queue<Tuple<ObjectStateEntry, string, IEnumerable<object>>>();
+        }
+
+        private void Detach()
+        {
+            _context.ObjectStateManager.ObjectStateManagerChanged -= this.HandleStateManagerChange;
+        }
+
+        private void HandleStateManagerChange(object sender, CollectionChangeEventArgs args)
+        {
+            if (args.Action == CollectionChangeAction.Add)
+            {
+                IObjectWithChangeTracker entity = args.Element as IObjectWithChangeTracker;
+                ObjectStateEntry entry = _context.ObjectStateManager.GetObjectStateEntry(entity);
+                ObjectChangeTracker changeTracker = entity.ChangeTracker;
+
+                changeTracker.ChangeTrackingEnabled = false;
+                _entityIndex.Add(entry, changeTracker);
+
+                var navPropNames = _context.MetadataWorkspace.GetCSpaceEntityType(entity.GetType()).NavigationProperties.Select(n => n.Name);
+                var entityRefOriginalValues = changeTracker.OriginalValues.Where(kvp => navPropNames.Contains(kvp.Key));
+                foreach (KeyValuePair<string, object> originalValueWithName in entityRefOriginalValues)
+                {
+                    if (originalValueWithName.Value != null)
+                    {
+                        _entitiesDuringAdd.Enqueue(new Tuple<ObjectStateEntry, string, IEnumerable<object>>(
+                            entry,
+                            originalValueWithName.Key,
+                            new object[] { originalValueWithName.Value }));
+                    }
+                }
+
+                foreach (KeyValuePair<string, ObjectList> collectionPropertyChangesWithName in changeTracker.ObjectsRemovedFromCollectionProperties)
+                {
+                    _entitiesDuringAdd.Enqueue(new Tuple<ObjectStateEntry, string, IEnumerable<object>>(
+                        entry,
+                        collectionPropertyChangesWithName.Key,
+                        collectionPropertyChangesWithName.Value));
+                }
+            }
+        }
+
+        private EntityIndex EntityIndex
+        {
+            get { return _entityIndex; }
+        }
+
+        private bool HasMore
+        {
+            get { ProcessNewAdds(); return _entitiesToAdd.Count > 0; }
+        }
+
+        private void QueueAdd(string entitySetName, IObjectWithChangeTracker entity)
+        {
+            if (!_entityIndex.Contains(entity))
+            {
+                _entitiesToAdd.Enqueue(new Tuple<string, IObjectWithChangeTracker>(entitySetName, entity));
+            }
+        }
+
+        private Tuple<string, IObjectWithChangeTracker> NextAdd()
+        {
+            ProcessNewAdds();
+            return _entitiesToAdd.Dequeue();
+        }
+
+        private void ProcessNewAdds()
+        {
+            while (_entitiesDuringAdd.Count > 0)
+            {
+                Tuple<ObjectStateEntry, string, IEnumerable<object>> relatedEntities = _entitiesDuringAdd.Dequeue();
+                RelatedEnd relatedEnd = relatedEntities.Item1.GetRelatedEnd(relatedEntities.Item2);
+                string entitySetName = relatedEnd.GetEntitySetName();
+
+                foreach (var targetEntity in relatedEntities.Item3)
+                {
+                    QueueAdd(entitySetName, targetEntity as IObjectWithChangeTracker);
+                }
+            }
+        }
+    }
+
+    private sealed class EntityIndex
+    {
+        private readonly ObjectContext _context;
+
+        private readonly HashSet<IObjectWithChangeTracker> _allEntities;
+
+        private readonly Dictionary<EntityKey, EntityKey> _temporaryKeyMap;
+
+        public EntityIndex(ObjectContext context)
+        {
+            _context = context;
+
+            _allEntities = new HashSet<IObjectWithChangeTracker>();
+            _temporaryKeyMap = new Dictionary<EntityKey, EntityKey>();
+        }
+
+        public void Add(ObjectStateEntry entry, ObjectChangeTracker changeTracker)
+        {
+            EntityKey temporaryKey = entry.EntityKey;
+            EntityKey finalKey;
+
+            if (!_allEntities.Contains(entry.Entity))
+            {
+                _allEntities.Add(entry.Entity as IObjectWithChangeTracker);
+            }
+
+            if (changeTracker.State == ObjectState.Added)
+            {
+                finalKey = temporaryKey;
+            }
+            else
+            {
+                finalKey = _context.CreateEntityKey(temporaryKey.EntityContainerName + "." + temporaryKey.EntitySetName, entry.Entity);
+            }
+            if (!_temporaryKeyMap.ContainsKey(finalKey))
+            {
+                _temporaryKeyMap.Add(finalKey, temporaryKey);
+            }
+        }
+
+        public bool Contains(object entity)
+        {
+            return _allEntities.Contains(entity);
+        }
+
+        public IEnumerable<IObjectWithChangeTracker> AllEntities
+        {
+            get { return _allEntities; }
+        }
+
+        public EntityKey ConvertEntityKey(EntityKey targetKey)
+        {
+            ObjectStateEntry targetEntry;
+            if (!_context.ObjectStateManager.TryGetObjectStateEntry(targetKey, out targetEntry))
+            {
+                EntityKey temporaryKey;
+                if (_temporaryKeyMap.TryGetValue(targetKey, out temporaryKey))
+                {
+                    targetKey = temporaryKey;
+                }
+            }
+            return targetKey;
+        }
+    }
+
+    private sealed class RelationshipSet : IEnumerable<RelationshipWrapper>
+    {
+        private readonly HashSet<RelationshipWrapper> _relationships;
+        private readonly ObjectContext _context;
+
+        public RelationshipSet(ObjectContext context, IEnumerable<object> allEntities)
+        {
+            _context = context;
+            _relationships = new HashSet<RelationshipWrapper>();
+            foreach (object entity in allEntities)
+            {
+                ObjectStateEntry entry = context.ObjectStateManager.GetObjectStateEntry(entity);
+                foreach (IRelatedEnd relatedEnd in entry.RelationshipManager.GetAllRelatedEnds())
+                {
+                    if (!((AssociationType)relatedEnd.RelationshipSet.ElementType).IsForeignKey)
+                    {
+                        foreach (object targetEntity in relatedEnd)
+                        {
+                            Add(relatedEnd, entity, targetEntity, EntityState.Unchanged);
+                        }
+                    }
+                }
+            }
+        }
+
+        public void Add(IRelatedEnd relatedEnd, object sourceEntity, object targetEntity, EntityState state)
+        {
+            RelationshipWrapper wrapper = new RelationshipWrapper(
+                                (AssociationSet)relatedEnd.RelationshipSet,
+                                relatedEnd.SourceRoleName,
+                                sourceEntity,
+                                relatedEnd.TargetRoleName,
+                                targetEntity,
+                                state);
+            if (!_relationships.Contains(wrapper))
+            {
+                _relationships.Add(wrapper);
+            }
+        }
+
+        public void Remove(ObjectStateEntry relationshipEntry)
+        {
+            AssociationSet associationSet = (AssociationSet)relationshipEntry.EntitySet;
+            DbDataRecord values = relationshipEntry.State == EntityState.Deleted ? relationshipEntry.OriginalValues : relationshipEntry.CurrentValues;
+            int fromOridinal = values.GetOrdinal(associationSet.ElementType.AssociationEndMembers[0].Name);
+            object fromEntity = _context.ObjectStateManager.GetObjectStateEntry((EntityKey)values.GetValue(fromOridinal)).Entity;
+            int toOridinal = values.GetOrdinal(associationSet.ElementType.AssociationEndMembers[1].Name);
+            object toEntity = _context.ObjectStateManager.GetObjectStateEntry((EntityKey)values.GetValue(toOridinal)).Entity;
+
+            if (fromEntity != null && toEntity != null)
+            {
+                RelationshipWrapper wrapper = new RelationshipWrapper(
+                    associationSet,
+                    associationSet.ElementType.AssociationEndMembers[0].Name,
+                    fromEntity,
+                    associationSet.ElementType.AssociationEndMembers[1].Name,
+                    toEntity,
+                    EntityState.Unchanged);
+
+                _relationships.Remove(wrapper);
+            }
+        }
+
+        #region IEnumerable<RelationshipWrapper>
+
+        public IEnumerator<RelationshipWrapper> GetEnumerator()
+        {
+            return _relationships.GetEnumerator();
+        }
+
+        IEnumerator System.Collections.IEnumerable.GetEnumerator()
+        {
+            return _relationships.GetEnumerator();
+        }
+
+        #endregion
+    }
+
+    private sealed class RelationshipWrapper : IEquatable<RelationshipWrapper>
+    {
+        internal readonly AssociationSet AssociationSet;
+        internal readonly object End0;
+        internal readonly object End1;
+        internal readonly EntityState State;
+
+        internal RelationshipWrapper(AssociationSet extent,
+                                        string role0, object end0,
+                                        string role1, object end1,
+                                        EntityState state)
+        {
+            AssociationSet = extent;
+
+            State = state;
+
+            if (extent.ElementType.AssociationEndMembers[0].Name == role0)
+            {
+                End0 = end0;
+                End1 = end1;
+            }
+            else
+            {
+                End0 = end1;
+                End1 = end0;
+            }
+        }
+
+        internal ReadOnlyMetadataCollection<AssociationEndMember> AssociationEndMembers
+        {
+            get { return this.AssociationSet.ElementType.AssociationEndMembers; }
+        }
+
+        public override int GetHashCode()
+        {
+            return this.AssociationSet.Name.GetHashCode() ^ (this.End0.GetHashCode() + this.End1.GetHashCode());
+        }
+
+        public override bool Equals(object obj)
+        {
+            return Equals(obj as RelationshipWrapper);
+        }
+
+        public bool Equals(RelationshipWrapper wrapper)
+        {
+            return (Object.ReferenceEquals(this, wrapper) ||
+                    ((null != wrapper) &&
+                        Object.ReferenceEquals(this.AssociationSet, wrapper.AssociationSet) &&
+                        Object.ReferenceEquals(this.End0, wrapper.End0) &&
+                        Object.ReferenceEquals(this.End1, wrapper.End1)));
+        }
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("EntitySet.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.Data.Entity", "System.Data.Entity.Core.Objects", "System.Linq", "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks", serverFxDALInterfacesNamespace, serverFxEntitiesNamespace);
+#>
+public partial class EntitySet<T> : IEntitySet<T>
+    where T : class, IEntity
+{
+    public EntitySet(ObjectSet<T> objectSet, Func<Expression, Expression> expressionTransformation = null)
+    {
+        ObjectSet = objectSet;
+        AsyncQueryProviderFactory = new EFAsyncQueryProviderFactory();
+        ExpressionTransformation = expressionTransformation;
+    }
+    
+    public <#=serverFxDALInterfacesNamespace#>.MergeOption MergeOption { get; set; }
+    public IAsyncQueryProviderFactory AsyncQueryProviderFactory { get; private set; }
+    public Func<Expression, Expression> ExpressionTransformation { get; private set; }
+    public bool FromQuery 
+    { 
+        get { return false; }
+        set 
+        {
+            throw new InvalidOperationException();
+        }
+    }
+    
+    private ObjectSet<T> _objectSet;
+    public ObjectSet<T> ObjectSet
+    {
+        get
+        {
+            _objectSet.MergeOption = MergeOption.ToEFMergeOption();
+            return _objectSet;
+        }
+        private set { _objectSet = value; }
+    }
+        
+    public void Add(T item)
+    {
+        item.ChangeTracker.ChangeTrackingEnabled = true;
+        item.ChangeTracker.State = ObjectState.Added;
+        ObjectSet.AddObject(item);
+    }
+                
+    public void Attach(T item)
+    {
+        item.ChangeTracker.ChangeTrackingEnabled = true;
+        item.ChangeTracker.State = ObjectState.Unchanged;
+        ObjectSet.Attach(item);
+    }
+
+    public void AttachAsModified(T item)
+    {
+        item.ChangeTracker.ChangeTrackingEnabled = true;
+        item.ChangeTracker.State = ObjectState.Modified;
+        item.ChangeTracker.ModifiedProperties.AddRange(ObjectSet.EntitySet.ElementType.Properties.Except(ObjectSet.EntitySet.ElementType.KeyMembers).Select(m => m.Name));
+        ObjectSet.Attach(item);
+        ObjectSet.Context.ObjectStateManager.GetObjectStateEntry(item).ChangeState(EntityState.Modified);
+    }
+
+    public void AttachAsDeleted(T item)
+    {
+        item.ChangeTracker.ChangeTrackingEnabled = true;
+        ObjectSet.Attach(item);
+        Delete(item);
+    }
+                
+    public void Detach(T item)
+    {
+        item.ChangeTracker.ChangeTrackingEnabled = false;
+        item.ChangeTracker.State = ObjectState.Detached;
+        ObjectSet.Detach(item);
+    }
+                        
+    public void Delete(T item)
+    {
+        item.RemoveNavigationProperties();
+        item.ChangeTracker.State = ObjectState.Deleted;
+        ObjectSet.DeleteObject(item);
+    }
+    
+    public IEnumerable<T> Local
+    {
+        get { return ObjectSet.Context.ObjectStateManager.GetObjectStateEntries(EntityState.Added | EntityState.Modified | EntityState.Unchanged | EntityState.Deleted).Select(ose => ose.Entity).OfType<T>(); } 
+    }
+
+    public IQueryable<T> WithMergeOption(<#=serverFxDALInterfacesNamespace#>.MergeOption mergeOption)
+    {
+        var value = new EntitySet<T>(ObjectSet, ExpressionTransformation);
+        value.MergeOption = mergeOption;
+        return value;
+    }
+    
+    IEnumerator<T> IEnumerable<T>.GetEnumerator()
+    {
+        return ((IEnumerable<T>)ObjectSet).GetEnumerator();
+    }
+    
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return ((IEnumerable)ObjectSet).GetEnumerator();
+    }
+    
+    Type IQueryable.ElementType
+    {
+        get { return ((IQueryable)ObjectSet).ElementType; }
+    }
+    
+    Expression IQueryable.Expression
+    {
+        get { return ((IQueryable)ObjectSet).Expression; }
+    }
+    
+    IQueryProvider IQueryable.Provider
+    {
+        get { return new WAQSQueryProvider(DataContext, ((IQueryable)ObjectSet).Provider, AsyncQueryProviderFactory, ExpressionTransformation); }
+    }
+
+    public IDataContext DataContext 
+    {
+        get { return (IDataContext)ObjectSet.Context; }
+    }
+
+    IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> IWAQSQueryBase.QueryableIncludes
+    {
+        get { return new Func<IWAQSQueryBase, QueryableInclude>[0]; }
+        set { throw new InvalidOperationException(); }
+    }
+
+    IEnumerable<string> IWAQSQueryBase.WithSpecifications
+    {
+        get { return new string[0]; }
+        set { throw new InvalidOperationException(); }
+    }
+<#+
+    CompleteEntitySet();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("MergeOptionExtensions.cs");
+    WriteHeader(namespaceName, code, "System");
+#>
+public static class MergeOptionExtensions
+{
+    public static System.Data.Entity.Core.Objects.MergeOption ToEFMergeOption(this <#=serverFxDALInterfacesNamespace#>.MergeOption mergOption)
+    {
+        switch (mergOption)
+        {
+            case <#=serverFxDALInterfacesNamespace#>.MergeOption.AppendOnly:
+                return System.Data.Entity.Core.Objects.MergeOption.AppendOnly;
+            case <#=serverFxDALInterfacesNamespace#>.MergeOption.OverwriteChanges:
+                return System.Data.Entity.Core.Objects.MergeOption.OverwriteChanges;
+            case <#=serverFxDALInterfacesNamespace#>.MergeOption.PreserveChanges:
+                return System.Data.Entity.Core.Objects.MergeOption.PreserveChanges;
+            case <#=serverFxDALInterfacesNamespace#>.MergeOption.NoTracking:
+                return System.Data.Entity.Core.Objects.MergeOption.NoTracking;
+            default:
+                throw new NotImplementedException();
+        }  
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("CustomizableObjectContext.cs");
+    List<string> customizableObjectContextUsings = new List<string>() { "System", "System.Collections.Generic", "System.Data.Entity.Core.EntityClient", "System.Data.Entity.Core.Objects" };
+    CompleteCustomizableObjectContextUsings(customizableObjectContextUsings);
+    WriteHeader(namespaceName, code, customizableObjectContextUsings.ToArray());
+#>
+public class CustomizableObjectContext : ObjectContext
+{
+    public CustomizableObjectContext(EntityConnection connection)
+        : base(connection)
+    {
+    }
+    public CustomizableObjectContext(string connectionString)
+        : base(connectionString)
+    {
+    }
+    protected CustomizableObjectContext(EntityConnection connection, string defaultContainerName)
+        : base(connection, defaultContainerName)
+    {
+    }
+    protected CustomizableObjectContext(string connectionString, string defaultContainerName)
+        : base(connectionString, defaultContainerName)
+    {
+    }
+
+    private List<Func<ObjectContext, SaveOptions, Func<SaveOptions, int>, int>> _saveActions = new List<Func<ObjectContext, SaveOptions, Func<SaveOptions, int>,int>>();
+
+    public void AddSaveAction(Func<ObjectContext, SaveOptions, Func<SaveOptions, int>, int> saveAction)
+    {
+        _saveActions.Add(saveAction);
+    }
+    
+    public override int SaveChanges(SaveOptions options)
+    {
+        Func<int, SaveOptions, int> saveAction = null;
+        saveAction = (index, saveOptions) =>
+            {
+                if (index == -1)
+                    return base.SaveChanges(saveOptions);
+                return _saveActions[index](this, saveOptions, so => saveAction(index - 1, so));
+            };
+        return saveAction(_saveActions.Count - 1, options);
+    }
+<#+ CompleteCustomizableObjectContext(); #>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ObjectContextCustomizerBase.cs");
+    List<string> objectContextCustomizerBaseUsings = new List<string>() { "System", "System.Data.Entity.Core.Objects" };
+    CompleteObjectContextCustomizerBaseUsings(objectContextCustomizerBaseUsings);
+    WriteHeader(namespaceName, code, objectContextCustomizerBaseUsings.ToArray());
+#>
+public abstract class ObjectContextCustomizerBase<T> 
+    where T : ObjectContextCustomizerBase<T>
+{
+    protected ObjectContext ObjectContext { get; set; }
+
+    protected abstract int SaveChanges(ObjectContext context, SaveOptions options, Func<SaveOptions, int> baseSaveChanges);
+<#+ CompleteObjectContextCustomizerBase(); #>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ObjectContextCustomizer.cs");
+    WriteHeader(namespaceName, code);
+#>
+public abstract class ObjectContextCustomizer<T>  : ObjectContextCustomizerBase<T>
+    where T : ObjectContextCustomizer<T>, new()
+{
+    public static OC CreateObjectContext<OC>(OC objectContext)
+        where OC : CustomizableObjectContext
+    {
+        objectContext.AddSaveAction(new T { ObjectContext = objectContext }.SaveChanges);
+<#+ CompleteObjectContextCustomizerCreateObjectContext(); #>
+        return objectContext;
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ExceptionHandlerObjectContext.cs");
+    var exceptionHandlerObjectContextUsings = new List<string>(){ "System", "System.Collections.Generic", "System.Data.Entity", "System.Data.Entity.Core", "System.Data.Entity.Core.Objects", "System.Linq" };
+    CompleteExceptionHandlerObjectContextUsings(exceptionHandlerObjectContextUsings);
+    WriteHeader(namespaceName, code, exceptionHandlerObjectContextUsings.ToArray());
+#>
+public partial class ExceptionHandlerObjectContext<T> : ObjectContextCustomizer<ExceptionHandlerObjectContext<T>> where T : ObjectContext, new()
+{
+    protected override int SaveChanges(ObjectContext context, SaveOptions options, Func<SaveOptions, int> baseSaveChanges)
+    {
+        _entities.Clear();
+        return SaveChangesInternal(context, options, baseSaveChanges);
+    }
+    private int SaveChangesInternal(ObjectContext context, SaveOptions options, Func<SaveOptions, int> baseSaveChanges)
+    { 
+        int value = 0;
+        try
+        {
+            value = baseSaveChanges(options);
+        }
+        catch (OptimisticConcurrencyException e)
+        {
+            using (var contextTmp = new T())
+            {
+                contextTmp.MetadataWorkspace.LoadFromAssembly(context.GetType().Assembly);
+                if (DetachAlreadyDeletedEntities(e, contextTmp)) 
+                    SaveChanges(context, options, baseSaveChanges);
+                else
+                    HandleOrReThrow(e);
+            }
+        }
+        catch (Exception e)
+        {
+            HandleOrReThrow(e);
+        }
+        return value;
+    }
+
+    private HashSet<object> _entities = new HashSet<object>();
+
+    private bool DetachAlreadyDeletedEntities(OptimisticConcurrencyException e, T contextTmp)
+    {
+        //rajouter une condition si on a déjà eu le pb sur l'entité => throw
+        bool canHandle = true;
+        return e.StateEntries.Any() && e.StateEntries.Select(se =>
+            {
+                if (se.State != EntityState.Deleted)
+                    return false;
+
+                object dbEntity;
+                if (contextTmp.TryGetObjectByKey(se.EntityKey, out dbEntity))
+                {
+                    if (_entities.Contains(se.Entity))
+                        return false;
+                    _entities.Add(se.Entity);
+                    ObjectContext.ApplyOriginalValues(se.EntitySet.Name, dbEntity); // In case of ConcurrencyMode = fixed
+                }
+                else
+                    ObjectContext.Detach(se.Entity);
+
+                return true;
+            }).TakeWhile(b => canHandle).Aggregate((b1, b2) => canHandle = b2);// Aggregate for execute select on each of them
+    }
+
+    private void HandleOrReThrow(Exception e)
+    {
+        bool handled = false;
+        HandleException(e, ref handled);
+        if (!handled)
+            throw e;
+    }
+
+    partial void HandleException(Exception e, ref bool handled);
+<#+ CompleteExceptionHandlerObjectContext(); #>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("UpdateExceptionDetail.cs");
+    WriteHeader(namespaceName, code, "System.Data.Entity.Core", "System.Linq");
+#>
+public class UpdateExceptionDetail : <#=serverFxCommonNamespace#>.ExceptionDetail<UpdateException>
+{
+    public UpdateExceptionDetail(UpdateException updateException)
+        : base(updateException)
+    {
+        Entities = updateException.StateEntries.Select(se => se.Entity);
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("EFAsyncEnumerableFactory.cs");
+    WriteHeader(namespaceName, code, "System", "System.Data.Entity.Infrastructure", "System.Linq", serverFxDALInterfacesNamespace);
+#>
+public class EFAsyncEnumerableFactory : IAsyncEnumerableFactory
+{
+<#+
+    CompleteEFAsyncEnumerableFactory();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("EFAsyncQueryProviderFactory.cs");
+    WriteHeader(namespaceName, code, "System", "System.Data.Entity.Infrastructure", "System.Linq", "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks", serverFxDALInterfacesNamespace);
+#>
+public class EFAsyncQueryProviderFactory : IAsyncQueryProviderFactory
+{
+<#+
+    EFAsyncQueryProviderFactory();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    Complete(fileManager, code, namespaceName, serverFxDALInterfacesNamespace);
+
+    fileManager.Process();
+}
+#>

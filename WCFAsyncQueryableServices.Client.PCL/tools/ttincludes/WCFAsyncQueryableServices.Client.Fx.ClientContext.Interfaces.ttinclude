@@ -1,0 +1,1489 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteClientFxClientContextInterfaces(string clientFxComponentModelNamespace, string clientFxEntitiesTrackingNamespace, string expressionVisitorNamespace, string namespaceName = null, bool useAsyncPrefix = true)
+{
+    string asyncSuffix = useAsyncPrefix ? "Async" : "";
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    MetadataLoader loader = new MetadataLoader(this);
+    CodeRegion region = new CodeRegion(this, 1);
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    string expressionNamespace = namespaceName + ".ExpressionSerialization";
+
+    fileManager.StartNewFile("IExpressionTransformer.cs");
+    WriteHeader(expressionNamespace, code, "System.Linq.Expressions");
+#>
+public interface IExpressionTransformer
+{
+    Expression TransformExpression(Expression expression);
+}
+<#+
+    WriteFooter(expressionNamespace);
+
+    fileManager.StartNewFile("IClientEntitySet.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.Collections.Specialized", clientFxEntitiesTrackingNamespace, expressionNamespace);
+#>
+public interface IClientEntitySet : IEnumerable, IDisposable, INotifyCollectionChanged
+{
+    string EntitySetName { get; }
+    IClientContext Context { get; }
+    SerializableExpression Expression { get; }
+}
+    
+public interface IClientEntitySet<ClientContext> : IClientEntitySet
+{
+    new ClientContext Context { get; }
+    
+    void Add(IObjectWithChangeTracker entity);
+    void Attach(IObjectWithChangeTracker entity);
+    void Remove(IObjectWithChangeTracker entity);
+    void Detach(IObjectWithChangeTracker entity);
+    void Replace(ref IObjectWithChangeTracker entity);
+    
+    Func<IObjectWithChangeTracker, object> GetEntityKey { get; }
+}
+    
+public interface IClientEntitySet<ClientContext, EntityType> : IClientEntitySet<ClientContext>, IEnumerable<EntityType>
+    where EntityType : IObjectWithChangeTracker
+{
+    void Add(EntityType entity);
+    void Attach(EntityType entity);
+    void Remove(EntityType entity);
+    void Detach(EntityType entity);
+    void Replace(ref EntityType entity);
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("AsyncQueryableInclude.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class AsyncQueryableInclude
+{
+    public IAsyncQueryableBase[] Queries { get; set; }
+    public Func<object, object[], MergeOption, object> Load { get; set; }
+    public string Path { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IAsyncQueryableBase.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Threading.Tasks", expressionNamespace);
+#>
+public interface IAsyncQueryableBase
+{
+    IClientContextBase Context { get; }
+    ParameterMode ParameterMode { get; }
+    SerializableExpression Expression { get; }
+    Type Type { get; }
+    IEnumerable<Func<IAsyncQueryableBase, AsyncQueryableInclude>> Includes { get; }
+    IEnumerable<string> WithSpecificationsProperties { get; }
+    IEnumerable<string> SelectedProperties { get; }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IAsyncQueryable.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Threading.Tasks", namespaceName + ".Querying");
+#>
+public interface IAsyncQueryable : IAsyncQueryableBase
+{
+}
+
+public interface IAsyncQueryable<T> : IAsyncQueryable
+{
+    Task<IEnumerable<T>> Execute<#=asyncSuffix#>(MergeOption? mergeOption = null, Func<bool> cancel = null);
+    Task<QueryPage<T>> LoadPage<#=asyncSuffix#>(int pageSize, params LoadPageParameter[] identifiers);
+    Task<QueryPage<T>> LoadPage<#=asyncSuffix#>(int pageSize, Func<bool> cancel, params LoadPageParameter[] identifiers);
+    Task<QueryPage<T>> LoadPage<#=asyncSuffix#>(int pageSize, MergeOption? mergeOption, params LoadPageParameter[] identifiers);
+    Task<QueryPage<T>> LoadPage<#=asyncSuffix#>(int pageSize, MergeOption? mergeOption, Func<bool> cancel, params LoadPageParameter[] identifiers);
+    Task<IEnumerable<T>> LoadPage<#=asyncSuffix#>(int pageSize, int pageIndex, MergeOption? mergeOption = null, Func<bool> cancel = null);
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IAsyncQueryableValue.cs");
+WriteHeader(namespaceName, code, "System", "System.Threading.Tasks");
+#>
+public interface IAsyncQueryableValue : IAsyncQueryableBase
+{
+}
+
+public interface IAsyncQueryableValue<T> : IAsyncQueryableValue
+{
+    Task<T> Execute<#=asyncSuffix#>(MergeOption? mergeOption = null, Func<bool> cancel = null);
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IPaginatedQuery.cs");
+WriteHeader(namespaceName, code, "System", "System.ComponentModel");
+#>
+public interface IPaginatedQuery : INotifyPropertyChanged
+{
+    int MaxPage { get; }
+    int PageIndex { get; set; }
+    event Action PageIndexChanged;
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IClientContextBase.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Threading.Tasks", namespaceName + ".Querying", clientFxComponentModelNamespace, namespaceName + ".ExpressionSerialization");
+#>
+public interface IClientContextBase : IDisposable
+{
+    string Name { get; }
+    Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null);
+    Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null);
+    Task<object[]> ExecuteQueries<#=asyncSuffix#>(params IAsyncQueryableBase[] queries);
+    Task<object[]> ExecuteQueries<#=asyncSuffix#>(IEnumerable<IAsyncQueryableBase> queries, MergeOption? mergeOption = null, Func<bool> cancel = null);
+    Task<QueryPage<T>> LoadPage<#=asyncSuffix#><T>(int pageSize, IAsyncQueryable<T> query, LoadPageParameter[] identifiers, MergeOption? mergeOption = null, Func<bool> cancel = null);
+    IExpressionTransformer GetTransformer();
+<#+AddAddPropertyMethods();#>
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("IClientContext.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Threading.Tasks", clientFxEntitiesTrackingNamespace, namespaceName + ".Errors");
+#>
+public interface IClientContext : IClientContextBase
+{
+    MergeOption MergeOption { get; set; }
+    IAsyncQueryable<T> GetClientEntitySetAsyncQueryable<T>(ParameterMode? parameterMode = null) where T : IObjectWithChangeTracker;
+    IEnumerable<Error> ValidateOnClient();
+    Task SaveChanges<#=asyncSuffix#>(bool validate = false);
+    void AcceptChanges();
+    bool HasChanges { get; }
+    void SavingChanges(bool validate = false);
+    ISerializableContext GetModifiedEntities();
+    ISerializableContext GetSerializableContext(ISerializableContext modifiedEntities);
+    Task<ISerializableContext> TrySaving<#=asyncSuffix#>(Func<Task<ISerializableContext>> saveChanges<#=asyncSuffix#>);
+    void Refresh(ISerializableContext originalSerializableContext, ISerializableContext newSerializableContext);
+    void SavedChanges();
+}
+
+public interface IClientContext<TClientContext> : IClientContext
+    where TClientContext : IClientContext<TClientContext>
+{
+    IClientEntitySet<TClientContext, TEntity> GetClientEntitySet<TEntity>()
+        where TEntity : IObjectWithChangeTracker;
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ISerializableContext.cs");
+    WriteHeader(namespaceName, code);
+#>
+public partial interface ISerializableContext
+{
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("LoadPageParameter.cs");
+    WriteHeader(namespaceName + ".Querying", code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Querying")]
+[KnownType(typeof(int))]
+[KnownType(typeof(uint))]
+[KnownType(typeof(short))]
+[KnownType(typeof(ushort))]
+[KnownType(typeof(byte))]
+[KnownType(typeof(long))]
+[KnownType(typeof(ulong))]
+[KnownType(typeof(decimal))]
+[KnownType(typeof(double))]
+[KnownType(typeof(char))]
+[KnownType(typeof(DateTime))]
+[KnownType(typeof(DateTimeOffset))]
+[KnownType(typeof(TimeSpan))]
+[KnownType(typeof(int?))]
+[KnownType(typeof(uint?))]
+[KnownType(typeof(short?))]
+[KnownType(typeof(ushort?))]
+[KnownType(typeof(byte?))]
+[KnownType(typeof(long?))]
+[KnownType(typeof(ulong?))]
+[KnownType(typeof(decimal?))]
+[KnownType(typeof(double?))]
+[KnownType(typeof(char?))]
+[KnownType(typeof(DateTime?))]
+[KnownType(typeof(DateTimeOffset?))]
+[KnownType(typeof(TimeSpan?))]
+[KnownType(typeof(string))]
+public class LoadPageParameter
+{
+    [DataMember]
+    public string PropertyName { get; set; }
+
+    [DataMember]
+    public object Value { get; set; }
+
+    [DataMember]
+    public bool Descending { get; set; }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("SerializableExpressionRewriter.cs");
+    WriteHeader(expressionNamespace, code, "System.Collections.Generic");
+#>
+public abstract class SerializableExpressionRewriter
+{
+    public virtual SerializableExpression Visit(SerializableExpression expression)
+    {
+        if (expression == null)
+            return null;
+        return expression.Visit(this);
+    }
+
+    protected internal virtual SerializableExpression VisitTypeBinary(SerializableTypeBinaryExpression expression)
+    {
+        var exp = Visit(expression.Expression);
+        return new SerializableTypeBinaryExpression(exp, expression.NodeType, expression.TypeOperand);
+    }
+
+    protected internal virtual SerializableExpression VisitBinary(SerializableBinaryExpression expression)
+    {
+        var left = Visit(expression.Left);
+        var right = Visit(expression.Right);
+        return new SerializableBinaryExpression(left, right, expression.NodeType);
+    }
+
+    protected internal virtual SerializableExpression VisitConstant(SerializableConstantExpression expression)
+    {
+        return expression;
+    }
+
+    protected internal virtual SerializableExpression VisitConstructor(SerializableConstructorExpression expression)
+    {
+        var arguments = new List<SerializableExpression>();
+        foreach (var arg in expression.Arguments)
+            arguments.Add(Visit(arg));
+        return new SerializableConstructorExpression(expression.Type, expression.ArgumentTypes, arguments);
+    }
+
+    protected internal virtual SerializableExpression VisitEntitySet(SerializableEntitySetExpression expression)
+    {
+        return expression;
+    }
+
+    protected internal virtual SerializableExpression VisitLambda(SerializableLambdaExpression expression)
+    {
+        var parameters = new List<SerializableParameterExpression>();
+        foreach (var parameter in expression.Parameters)
+            parameters.Add((SerializableParameterExpression)Visit(parameter));
+        SerializableExpression body = Visit(expression.Body);
+        return new SerializableLambdaExpression(parameters, expression.ReturnType, body);
+    }
+
+    protected internal virtual SerializableExpression VisitMethodCall(SerializableMethodCallExpression expression)
+    {
+        var source = Visit(expression.Source);
+        var parameters = new List<SerializableExpression>();
+        foreach (var parameter in expression.Parameters)
+            parameters.Add(Visit(parameter));
+        return new SerializableMethodCallExpression(source, parameters, expression.Method);
+    }
+
+    protected internal virtual SerializableExpression VisitPropertyGetter(SerializablePropertyGetterExpression expression)
+    {
+        return new SerializablePropertyGetterExpression(Visit(expression.Source), expression.Property);
+    }
+
+    protected internal virtual SerializableExpression VisitPropertySetter(SerializablePropertySetterExpression expression)
+    {
+        var source = Visit(expression.Source);
+        var value = Visit(expression.Value);
+        return new SerializablePropertySetterExpression(source, expression.Property, value);
+    }
+
+    protected internal virtual SerializableExpression VisitMemberInit(SerializableMemberInitExpression expression)
+    {
+        var ctor = (SerializableConstructorExpression)Visit(expression.Constructor);
+        var setters = new List<SerializablePropertySetterExpression>();
+        foreach (var setter in expression.Setters)
+            setters.Add((SerializablePropertySetterExpression)Visit(setter));
+        return new SerializableMemberInitExpression(ctor, setters);
+    }
+
+    protected internal virtual SerializableExpression VisitParameter(SerializableParameterExpression expression)
+    {
+        return expression;
+    }
+
+    protected internal virtual SerializableExpression VisitUnary(SerializableUnaryExpression expression)
+    {
+        var operand = Visit(expression.Operand);
+        return new SerializableUnaryExpression(operand, expression.NodeType, expression.Type);
+    }
+
+    protected internal virtual SerializableExpression VisitConditional(SerializableConditionalExpression expression)
+    {
+        var test = Visit(expression.TestExpression);
+        var ifTrue = Visit(expression.IfTrueExpression);
+        var ifFalse = Visit(expression.IfFalseExpression);
+        return new SerializableConditionalExpression(test, ifTrue, ifFalse, expression.Type);
+    }
+}
+<#+
+    WriteFooter(expressionNamespace);
+
+    fileManager.StartNewFile("SerializableExpression.cs");
+    WriteHeader(expressionNamespace, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+[KnownType(typeof(SerializableBinaryExpression))]
+[KnownType(typeof(SerializableUnaryExpression))]
+[KnownType(typeof(SerializableEntitySetExpression))]
+[KnownType(typeof(SerializableMemberExpression))]
+[KnownType(typeof(SerializableMethodCallExpression))]
+[KnownType(typeof(SerializablePropertyGetterExpression))]
+[KnownType(typeof(SerializablePropertySetterExpression))]
+[KnownType(typeof(SerializableConstructorExpression))]
+[KnownType(typeof(SerializableLambdaExpression))]
+[KnownType(typeof(SerializableParameterExpression))]
+[KnownType(typeof(SerializableConstantExpression))]
+[KnownType(typeof(SerializableMemberInitExpression))]
+[KnownType(typeof(SerializableConditionalExpression))]
+[KnownType(typeof(SerializableTypeBinaryExpression))]
+public abstract partial class SerializableExpression
+{
+    protected internal abstract SerializableExpression Visit(SerializableExpressionRewriter rewriter);
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableLambdaExpression.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableLambdaExpression : SerializableExpression
+{
+    public SerializableLambdaExpression()
+    {
+    }
+    public SerializableLambdaExpression(List<SerializableParameterExpression> parameters, Type returnType, SerializableExpression body)
+        : this(parameters, new SerializableType(returnType), body)
+    {
+    }
+    public SerializableLambdaExpression(List<SerializableParameterExpression> parameters, SerializableType returnType, SerializableExpression body)
+    {
+        Parameters = parameters;
+        ReturnType = returnType;
+        Body = body;
+    }
+    
+    [DataMember]
+    public List<SerializableParameterExpression> Parameters { get; set; }
+    [DataMember]
+    public SerializableType ReturnType { get; set; }
+    [DataMember]
+    public SerializableExpression Body { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitLambda(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableMemberExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Runtime.Serialization", "System.Reflection");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+[KnownType(typeof(SerializableMethodCallExpression))]
+[KnownType(typeof(SerializablePropertySetterExpression))]
+[KnownType(typeof(SerializablePropertySetterExpression))]
+public abstract class SerializableMemberExpression : SerializableExpression
+{
+    public SerializableMemberExpression()
+    {
+    }
+    public SerializableMemberExpression(SerializableExpression source, MemberInfo memberInfo)
+    {
+        Source = source;
+        MemberDeclaringType = new SerializableType(memberInfo.DeclaringType);
+        MemberName = memberInfo.Name;
+    }
+
+    [DataMember]
+    public SerializableExpression Source { get; set; }
+    [DataMember]
+    public SerializableType MemberDeclaringType { get; set; }
+    [DataMember]
+    public string MemberName { get; set; }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableMemberInitExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Collections.Generic", "System.Linq", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableMemberInitExpression : SerializableExpression
+{
+    public SerializableMemberInitExpression()
+    {
+    }
+    public SerializableMemberInitExpression(SerializableConstructorExpression constructor, IEnumerable<SerializablePropertySetterExpression> setters)
+    {
+        Constructor = constructor;
+        Setters = setters.ToList();
+    }
+
+    [DataMember]
+    public SerializableConstructorExpression Constructor { get; set; }
+    [DataMember]
+    public List<SerializablePropertySetterExpression> Setters { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitMemberInit(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableMethodCallExpression.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Collections.Generic", "System.Collections.ObjectModel", "System.Linq", "System.Reflection", "System.Runtime.Serialization", clientFxEntitiesTrackingNamespace);
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableMethodCallExpression : SerializableMemberExpression
+{
+    public SerializableMethodCallExpression()
+    {
+    }
+    public SerializableMethodCallExpression(SerializableExpression source, IEnumerable<SerializableExpression> parameters, MethodInfo method)
+        : base(source, method)
+    {
+        Type entityCollectionType;
+        if (method.Name == "Contains" && ((entityCollectionType = method.DeclaringType.GetInterfaces().FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IEntityCollection<>))) != null) || (entityCollectionType = method.DeclaringType).IsGenericType && entityCollectionType.GetGenericTypeDefinition() == typeof(TrackableCollectionBase<>))
+        {
+            MemberDeclaringType.NamespaceName = typeof(Collection<>).Namespace;
+            MemberDeclaringType.TypeName = "Collection<>";
+            Signature = null;
+        }
+        else
+            Signature = (method.IsGenericMethod ? method.GetGenericMethodDefinition() : method).ToString();
+        Parameters = parameters.ToList();
+        GenericArguments = method.GetGenericArguments().Select(a => new SerializableType(a)).ToList();
+        Method = method;
+    }
+            
+    [DataMember]
+    public string Signature { get; set; }
+    [DataMember]
+    public List<SerializableExpression> Parameters { get; set; }
+    [DataMember]
+    public List<SerializableType> GenericArguments { get; set; }
+    public MethodInfo Method { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitMethodCall(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableParameterExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Linq.Expressions", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableParameterExpression : SerializableExpression
+{
+    public SerializableParameterExpression()
+    {
+    }
+    public SerializableParameterExpression(ParameterExpression parameter)
+    {
+        Name = parameter.Name;
+        Type = new SerializableType(parameter.Type);
+    }
+
+    [DataMember]
+    public string Name { get; set; }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitParameter(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializablePropertyExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializablePropertyExpression
+{
+    public SerializablePropertyExpression()
+    {
+    }
+    public SerializablePropertyExpression(SerializableType type, string name)
+    {
+        Type = type;
+        Name = name;
+    }
+
+    [DataMember]
+    public SerializableType Type { get; set; }
+    [DataMember]
+    public string Name { get; set; }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializablePropertyGetterExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Reflection", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializablePropertyGetterExpression : SerializableMemberExpression
+{
+    public SerializablePropertyGetterExpression()
+    {
+    }
+    public SerializablePropertyGetterExpression(SerializableExpression source, PropertyInfo property)
+        : base(source, property)
+    {
+        Property = property;
+    }
+
+    public PropertyInfo Property { get; private set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitPropertyGetter(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializablePropertySetterExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Reflection", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializablePropertySetterExpression : SerializableMemberExpression
+{
+    public SerializablePropertySetterExpression()
+    {
+    }
+    public SerializablePropertySetterExpression(SerializableExpression source, PropertyInfo property, SerializableExpression value)
+        : base(source, property)
+    {
+        Value = value;
+        Property = property;
+    }
+    
+    [DataMember]
+    public SerializableExpression Value { get; set; }
+    [DataMember]
+    public int Type { get; set; }
+    public PropertyInfo Property { get; private set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitPropertySetter(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableConditionalExpression.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableConditionalExpression : SerializableExpression
+{
+    public SerializableConditionalExpression()
+    {
+    }
+    public SerializableConditionalExpression(SerializableExpression testExpression, SerializableExpression ifTrueExpression, SerializableExpression ifFalseExpression, Type type)
+        : this(testExpression, ifTrueExpression, ifFalseExpression, new SerializableType(type))
+    {
+    }
+    public SerializableConditionalExpression(SerializableExpression testExpression, SerializableExpression ifTrueExpression, SerializableExpression ifFalseExpression, SerializableType type)
+    {
+        TestExpression = testExpression;
+        IfTrueExpression = ifTrueExpression;
+        IfFalseExpression = ifFalseExpression;
+        Type = type;
+    }
+    
+    [DataMember]
+    public SerializableExpression TestExpression { get; set; }
+    [DataMember]
+    public SerializableExpression IfTrueExpression { get; set; }
+    [DataMember]
+    public SerializableExpression IfFalseExpression { get; set; }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitConditional(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableType.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Collections.Generic", "System.Linq", "System.Runtime.CompilerServices", "System.Runtime.Serialization", "System.Text", "System.Text.RegularExpressions", clientFxEntitiesTrackingNamespace);
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public partial class SerializableType
+{
+    public SerializableType()
+    {
+    }
+    public SerializableType(Type type)
+    {
+        ReplaceType(ref type);
+        Type = type;
+    }
+    partial void ReplaceType(ref Type type);
+    
+    private Type GetType(Type type)
+    {
+        if (typeof(IAsyncQueryableBase).IsAssignableFrom(type))
+        {
+            if (type.IsGenericType && type.GetGenericArguments().Length == 1)
+            {
+                if (type.GetGenericTypeDefinition() == typeof(IAsyncQueryable<>))
+                    return typeof(IQueryable<>).MakeGenericType(GetType(type.GetGenericArguments()[0]));
+                else if (type.GetGenericTypeDefinition() == typeof(IAsyncQueryableValue<>))
+                    return GetType(type.GetGenericArguments()[0]);
+            }
+            else if (type == typeof(IAsyncQueryable))
+                return typeof(IQueryable);
+            throw new InvalidOperationException();
+        }
+        return type;
+    }
+    
+    [DataMember]
+    public string TypeName { get; set; }
+    [DataMember]
+    public string NamespaceName { get; set; }
+    [DataMember]
+    public string WCFNamespaceName { get; set; }
+    [DataMember]
+    public List<SerializableType> GenericArguments { get; set; }
+    [DataMember]
+    public SerializableType ArrayOf { get; set; }
+    [DataMember]
+    public bool IsKnownByServer { get; set; }
+    [DataMember]
+    public List<SerializablePropertyExpression> Properties { get; set; }
+
+    private Type _type;
+    public Type Type
+    {
+        get { return _type; }
+        private set 
+        { 
+            _type = value;
+            value = GetType(value);
+            GenericArguments = value.GetGenericArguments().Select(a => new SerializableType(a)).ToList();
+            TypeName = Regex.Replace(value.Name, @"`(\d+)$", m =>
+            {
+                var sb = new StringBuilder();
+                sb.Append("<");
+                for (int i = 1, count = int.Parse(m.Groups[1].Value); i < count; i++)
+                    sb.Append(",");
+                sb.Append(">");
+                return sb.ToString();
+            });
+            NamespaceName = value.Namespace;
+            WCFNamespaceName = value.GetCustomAttributes(typeof(DataContractAttribute), true).OfType<DataContractAttribute>().Select(dc => dc.Namespace).FirstOrDefault();
+            if (value.IsArray)
+                ArrayOf = new SerializableType(value.GetElementType());
+            if (value.Namespace == null || !(IsKnownByServer = WCFNamespaceName != null || typeof(IClientContext).IsAssignableFrom(value) || value.Namespace.StartsWith("System") || ArrayOf != null && ArrayOf.IsKnownByServer || value.GetCustomAttributes(true).OfType<IsKnownByServerAttribute>().Any()))
+                Properties = value.GetProperties().Where(p => p.CanRead && (p.CanWrite || value.Name.StartsWith("<>f__AnonymousType"))).Select(p => new SerializablePropertyExpression(new SerializableType(p.PropertyType), p.Name)).ToList();
+        }
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableUnaryExpression.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Linq.Expressions", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableUnaryExpression : SerializableExpression
+{
+    public SerializableUnaryExpression()
+    {
+    }
+    public SerializableUnaryExpression(SerializableExpression operand, ExpressionType nodeType, Type type)
+        : this(operand, Enum.GetName(typeof(ExpressionType), nodeType), new SerializableType(type))
+    {
+    }
+    public SerializableUnaryExpression(SerializableExpression operand, string nodeType, SerializableType type)
+    {
+        Operand = operand;
+        NodeType = nodeType;
+        Type = type;
+    }
+    
+    [DataMember]
+    public SerializableExpression Operand { get; set; }
+    [DataMember]
+    public string NodeType { get; set; }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitUnary(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableExpressionBuilder.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Text.RegularExpressions");
+#>
+public class SerializableExpressionBuilder : ExpressionVisitor
+{
+    private Reference<SerializableExpression> _serializableReference;
+    private Dictionary<ParameterExpression, SerializableParameterExpression> _lambdaParameters = new Dictionary<ParameterExpression, SerializableParameterExpression>();
+    private ParameterMode _parameterMode;
+    private IClientContextBase _clientContext;
+    private Func<ParameterExpression, SerializableExpression> _transformParameter;
+
+    internal SerializableExpressionBuilder(Reference<SerializableExpression> serializableReference, ParameterMode parameterMode, IClientContextBase clientContext)
+    {
+        _serializableReference = serializableReference;
+        _parameterMode = parameterMode;
+        _clientContext = clientContext;
+    }
+    internal SerializableExpressionBuilder(Reference<SerializableExpression> serializableReference, ParameterMode parameterMode, Dictionary<ParameterExpression, SerializableParameterExpression> lambdaParameters, IClientContextBase clientContext, Func<ParameterExpression, SerializableExpression> transformParameter)
+        : this(serializableReference, parameterMode, clientContext)
+    {
+        _lambdaParameters = lambdaParameters;
+        _transformParameter = transformParameter;
+    }
+    
+    public bool UseQueryable { get; set; }
+    
+    public override Expression Visit(Expression node)
+    {
+        if (node == null)
+            return null;
+        var nodeAsMemberExp = node as MemberExpression;
+        if (nodeAsMemberExp != null && nodeAsMemberExp.Expression is ConstantExpression && typeof(IAsyncQueryableBase).IsAssignableFrom(node.Type))
+        {
+            _serializableReference.Value = ((IAsyncQueryableBase)Expression.Lambda<Func<IAsyncQueryableBase>>(node).Compile()()).Expression;
+            return null;
+        }
+        var newNode = _clientContext.GetTransformer().TransformExpression(node);
+        Expression value;
+        if (newNode == node)
+            value = base.Visit(node);
+        else
+            value = base.Visit(newNode);
+        if (value != null)
+            throw new NotImplementedException();
+        return null;
+    }
+                
+    protected override Expression VisitTypeBinary(TypeBinaryExpression node)
+    {
+        var serializableExpressionReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(serializableExpressionReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.Expression);
+        _serializableReference.Value = new SerializableTypeBinaryExpression(serializableExpressionReference.Value, node.NodeType, node.TypeOperand);
+        return null;
+    }
+                
+    protected override Expression VisitBinary(BinaryExpression node)
+    {
+        var serializableLeftReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(serializableLeftReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.Left);
+        var serializableRightReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(serializableRightReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.Right);
+        _serializableReference.Value = new SerializableBinaryExpression(serializableLeftReference.Value, serializableRightReference.Value, node.NodeType);
+        return null;
+    }
+                
+    protected override Expression VisitUnary(UnaryExpression node)
+    {
+        var serializableExpressionReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(serializableExpressionReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.Operand);
+        _serializableReference.Value = new SerializableUnaryExpression(serializableExpressionReference.Value, node.NodeType, node.Type);
+        return null;
+    }
+                
+    protected override Expression VisitMethodCall(MethodCallExpression node)
+    {
+        if (node.Method.DeclaringType == typeof(AsyncQueryableExtensions) && node.Method.Name == "AsObject")
+        {
+            Visit(node.Arguments[0]);
+            return null;
+        }
+            
+        if (node.Method.DeclaringType == typeof(ClientEntitySetExtensions) && node.Method.Name == "AsAsyncQueryable")
+        {
+            _serializableReference.Value = Expression.Lambda<Func<IAsyncQueryable>>(node).Compile()().Expression;
+            return null;
+        }
+            
+        if (typeof(IClientEntitySet).IsAssignableFrom(node.Method.ReturnType))
+        {
+            _serializableReference.Value = new SerializableEntitySetExpression(Expression.Lambda<Func<IClientEntitySet>>(node).Compile()().EntitySetName);
+            return null;
+        }
+                
+        if (node.Method.DeclaringType == typeof(ClientEntitySetExtensions))
+        {
+            new SerializableExpressionBuilder(_serializableReference, _parameterMode, _clientContext).Visit(node.Arguments[0]);
+            return null;
+        }
+                
+        if (node.Object is ConstantExpression)
+        {
+            var value = Expression.Lambda(node).Compile();
+            if (_parameterMode == ParameterMode.OnDefinition)
+                _serializableReference.Value = new SerializableConstantExpression(value.DynamicInvoke(), node.Type);
+            else
+                _serializableReference.Value = new SerializableConstantExpression(value, node.Type);
+            return null;
+        }
+                
+        var serializableSourceReference = new Reference<SerializableExpression>();
+        if (node.Object != null)
+            new SerializableExpressionBuilder(serializableSourceReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.Object);
+                
+        var method = node.Method;
+                
+        if (typeof(IAsyncQueryableBase).IsAssignableFrom(node.Type) && method.DeclaringType == typeof(AsyncQueryableExtensions))
+        {
+            var signature = Regex.Replace((method.IsGenericMethod ? method.GetGenericMethodDefinition().ToString() : method.ToString()), string.Concat(typeof(IAsyncQueryableValue).ToString(), @"`1\[((?>[^\[\]]+|\[(?<DEPTH>)|\](?<-DEPTH>))*(?(DEPTH)(?!)))\]"), m => Regex.Replace(m.Groups[1].Value, @"System.([\w\d]+)", m2 => m2.Groups[1].Value)).Replace(typeof(IAsyncQueryable).ToString(), typeof(IQueryable).ToString());
+                                   
+            var queryableMethod = typeof(Queryable).GetMethods().First(m => (m.IsGenericMethod ? m.GetGenericMethodDefinition().ToString() : m.ToString()) == signature);
+            if (method.IsGenericMethod)
+                method = queryableMethod.MakeGenericMethod(method.GetGenericArguments());
+        }
+
+        bool applyQueryable = UseQueryable && method.DeclaringType == typeof(Enumerable);
+        if (applyQueryable)
+        {
+            var signature = Regex.Replace(Regex.Replace((method.IsGenericMethod ? method.GetGenericMethodDefinition().ToString() : method.ToString()), @"(System.Collections.Generic.IEnumerable|System.Linq.I(\w*)Enumerable)`1\[((?>[^\[\]]+|\[(?<DEPTH>)|\](?<-DEPTH>))*(?(DEPTH)(?!)))\]", m => string.Concat("System.Linq.I", m.Groups[2].Value, "Queryable`1[", m.Groups[3].Value, "]")), @"System.Func`\d+\[[^\[\]]+\]", m => string.Concat("System.Linq.Expressions.Expression`1[", m.Value, "]"));
+        
+            var queryableMethod = typeof(Queryable).GetMethods().First(m => (m.IsGenericMethod ? m.GetGenericMethodDefinition().ToString() : m.ToString()) == signature);
+            if (method.IsGenericMethod)
+                method = queryableMethod.MakeGenericMethod(method.GetGenericArguments());
+        }
+        
+        _serializableReference.Value = new SerializableMethodCallExpression(serializableSourceReference.Value, node.Arguments.Select((a, i) =>
+        {
+            var parameterSourceReference = new Reference<SerializableExpression>();
+            var serializableExpressionBuilder = new SerializableExpressionBuilder(parameterSourceReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter);
+            if (i == 0 && applyQueryable)
+                serializableExpressionBuilder.UseQueryable = true;
+            serializableExpressionBuilder.Visit(a);
+            return parameterSourceReference.Value;
+        }), method);
+        return null;
+    }
+                
+    protected override Expression VisitMember(MemberExpression node)
+    {
+        var prop = node.Member as PropertyInfo;
+        Type constantType = null;
+        if (prop == null)
+        {
+            Type fieldType = ((FieldInfo)node.Member).FieldType;
+            if (typeof(IClientEntitySet).IsAssignableFrom(fieldType))
+            {
+                _serializableReference.Value = new SerializableEntitySetExpression(Expression.Lambda<Func<IClientEntitySet>>(node).Compile()().EntitySetName);
+                return null;
+            }
+            constantType = fieldType;
+        }
+        else if (prop.GetGetMethod().IsStatic)
+            _serializableReference.Value = new SerializableConstantExpression(prop.GetValue(null, null), ((PropertyInfo)node.Member).PropertyType);
+        else
+        {
+            if (typeof(IClientEntitySet).IsAssignableFrom(prop.PropertyType))
+            {
+                _serializableReference.Value = new SerializableEntitySetExpression(Expression.Lambda<Func<IClientEntitySet>>(node).Compile()().EntitySetName);
+                return null;
+            }
+            if (typeof(IClientContext).IsAssignableFrom(prop.DeclaringType))
+            {
+                _serializableReference.Value = new SerializablePropertyGetterExpression(null, prop);
+                return null;
+            }
+                
+            if (node.Expression is ConstantExpression)
+            {
+                constantType = prop.PropertyType;
+            }
+            else
+            {
+                var serializableSourceReference = new Reference<SerializableExpression>();
+                new SerializableExpressionBuilder(serializableSourceReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.Expression);
+                _serializableReference.Value = new SerializablePropertyGetterExpression(serializableSourceReference.Value, prop);
+                return null;
+            }
+        }
+        if (constantType != null)
+        {
+            var value = Expression.Lambda(node).Compile();
+            if (_parameterMode == ParameterMode.OnDefinition)
+                _serializableReference.Value = new SerializableConstantExpression(value.DynamicInvoke(), constantType);
+            else
+                _serializableReference.Value = new SerializableConstantExpression(value, constantType);
+        }
+        return null;
+    }
+                
+    protected override Expression VisitConstant(ConstantExpression node)
+    {
+        _serializableReference.Value = new SerializableConstantExpression(node.Value, node.Type);
+        return null;
+    }
+                
+    protected override Expression VisitLambda<T>(Expression<T> node)
+    {
+        List<SerializableParameterExpression> parameters = new List<SerializableParameterExpression>();
+        Dictionary<ParameterExpression, SerializableParameterExpression> lambdaParameters = new Dictionary<ParameterExpression, SerializableParameterExpression>(_lambdaParameters);
+        foreach (var parameter in node.Parameters)
+        {
+            var serializableParameter = new SerializableParameterExpression(parameter);
+            parameters.Add(serializableParameter);
+            lambdaParameters.Add(parameter, serializableParameter);
+        }
+                
+        var serializableBodyReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(serializableBodyReference, _parameterMode, lambdaParameters, _clientContext, _transformParameter).Visit(node.Body);
+                
+        _serializableReference.Value = new SerializableLambdaExpression(parameters, node.ReturnType, serializableBodyReference.Value);
+        if (typeof(IAsyncQueryableBase).IsAssignableFrom(node.Type))
+            _serializableReference.Value = new SerializableUnaryExpression(_serializableReference.Value, ExpressionType.Quote, typeof(Expression<T>));
+        return null;
+    }
+             
+    protected override Expression VisitParameter(ParameterExpression node)
+    {
+        SerializableParameterExpression serializableParameterExpression;
+        if (_lambdaParameters.TryGetValue(node, out serializableParameterExpression))
+            _serializableReference.Value = serializableParameterExpression;
+        else
+            _serializableReference.Value = _transformParameter(node);
+        return null;
+    }
+                
+    protected override Expression VisitNew(NewExpression node)
+    {
+        _serializableReference.Value = new SerializableConstructorExpression(new SerializableType(node.Type), node.Arguments.Select(a => new SerializableType(a.Type)), node.Arguments.Select(a =>
+        {
+            var parameterSourceReference = new Reference<SerializableExpression>();
+            new SerializableExpressionBuilder(parameterSourceReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(a);
+            return parameterSourceReference.Value;
+        }));
+        return null;
+    }
+                
+    protected override Expression VisitMemberInit(MemberInitExpression node)
+    {
+        var ctorReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(ctorReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.NewExpression);
+        _serializableReference.Value = new SerializableMemberInitExpression((SerializableConstructorExpression)ctorReference.Value, node.Bindings.Select(b =>
+            {
+                var valueReference = new Reference<SerializableExpression>();
+                Expression value;
+                var memberAssignment = b as MemberAssignment;
+                if (memberAssignment != null)
+                    value = memberAssignment.Expression;
+                else
+                    throw new NotImplementedException();
+                new SerializableExpressionBuilder(valueReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(value);
+                return new SerializablePropertySetterExpression(null, (PropertyInfo)b.Member, valueReference.Value);
+            }));
+        return null;
+    }
+                
+    protected override Expression VisitConditional(ConditionalExpression node)
+    {
+        var testReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(testReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.Test);
+        var ifTrueReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(ifTrueReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.IfTrue);
+        var ifFalseReference = new Reference<SerializableExpression>();
+        new SerializableExpressionBuilder(ifFalseReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter).Visit(node.IfFalse);
+        _serializableReference.Value = new SerializableConditionalExpression(testReference.Value, ifTrueReference.Value, ifFalseReference.Value, node.Type);
+        return null;
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableTypeBinaryExpression.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Linq.Expressions", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableTypeBinaryExpression : SerializableExpression
+{
+    public SerializableTypeBinaryExpression()
+    {
+    }
+    public SerializableTypeBinaryExpression(SerializableExpression expression, ExpressionType nodeType, Type typeOperand)
+        : this(expression, Enum.GetName(typeof(ExpressionType), nodeType), new SerializableType(typeOperand))
+    {
+    }
+    public SerializableTypeBinaryExpression(SerializableExpression expression, string nodeType, SerializableType typeOperand)
+    {
+        Expression = expression;
+        NodeType = nodeType;
+        TypeOperand = typeOperand;
+    }
+    
+    [DataMember]
+    public SerializableExpression Expression { get; set; }
+    [DataMember]
+    public SerializableType TypeOperand { get; set; }
+    [DataMember]
+    public string NodeType { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitTypeBinary(this);
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("SerializableBinaryExpression.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Linq.Expressions", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableBinaryExpression : SerializableExpression
+{
+    public SerializableBinaryExpression()
+    {
+    }
+    public SerializableBinaryExpression(SerializableExpression left, SerializableExpression right, ExpressionType nodeType)
+        : this(left, right, Enum.GetName(typeof(ExpressionType), nodeType))
+    {
+    }
+    public SerializableBinaryExpression(SerializableExpression left, SerializableExpression right, string nodeType)
+    {
+        Left = left;
+        Right = right;
+        NodeType = nodeType;
+    }
+
+    [DataMember]
+    public SerializableExpression Left { get; set; }
+    [DataMember]
+    public SerializableExpression Right { get; set; }
+    [DataMember]
+    public string NodeType { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitBinary(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableConstantExpression.cs");
+WriteHeader(expressionNamespace, code, "System", "System.Collections", "System.Collections.Generic", "System.Linq", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+[KnownType(typeof(int))]
+[KnownType(typeof(uint))]
+[KnownType(typeof(short))]
+[KnownType(typeof(ushort))]
+[KnownType(typeof(byte))]
+[KnownType(typeof(long))]
+[KnownType(typeof(ulong))]
+[KnownType(typeof(decimal))]
+[KnownType(typeof(double))]
+[KnownType(typeof(char))]
+[KnownType(typeof(DateTime))]
+[KnownType(typeof(DateTimeOffset))]
+[KnownType(typeof(TimeSpan))]
+[KnownType(typeof(int?))]
+[KnownType(typeof(uint?))]
+[KnownType(typeof(short?))]
+[KnownType(typeof(ushort?))]
+[KnownType(typeof(byte?))]
+[KnownType(typeof(long?))]
+[KnownType(typeof(ulong?))]
+[KnownType(typeof(decimal?))]
+[KnownType(typeof(double?))]
+[KnownType(typeof(char?))]
+[KnownType(typeof(DateTime?))]
+[KnownType(typeof(DateTimeOffset?))]
+[KnownType(typeof(TimeSpan?))]
+[KnownType(typeof(string))]
+[KnownType(typeof(int[]))]
+[KnownType(typeof(uint[]))]
+[KnownType(typeof(short[]))]
+[KnownType(typeof(ushort[]))]
+[KnownType(typeof(byte[]))]
+[KnownType(typeof(long[]))]
+[KnownType(typeof(ulong[]))]
+[KnownType(typeof(decimal[]))]
+[KnownType(typeof(double[]))]
+[KnownType(typeof(char[]))]
+[KnownType(typeof(DateTime[]))]
+[KnownType(typeof(DateTimeOffset[]))]
+[KnownType(typeof(TimeSpan[]))]
+[KnownType(typeof(int?[]))]
+[KnownType(typeof(uint?[]))]
+[KnownType(typeof(short?[]))]
+[KnownType(typeof(ushort?[]))]
+[KnownType(typeof(byte?[]))]
+[KnownType(typeof(long?[]))]
+[KnownType(typeof(ulong?[]))]
+[KnownType(typeof(decimal?[]))]
+[KnownType(typeof(double?[]))]
+[KnownType(typeof(char?[]))]
+[KnownType(typeof(DateTimeOffset?[]))]
+[KnownType(typeof(DateTime?[]))]
+[KnownType(typeof(TimeSpan?[]))]
+[KnownType(typeof(string[]))]
+public class SerializableConstantExpression : SerializableExpression
+{
+    public SerializableConstantExpression()
+    {
+    }
+    public SerializableConstantExpression(object value, Type type)
+    {
+        Value = value;
+        Type = new SerializableType(type);
+    }
+    public SerializableConstantExpression(Delegate @delegate, Type type)
+    {
+        Delegate = @delegate;
+        Type = new SerializableType(type);
+    }
+
+    public Delegate Delegate { get; set; }
+
+    private object _value;
+    [DataMember]
+    public object Value 
+    {
+        get
+        {
+            if (Delegate != null)
+                _value = Delegate.DynamicInvoke();
+            if (_value is Enum)
+                _value = (int)_value;
+            if (!(_value is IEnumerable) || _value is string)
+                return _value;
+            var enumerable = _value.GetType().GetInterfaces().FirstOrDefault(f => f.IsGenericType && f.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+            if (enumerable == null)
+                throw new NotImplementedException();
+            return typeof(Enumerable).GetMethod("ToArray").MakeGenericMethod(enumerable.GetGenericArguments()[0]).Invoke(null, new object[] { _value });
+        }
+        set { _value = value; } 
+    }
+    [DataMember]
+    public SerializableType Type { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitConstant(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableConstructorExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Collections.Generic", "System.Linq", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableConstructorExpression : SerializableExpression
+{
+    public SerializableConstructorExpression()
+    {
+    }
+    public SerializableConstructorExpression(SerializableType type, IEnumerable<SerializableType> argumentTypes, IEnumerable<SerializableExpression> arguments)
+    {
+        Type = type;
+        ArgumentTypes = argumentTypes.ToList();
+        Arguments = arguments.ToList();
+    }
+
+    [DataMember]
+    public SerializableType Type { get; set; }
+    [DataMember]
+    public List<SerializableType> ArgumentTypes { get; set; }
+    [DataMember]
+    public List<SerializableExpression> Arguments { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitConstructor(this);
+    }
+}
+<#+
+WriteFooter(expressionNamespace);
+
+fileManager.StartNewFile("SerializableEntitySetExpression.cs");
+WriteHeader(expressionNamespace, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QuerySerialization", IsReference = true)]
+public class SerializableEntitySetExpression : SerializableExpression
+{
+    public SerializableEntitySetExpression()
+    {
+    }
+    public SerializableEntitySetExpression(string entitySetName)
+    {
+        EntitySetName = entitySetName;
+    }
+
+    [DataMember]
+    public string EntitySetName { get; set; }
+
+    protected internal override SerializableExpression Visit(SerializableExpressionRewriter rewriter)
+    {
+        return rewriter.VisitEntitySet(this);
+    }
+}
+<#+
+    WriteFooter(expressionNamespace);
+
+    string errorNamespaceName = namespaceName + ".Errors";
+
+    fileManager.StartNewFile("Criticity.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Errors")]
+[Flags]
+public enum Criticity
+{
+    [EnumMember]
+    None = 0,
+    [EnumMember]
+    Information = 1,
+    [EnumMember]
+    Warning = 2,
+    [EnumMember]
+    Error = 8,
+    [EnumMember]
+    Mandatory = 12
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile("Error.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Runtime.Serialization", clientFxComponentModelNamespace);
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Errors")]
+public partial class Error
+{
+    [DataMember]
+    public string Message { get; set; }
+    [DataMember]
+    public Criticity Criticity { get; set; }
+    [DataMember]
+    public string Key { get; set; }
+    [DataMember]
+    public ErrorDetail[] ErrorDetails { get; set; }
+
+    public ErrorInfo ErrorInfo { get; set; }
+
+    private ErrorSource _source = ErrorSource.FromClient;
+    public ErrorSource Source
+    {
+        get { return _source; }
+        private set { _source = value; }
+    }
+    [OnDeserializing]
+    public void OnDeserializingMethod(StreamingContext context)
+    {
+        Source = ErrorSource.FromServer;
+    }
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile("ErrorDetail.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Errors")]
+public partial class ErrorDetail
+{
+    [DataMember]
+    public Guid EntityKey { get; set; }
+    [DataMember]
+    public string PropertyName { get; set; }
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile("ErrorSource.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Runtime.Serialization");
+#>
+public enum ErrorSource
+{
+    Unknown,
+    FromClient,
+    FromServer
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile("ErrorException.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Collections.Generic");
+#>
+public partial class ErrorException : Exception
+{
+    public ErrorException(IEnumerable<Error> errors, ErrorSource source = ErrorSource.FromClient)
+    {
+        Errors = errors;
+        Source = source;
+    }
+
+    public IEnumerable<Error> Errors { get; private set; }
+
+    public <#=expectionHasSource ? "new " : ""#>ErrorSource Source { get; private set; }
+
+    public static ErrorException Throw(IEnumerable<Error> errors, ErrorSource source = ErrorSource.FromClient)
+    {
+        var exception = new ErrorException(errors, source);
+        CustomThrowServerException(exception);
+        throw exception;
+    }
+    protected static void CustomThrowServerException(ErrorException exception)
+    {
+        CustomThrow(exception);
+    }
+    static partial void CustomThrow(ErrorException exception);
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile("ServerException.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Collections.Generic");
+#>
+public partial class ServerException : Exception
+{
+    public ServerException(string errorType, string errorMessage)
+        : base(errorMessage)
+    {
+        ErrorType = errorType;
+    }
+
+    public string ErrorType { get; private set; }
+
+    public static ServerException Throw(string errorType, string errorMessage)
+    {
+        var exception = new ServerException(errorType, errorMessage);
+        CustomThrowServerException(exception);
+        throw exception;
+    }
+    protected static void CustomThrowServerException(ServerException exception)
+    {
+        CustomThrow(exception);
+    }
+    static partial void CustomThrow(ServerException exception);
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile("SavingException.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Collections.Generic");
+#>
+public partial class SavingException : ServerException
+{
+    public SavingException(IEnumerable<object> entities, string errorType, string errorMessage)
+        : base(errorType, errorMessage)
+    {
+        Entities = entities;
+    }
+
+    public IEnumerable<object> Entities { get; private set; }
+
+    public static SavingException Throw(IEnumerable<object> entities, string errorType, string errorMessage)
+    {
+        var exception = new SavingException(entities, errorType, errorMessage);
+        CustomThrowServerException(exception);
+        throw exception;
+    }
+    protected static void CustomThrowServerException(SavingException exception)
+    {
+        CustomThrow(exception);
+        ServerException.CustomThrowServerException(exception);
+    }
+    static partial void CustomThrow(ServerException exception);
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    string queryNamespaceName = namespaceName + ".Query";
+
+    fileManager.StartNewFile("QuerySerialization.cs");
+    WriteHeader(queryNamespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization", expressionNamespace);
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Query")]
+public class QuerySerialization
+{
+    [DataMember]
+    public SerializableExpression Expression { get; set; }
+
+    [DataMember]
+    public SerializableType SerializableType { get; set; }
+    
+    [DataMember]
+    public List<string> WithSpecificationsProperties { get; set; }
+}
+<#+
+    WriteFooter(queryNamespaceName);
+
+    fileManager.StartNewFile("QueriesSerialization.cs");
+    WriteHeader(queryNamespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Query")]
+public class QueriesSerialization
+{
+    private List<QuerySerialization> _querySerializations;
+    [DataMember]
+    public List<QuerySerialization> QuerySerializations 
+    { 
+        get { return _querySerializations ?? (_querySerializations = new List<QuerySerialization>()); } 
+        set { _querySerializations = value; }
+    }
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("MergeOption.cs");
+WriteHeader(namespaceName, code);
+#>
+public enum MergeOption
+{
+    AppendOnly,
+    OverwriteChanges,
+    PreserveChanges,
+    NoTracking
+}
+<#+
+    WriteFooter(queryNamespaceName);
+
+    WriteSpecificClasses(fileManager, code, clientFxComponentModelNamespace, clientFxEntitiesTrackingNamespace, namespaceName);
+
+    fileManager.Process();
+}
+#>

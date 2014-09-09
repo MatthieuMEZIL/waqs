@@ -1,0 +1,27 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<WCFAsyncQueryableServices.Server EdmxPath="$edmxPath$">
+  <Specifications>
+    <Specification SlnFilePath="$SpecificationsSlnFilePath$" CsprojPath="$SpecificationsCsprojPath$" FolderPath="$SpecificationsFolderPath$" />
+  </Specifications>
+  <Entities SlnFilePath="$EntitiesSlnFilePath$" CsprojPath="$EntitiesCsprojPath$" FolderPath="$EntitiesFolderPath$" Generate="false" />
+  <DAL NamespaceName="$DALNamespace$" Generate="false" />
+  <DALInterfaces NamespaceName="$DALInterfacesNamespace$" Generate="false" />
+  <Service NamespaceName="$ServiceNamespace$" Generate="false" />
+  <ServiceInterfaces NamespaceName="$ServiceInterfacesNamespace$" Generate="false" />
+  <WCFService NamespaceName="$WCFServiceNamespace$" Generate="false" />
+  <WCFServiceContract NamespaceName="$WCFServiceContractNamespace$" Generate="false" />
+  <Web GlobalClassName="Global" />
+  <GlobalContext />
+  <Framework>
+    <Common NamespaceName="WCFAsyncQueryableServices.Common" Generate="false" />
+    <Specifications NamespaceName="WCFAsyncQueryableServices.Specifications" Generate="false" />
+    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="false" />
+    <DAL NamespaceName="WCFAsyncQueryableServices.DAL" Generate="false" />
+    <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" Generate="false" />
+    <Expressions NamespaceName="WCFAsyncQueryableServices.SerializableExpressions" Generate="false" />
+    <Service NamespaceName="WCFAsyncQueryableServices.Service" Generate="false" />
+    <ServiceInterfaces NamespaceName="WCFAsyncQueryableServices.Service.Interfaces" Generate="false" />
+    <WCFService NamespaceName="WCFAsyncQueryableServices.WCFService" Generate="false" />
+    <WCFServiceContract NamespaceName="WCFAsyncQueryableServices.WCFService.Contract" Generate="false" />
+  </Framework>
+</WCFAsyncQueryableServices.Server>

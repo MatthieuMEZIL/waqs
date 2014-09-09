@@ -1,0 +1,45 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Specifications.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.VS11.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Server.Entities.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteSpecificTypes(EntityFrameworkTemplateFileManager fileManager, EdmItemCollection itemCollection, CodeGenerationTools code, string edmxName, string namespaceName)
+{
+	// Emit Enum Types
+	foreach (EnumType enumType in itemCollection.GetItems<EnumType>().OrderBy(e => e.Name))
+	{
+		fileManager.StartNewFile(enumType.Name + ".cs");
+		WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+
+		if (enumType.IsFlags)
+		{
+#>
+[Flags]
+<#+
+		}
+#>
+[DataContract(Namespace = "http://<#=edmxName#>/Entities")]
+public enum <#=code.Escape(enumType)#> : <#=code.Escape(enumType.UnderlyingType.ClrEquivalentType, fullyQualifySystemTypes: false)#>
+{
+<#+
+		foreach (EnumMember member in enumType.Members)
+		{
+#>
+	[EnumMember]
+	<#=code.Escape(member)#> = <#=member.Value#>,
+
+<#+
+		}
+
+		// Remove the last comma and line break
+		if (enumType.Members.Any())
+			this.GenerationEnvironment.Remove(this.GenerationEnvironment.Length - (CurrentIndent.Length + 5), CurrentIndent.Length + 3);
+#>
+}
+<#+
+		WriteFooter(namespaceName);
+	}
+}
+#>

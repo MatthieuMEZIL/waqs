@@ -1,0 +1,94 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxWCFServiceContract(string serverFxServiceInterfacesNamespace, string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	fileManager.StartNewFile("FaultDetail.cs");
+	WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Fault")]
+public partial class FaultDetail
+{
+	[DataMember]
+	public string ErrorType { get; set; }
+
+	[DataMember]
+	public string ErrorMessage { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("StandardFaultsAttribute.cs");
+	WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.ComponentModel", "System.Linq", "System.ServiceModel.Channels", "System.ServiceModel.Description", "System.ServiceModel.Dispatcher", serverFxServiceInterfacesNamespace);
+#>
+[AttributeUsage(AttributeTargets.Interface, AllowMultiple = false, Inherited = true)]
+public partial class StandardFaultsAttribute : Attribute, IContractBehavior
+{
+	protected virtual List<Type> GetFaultTypes()
+	{
+		var value = new List<Type>() { typeof(FaultDetail), typeof(Error), typeof(ErrorCollection) };
+		GetFaultTypes(ref value);
+		return value;
+	}
+
+	partial void GetFaultTypes(ref List<Type> types);
+
+	public void AddBindingParameters(ContractDescription contractDescription, ServiceEndpoint endpoint, BindingParameterCollection bindingParameters)
+	{
+	}
+
+	public void ApplyClientBehavior(ContractDescription contractDescription, ServiceEndpoint endpoint, ClientRuntime clientRuntime)
+	{
+	}
+
+	public void ApplyDispatchBehavior(ContractDescription contractDescription, ServiceEndpoint endpoint, DispatchRuntime dispatchRuntime)
+	{
+	}
+
+	public void Validate(ContractDescription contractDescription, ServiceEndpoint endpoint)    
+	{
+		foreach (OperationDescription op in contractDescription.Operations)
+			foreach (Type fault in GetFaultTypes())
+			{
+				if (! op.Faults.Any(f => f.Name == fault.Name))
+					op.Faults.Add(MakeFault(fault));
+				if (! op.KnownTypes.Contains(fault))
+					op.KnownTypes.Add(fault);
+			}
+	}
+
+	private FaultDescription MakeFault(Type detailType)
+	{
+		string action = detailType.Name;
+		DescriptionAttribute description = (DescriptionAttribute)Attribute.GetCustomAttribute(detailType, typeof(DescriptionAttribute));
+		if (description != null)
+			action = description.Description;
+		return new FaultDescription(action) { DetailType = detailType, Name = detailType.Name };
+	}
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("ErrorCollection.cs");
+	WriteHeader(namespaceName, code, "System.Runtime.Serialization", serverFxServiceInterfacesNamespace);
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Fault")]
+public class ErrorCollection
+{
+	[DataMember]
+	public Error[] Errors { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.Process();
+}
+#>

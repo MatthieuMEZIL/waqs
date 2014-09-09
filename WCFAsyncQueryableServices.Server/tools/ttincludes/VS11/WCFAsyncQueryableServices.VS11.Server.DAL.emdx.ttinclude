@@ -1,0 +1,6 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Server.DAL.emdx.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+string VsVersion = "VS11";
+#>

@@ -1,0 +1,648 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+public static MethodDeclarationSyntax AddEntityMethod(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, MethodDeclarationSyntax method, ISemanticModel semanticModel, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, SpecificationsElements specificationsElements, EdmxElements edmxElements, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, Dictionary<string, string> namespacesReplacement)
+{
+    return AddEntityMethod(members, className, method, semanticModel, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, dtoTypes, server, (cn, hasContextOrUseServiceProperty, modifiers, parameters, isAbstract, isVirtual, isOverride) => AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, edmxElements, hasContextOrUseServiceProperty, modifiers, parameters, dtoTypes, dtoNamespace, server, isAbstract, isVirtual, isOverride, namespacesReplacement), namespacesReplacement);
+}
+public static MethodDeclarationSyntax AddEntityMethod(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, MethodDeclarationSyntax method, ISemanticModel semanticModel, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, SpecificationsElements specificationsElements, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, Dictionary<string, string> namespacesReplacement)
+{
+    return AddEntityMethod(members, className, method, semanticModel, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, dtoTypes, server, (cn, hasContextOrUseServiceProperty, modifiers, parameters, isAbstract, isVirtual, isOverride) => AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, hasContextOrUseServiceProperty, modifiers, parameters, dtoTypes, dtoNamespace, server, isAbstract, isVirtual, isOverride, namespacesReplacement), namespacesReplacement);
+}
+private static MethodDeclarationSyntax AddEntityMethod(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, MethodDeclarationSyntax method, ISemanticModel semanticModel, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, SpecificationsElements specificationsElements, IEnumerable<TypeSymbol> dtoTypes, bool server, Func<string, bool, List<SyntaxToken>, IEnumerable<ParameterSyntax>, bool, bool, bool, MethodDeclarationSyntax> returnFunction, Dictionary<string, string> namespacesReplacement)
+{
+    bool isAbstract = specificationsElements.AbstractMethods.Contains(method);
+    bool isVirtual = specificationsElements.VirtualMethods.Contains(method);
+    bool isOverride = specificationsElements.OverrideMethods.Contains(method);
+    var modifiers = new List<SyntaxToken>() { SyntaxFactory.Token(SyntaxKind.PublicKeyword) };
+    if (isAbstract)
+        modifiers.Add(SyntaxFactory.Token(SyntaxKind.AbstractKeyword));
+    else if (isOverride)
+        modifiers.Add(SyntaxFactory.Token(SyntaxKind.OverrideKeyword));
+    else if (isVirtual)
+        modifiers.Add(SyntaxFactory.Token(SyntaxKind.VirtualKeyword));
+    if (className == null)
+        modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+
+    bool hasContext;
+    string contextName;
+    bool hasService;
+    string serviceName;
+    IEnumerable<ParameterSyntax> parameters = method.ParameterList.Parameters;
+    parameters = specificationsElements.GetParametersWithoutContextAndService(method, parameters, dtoTypes, out hasContext, out contextName, out hasService, out serviceName, namespacesReplacement);
+    bool hasContextOrUseServiceProperty = hasContext || hasService || specificationsElements.UseServiceProperty(method);
+    return returnFunction(className, hasContextOrUseServiceProperty, modifiers, parameters, isAbstract, isVirtual, isOverride);
+}
+
+private static MethodDeclarationSyntax AddEntityMethod(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, MethodDeclarationSyntax method, ISemanticModel semanticModel, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, SpecificationsElements specificationsElements, EdmxElements edmxElements, bool hasContextOrServiceOrUseServiceProperty, List<SyntaxToken> modifiers, IEnumerable<ParameterSyntax> parameters, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, bool isAbstract, bool isVirtual, bool isOverride, Dictionary<string, string> namespacesReplacement)
+{
+    return AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, hasContextOrServiceOrUseServiceProperty, modifiers, parameters, dtoTypes, dtoNamespace, server, isAbstract, isVirtual, isOverride, specificationsElements.IsValidateMethod(method, edmxElements, semanticModel, serverEntitiesNamespace), namespacesReplacement);
+}
+
+private static MethodDeclarationSyntax AddEntityMethod(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, MethodDeclarationSyntax method, ISemanticModel semanticModel, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, SpecificationsElements specificationsElements, bool hasContextOrServiceOrUseServiceProperty, List<SyntaxToken> modifiers, IEnumerable<ParameterSyntax> parameters, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, bool isAbstract, bool isVirtual, bool isOverride, Dictionary<string, string> namespacesReplacement)
+{
+    return AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, hasContextOrServiceOrUseServiceProperty, modifiers, parameters, dtoTypes, dtoNamespace, server, isAbstract, isVirtual, isOverride, specificationsElements.IsValidateMethod(method, dtoTypes, semanticModel, serverEntitiesNamespace), namespacesReplacement);
+}
+private static MethodDeclarationSyntax AddEntityMethod(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, MethodDeclarationSyntax method, ISemanticModel semanticModel, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, SpecificationsElements specificationsElements, bool hasContextOrServiceOrUseServiceProperty, List<SyntaxToken> modifiers, IEnumerable<ParameterSyntax> parameters, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, bool isAbstract, bool isVirtual, bool isOverride, bool isValidateMethod, Dictionary<string, string> namespacesReplacement)
+{
+    var methodSymbol = (MethodSymbol)semanticModel.GetDeclaredSymbol(method);
+    var returnType = (TypeSyntax)new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes, namespacesReplacement).Visit(method.ReturnType);
+    var newMember = SyntaxFactory.MethodDeclaration(returnType, method.Identifier.ValueText);
+    if (server)
+        newMember = newMember
+            .WithAttributeLists(
+                SyntaxFactory.List(
+                    new []
+                    {
+                        SyntaxFactory.AttributeList(
+                            SyntaxFactory.SeparatedList(
+                                new []
+                                {
+                                    SyntaxFactory.Attribute(
+                                        SyntaxFactory.ParseName("Specifications"))
+                                },
+                                new SyntaxToken[0]))
+                    }));
+    if (hasContextOrServiceOrUseServiceProperty)
+    {
+        if (server)
+        {
+            if (className != null)
+                parameters = parameters.Skip(1);
+            newMember = newMember
+                    .WithParameterList(
+                        SyntaxFactory.ParameterList(
+                            SyntaxFactory.SeparatedList(
+                                parameters, 
+                                parameters.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))))
+                    .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                    .WithTypeParameterList(method.TypeParameterList)
+                    .WithConstraintClauses(method.ConstraintClauses);
+            if (! isAbstract)
+            {
+                var membersValues = new List<MemberDeclarationSyntax>();
+                bool func = ! methodSymbol.ReturnsVoid;
+                IEnumerable<TypeSyntax> types = parameters.Select(p => p.Type);
+                if (func)
+                    types = types.Union(new TypeSyntax[] { returnType });
+                string funcActionString = func ? "Func" : "Action";
+                var sbActionFunc = new StringBuilder();
+                sbActionFunc.Append("[ThreadStatic]public static ");
+                if (specificationsElements.OverrideMethods.Contains(method))
+                    sbActionFunc.Append("new ");
+                sbActionFunc.Append(funcActionString);
+                if (types.Any() || className != null)
+                {
+                    sbActionFunc.Append("<");
+                    bool hasType;
+                    var typesEnumerator = types.GetEnumerator();
+                    if (className != null)
+                    {
+                        sbActionFunc.Append(className);
+                        if (hasType = typesEnumerator.MoveNext())
+                            sbActionFunc.Append(", ");
+                    }
+                    else
+                        hasType = typesEnumerator.MoveNext();
+                    if (hasType)
+                        for (;;)
+                        {
+                            sbActionFunc.Append(typesEnumerator.Current);
+                            if (typesEnumerator.MoveNext())
+                                sbActionFunc.Append(", ");
+                            else
+                                break;
+                        }
+                    sbActionFunc.Append(">");
+                }
+                else
+                    sbActionFunc.Append(" ");
+                sbActionFunc.Append(method.Identifier.ValueText.Trim());
+                sbActionFunc.Append(funcActionString);
+                sbActionFunc.Append(";");
+                membersValues.Add(SyntaxFactory.ParseCompilationUnit(sbActionFunc.ToString()).Members[0]);
+
+                var statements = new List<StatementSyntax>();
+                var sb = new StringBuilder();
+                bool isFuncValidateMethod = specificationsElements.IsValidateFunc(method);
+                if (isValidateMethod)
+                { 
+                    if (isFuncValidateMethod)
+                        sb.Append("var @func = ");
+                    else
+                        sb.Append("var @value = ");
+                }
+                else if (func)
+                    sb.Append("return ");
+                sb.Append(method.Identifier.ValueText.Trim());
+                sb.Append(funcActionString);
+                sb.Append("(");
+                if (className != null)
+                    sb.Append("this");
+                var parametersEnumerator = parameters.GetEnumerator();
+                if (parametersEnumerator.MoveNext())
+                {
+                    if (className != null)
+                        sb.Append(", ");
+                    for(;;)
+                    {
+                        sb.Append(parametersEnumerator.Current.Identifier.ValueText);
+                        if (parametersEnumerator.MoveNext())
+                            sb.Append(", ");
+                        else
+                            break;
+                    }
+                }
+                sb.Append(");");
+                statements.Add(SyntaxFactory.ParseStatement(sb.ToString()));
+                if (isValidateMethod)
+                {
+                    sb = new StringBuilder();
+                    sb.Append("if (@value != null) @value.Key = \"");
+                    sb.Append(method.Identifier.ValueText);
+                    sb.Append("\";");
+                    if (isFuncValidateMethod)
+                    {
+                        statements.Add(SyntaxFactory.ParseStatement("if (@func == null) return null;"));
+                        statements.Add(SyntaxFactory.ParseStatement(string.Concat("return () => { var @value = @func(); if (value == null) return null; ", sb.ToString(), "return @value; };")));
+                    }
+                    else
+                    {
+                        statements.Add(SyntaxFactory.ParseStatement(sb.ToString()));
+                        statements.Add(SyntaxFactory.ParseStatement("return @value;"));
+                    }
+                }
+
+                var value = newMember.WithBody(
+                    SyntaxFactory.Block(
+                        statements));
+                membersValues.Add(value);
+                members.TryAdd(methodSymbol.Name, membersValues);
+                return value;
+            }
+            members.TryAdd(methodSymbol.Name, new List<MemberDeclarationSyntax>() { newMember });
+            return newMember;
+        }
+    }
+    else
+    {
+        if (server || specificationsElements.IsApplicableOnClient(method))
+        {
+            var bodyRewriter = GetBodyRewriter(specificationsElements, semanticModel, serverFxServiceInterfacesNamespace, method, dtoTypes, className, server, namespacesReplacement); 
+            var body = ((MethodDeclarationSyntax)bodyRewriter.Visit(method)).Body;
+            parameters = (className == null ? parameters : parameters.Skip(1)).ToList();
+            newMember = newMember
+                .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters, parameters.Skip(1).Select(v => SyntaxFactory.Token(SyntaxKind.CommaToken)))))
+                .WithModifiers(SyntaxFactory.TokenList(modifiers))
+                .WithTypeParameterList(method.TypeParameterList)
+                .WithConstraintClauses(method.ConstraintClauses);
+            if (isAbstract)
+                newMember = newMember.WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+            else
+                newMember = newMember.WithBody(body);
+            members.TryAdd(methodSymbol.Name, new List<MemberDeclarationSyntax>() { newMember });
+            return newMember;
+        }
+    }
+    return null;
+}
+
+
+void WriteEntityTypeSerializationInfo(EntityType type, EdmItemCollection itemCollection, CodeGenerationTools code, MetadataTools tools, string wcfNamespace)
+{
+    new WritingFunctions(Write).WriteEntityTypeSerializationInfo(type, itemCollection, code, tools, wcfNamespace);
+}
+partial class WritingFunctions
+{
+public void WriteEntityTypeSerializationInfo(EntityType type, EdmItemCollection itemCollection, CodeGenerationTools code, MetadataTools tools, string wcfNamespace)
+{
+#>
+[DataContract(IsReference = true, Namespace = "<#=wcfNamespace#>")]
+<#+
+    foreach(EntityType subtype in GetSubEntityTypes(itemCollection, type))
+    {
+#>
+[KnownType(typeof(<#=code.Escape(subtype)#>))]
+<#+
+    }
+    List<EntityType> knownNavPropertyTypes = new List<EntityType>();
+    foreach(NavigationProperty navProperty in type.NavigationProperties.Where(np => np.DeclaringType == type && IsPublic(np)))
+    {
+        EntityType navPropertyType = navProperty.ToEndMember.GetEntityType();
+        if(!knownNavPropertyTypes.Contains(navPropertyType))
+        {
+            knownNavPropertyTypes.Add(navPropertyType);
+        }
+    }
+    foreach(EntityType knownNavPropertyType in knownNavPropertyTypes.Where(e => Accessibility.ForType(e) == "public"))
+    {
+#>
+[KnownType(typeof(<#=code.Escape(knownNavPropertyType)#>))]
+<#+
+    }
+}
+}
+
+void WriteEntityTypeSerializationInfo(EntityType type, EdmItemCollection itemCollection, CodeGenerationTools code, MetadataTools tools, string wcfNamespace, StringBuilder sb)
+{
+    sb.Append("[DataContract(IsReference = true, Namespace = \"");
+    sb.Append(wcfNamespace);
+    sb.Append("\")])\r\n");
+    foreach(EntityType subtype in GetSubEntityTypes(itemCollection, type))
+    {
+        sb.Append("[KnownType(typeof(");
+        sb.Append(code.Escape(subtype));
+        sb.Append("))]\r\n");
+    }
+    List<EntityType> knownNavPropertyTypes = new List<EntityType>();
+    foreach(NavigationProperty navProperty in type.NavigationProperties.Where(np => np.DeclaringType == type && IsPublic(np)))
+    {
+        EntityType navPropertyType = navProperty.ToEndMember.GetEntityType();
+        if(!knownNavPropertyTypes.Contains(navPropertyType))
+            knownNavPropertyTypes.Add(navPropertyType);
+    }
+    foreach(EntityType knownNavPropertyType in knownNavPropertyTypes.Where(e => Accessibility.ForType(e) == "public"))
+    {
+        sb.Append("[KnownType(typeof(");
+        sb.Append(code.Escape(knownNavPropertyType));
+        sb.Append("))]\r\n");
+    }
+}
+
+public static bool AddServiceAndSubMethods(SpecificationsElements specificationsElements, EdmxElements edmxElements, string className, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, Dictionary<string, string> namespacesReplacement = null)
+{
+    List<NamedTypeSymbol> interfaces;
+    return AddServiceAndSubMethods(specificationsElements, className, serverEntitiesNamespace, (method, semanticModel) => AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, edmxElements, dtoTypes, dtoNamespace, server, namespacesReplacement), t => t.ToString() == string.Concat(serverEntitiesNamespace, ".", className) || specificationsElements.InterfacesPerClasses.TryGetValue(className, out interfaces) && interfaces.Any(i => t.ToString() == i.ToString()));
+}
+public static bool AddServiceAndSubMethods(SpecificationsElements specificationsElements, TypeSymbol type, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, Dictionary<string, string> namespacesReplacement = null)
+{
+    return AddServiceAndSubMethods(specificationsElements, type.Name, serverEntitiesNamespace, (method, semanticModel) => AddEntityMethod(members, type.Name, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, dtoTypes, dtoNamespace, server, namespacesReplacement), t => t.ToString() == type.ToString());
+}
+private static bool AddServiceAndSubMethods(SpecificationsElements specificationsElements, string className, string serverEntitiesNamespace, Action<MethodDeclarationSyntax, ISemanticModel> addEntityMethod, Func<TypeSymbol, bool> testFirstParameter)
+{
+    bool value = false;
+    Parallel.ForEach(specificationsElements.ServiceMethods.Union(specificationsElements.SubMethods), method =>
+    {
+        var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+        var methodSymbol = specificationsElements.MethodSymbolPerMethods[method];
+        if (methodSymbol.Parameters.Any() && methodSymbol.IsExtensionMethod && testFirstParameter(methodSymbol.Parameters[0].Type))
+        {
+            addEntityMethod(method, semanticModel);
+            value = true;
+        }
+    });
+    return value;
+}
+
+public static void AddValidateMethods(IEnumerable<MethodDeclarationSyntax> validateMethods, SpecificationsElements specificationsElements, EdmxElements edmxElements, ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, Action<MethodDeclarationSyntax, StatementSyntax> addStatement, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, Dictionary<string, string> namespacesReplacement = null, Func<MethodDeclarationSyntax, bool> insert = null)
+{
+    AddValidateMethods(validateMethods, specificationsElements, members, className, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverFxSpecificationsNamespace, serverEntitiesNamespace, addStatement, dtoTypes, server, insert, (method, semanticModel) => AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, edmxElements, dtoTypes, dtoNamespace, server, namespacesReplacement));
+}
+public static void AddValidateMethods(IEnumerable<MethodDeclarationSyntax> validateMethods, SpecificationsElements specificationsElements, ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, Action<MethodDeclarationSyntax, StatementSyntax> addStatement, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, bool server, Dictionary<string, string> namespacesReplacement, Func<MethodDeclarationSyntax, bool> insert = null)
+{
+    AddValidateMethods(validateMethods, specificationsElements, members, className, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverFxSpecificationsNamespace, serverEntitiesNamespace, addStatement, dtoTypes, server, insert, (method, semanticModel) => AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationsElements, dtoTypes, dtoNamespace, server, namespacesReplacement));
+}
+private static void AddValidateMethods(IEnumerable<MethodDeclarationSyntax> validateMethods, SpecificationsElements specificationsElements, ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, string className, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, Action<MethodDeclarationSyntax, StatementSyntax> addStatement, IEnumerable<TypeSymbol> dtoTypes, bool server, Func<MethodDeclarationSyntax, bool> insert, Func<MethodDeclarationSyntax, ISemanticModel, MethodDeclarationSyntax> addEntityMethod)
+{
+    foreach (var method in validateMethods)
+    {
+        var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+        var validateMethod = addEntityMethod(method, semanticModel);
+        var states = new List<string>();
+        string addedState = "Added";
+        List<List<PropertySymbolInfo>> methodDependentProperties = specificationsElements.MethodsDependentProperties[method];
+        var validateMethodDependences = methodDependentProperties == null ? new List<PropertySymbolInfo>() : methodDependentProperties.Where(ps => ps.Count == 1).SelectMany(ps => ps).ToList();
+        string modifiedState = "Modified" + (validateMethodDependences.Count == 0 || ! server ? "" : string.Concat(" && ChangeTracker.ModifiedProperties.Any(mp => ", validateMethodDependences.Select(p => string.Concat("mp == \"", p.Name, "\"")).Aggregate((p1, p2) => string.Concat(p1, " || ", p2)), ")")); 
+        if (insert != null && insert(method) || specificationsElements.IsModeOnInsert(method, semanticModel))
+            states.Add(addedState);
+        if (specificationsElements.IsModeOnUpdate(method, semanticModel))
+            states.Add(modifiedState);
+        if (specificationsElements.IsModeOnDelete(method, semanticModel))
+            states.Add("Deleted");
+        members[validateMethod.Identifier.ValueText].Remove(validateMethod);
+        if (!server)
+            validateMethod = validateMethod
+                .WithIdentifier(
+                    SyntaxFactory.Identifier(string.Concat("Get", validateMethod.Identifier.ValueText, "Error")))
+                .WithParameterList(
+                    SyntaxFactory.ParameterList(
+                        SyntaxFactory.SeparatedList(
+                            new [] 
+                            {
+                                SyntaxFactory.Parameter(
+                                    SyntaxFactory.Identifier("force"))
+                                    .WithType(
+                                        SyntaxFactory.ParseTypeName("bool"))
+                                    .WithDefault(
+                                        SyntaxFactory.EqualsValueClause(
+                                            SyntaxFactory.ParseExpression("true")))
+                            },
+                            new SyntaxToken[0])))
+                .WithModifiers(
+                    SyntaxFactory.TokenList(
+                        validateMethod.Modifiers.Where(m => GetKind(m) != SyntaxKind.PublicKeyword).Union(new[] { SyntaxFactory.Token(SyntaxKind.ProtectedKeyword) })));
+        string condition = server ? "" : "IsDeserializing || ";
+        if (states.Count == 0)
+        {
+            states.Add(addedState);
+            states.Add(modifiedState);
+        }
+        bool exposeAsService = specificationsElements.IsExposedAsService(method);
+        condition += string.Concat("!(", server && ! exposeAsService ? "" : "force || ", states.Select(s => "ChangeTracker.State == ObjectState." + s).Aggregate((s1, s2) => string.Concat(s1, " || ", s2)), ")");
+        if (exposeAsService)
+            validateMethod = validateMethod.WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(validateMethod.ParameterList.Parameters.Union(new [] { SyntaxFactory.Parameter(SyntaxFactory.Identifier("force")).WithType(SyntaxFactory.ParseTypeName("bool")).WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression("false"))) }), validateMethod.ParameterList.Parameters.Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
+
+        validateMethod = validateMethod.WithBody(SyntaxFactory.Block((new [] { SyntaxFactory.ParseStatement(string.Concat("if (", condition, ") return null;" ))}).Union(validateMethod.Body.Statements)));
+        List<MemberDeclarationSyntax> membersValue;
+        if (members.TryGetValue(validateMethod.Identifier.ValueText, out membersValue))
+            membersValue.Add(validateMethod);
+        else
+            members.TryAdd(validateMethod.Identifier.ValueText, new List<MemberDeclarationSyntax>() { validateMethod });
+        var statement = SyntaxFactory.ParseStatement(string.Concat("if ((error = ", method.Identifier.ValueText + "(", server ? "" : "force", ")) != null) yield return error;"));
+        addStatement(method, statement);
+    }
+}
+
+public void WriteInterfaceSpecifications(SpecificationsElements specificationsElements, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string namespaceName, EntityFrameworkTemplateFileManager fileManager, EdmxElements edmxElements, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, Dictionary<string, string> namespacesReplacement = null)
+{
+    new WritingFunctions(Write).WriteInterfaceSpecifications(WriteHeader, WriteFooter, specificationsElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName, f => fileManager.StartNewFile(f), edmxElements, dtoTypes, dtoNamespace, namespacesReplacement);
+}
+partial class WritingFunctions
+{
+public void WriteInterfaceSpecifications(Action<string, CodeGenerationTools, string[]> writeHeader, Action<string> writeFooter, SpecificationsElements specificationsElements, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string namespaceName, Action<string> startNewFile, EdmxElements edmxElements, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, Dictionary<string, string> namespacesReplacement = null)
+{
+    foreach (var @interface in specificationsElements.InterfaceSpecifications)
+    {
+        var interfaceUsings = new Dictionary<string, List<string>>();
+        foreach (var extensionMethod in specificationsElements.InterfaceExtensionMethods[@interface.ToString()])
+        {
+            var usingVisitor = new UsingVisitor(specificationsElements.SemanticModelPerMethods[extensionMethod], specificationsElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName, SpecificationsElements.Type.Server, specificationsElements.SpecificationsNamespaces, m => m == extensionMethod ? SpecificationsElements.MethodAnalizing.Method : SpecificationsElements.MethodAnalizing.Signature, interfaceUsings);
+            usingVisitor.Visit(extensionMethod.Parent.Parent.Parent);
+        }
+        startNewFile(@interface.Name + "Specifications.cs");
+        List<string> usings;
+        interfaceUsings.TryGetValue(@interface.ToString(), out usings);
+        if (! (namespacesReplacement == null || usings == null))
+            for (int usingIndex = 0 ; usingIndex < usings.Count ; usingIndex ++)
+            {
+                string namespaceReplacement;
+                if (namespacesReplacement.TryGetValue(usings[usingIndex], out namespaceReplacement))
+                    usings[usingIndex] = namespaceReplacement;
+            }
+        writeHeader(edmxElements.NamespaceName, edmxElements.Code, usings == null ? new string[0] : usings.ToArray());
+        string interfaceFullName = @interface.ToString();
+        if (namespacesReplacement != null)
+        {
+            var ns = interfaceFullName;
+            int lastDotIndex;
+            while ((lastDotIndex = ns.LastIndexOf('.')) != -1)
+            {
+                ns = ns.Substring(0, lastDotIndex);
+                string nsRepacement;
+                if (namespacesReplacement.TryGetValue(ns, out nsRepacement))
+                {
+                    interfaceFullName = Regex.Replace(interfaceFullName, string.Concat("^", ns, "."), nsRepacement + ".");
+                    break;
+                }
+            }
+        }
+#>
+public partial interface <#=@interface.Name#>Specifications : <#=interfaceFullName#>
+{
+<#+
+        foreach (MethodDeclarationSyntax extensionMethod in specificationsElements.InterfaceExtensionMethods[@interface.ToString()])
+        {
+            var semanticModel = specificationsElements.SemanticModelPerMethods[extensionMethod];
+            var returnType = (TypeSyntax)new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes, namespacesReplacement).Visit(extensionMethod.ReturnType);
+            if (specificationsElements.GetMethods.Values.Any(ms => ms.Any(m => m == extensionMethod)))
+            {
+#>
+    <#=returnType.NormalizeWhitespace().ToString()#> <#=extensionMethod.Identifier.ToString().Substring(3)#> { get; }
+<#+
+            }
+            else
+            {
+                var parameters = extensionMethod.ParameterList.Parameters.Skip(1).Where(p => ! specificationsElements.IsContextOrService((TypeSymbol)semanticModel.GetSymbolInfo(p.Type).Symbol)).Select(p => p.WithType((TypeSyntax)new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes, namespacesReplacement).Visit(p.Type))).ToList();
+#>
+    <#=extensionMethod.WithModifiers(SyntaxFactory.TokenList()).WithBody(null).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters, parameters.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken))))).WithReturnType(returnType).NormalizeWhitespace().ToString()#>;
+<#+
+            }
+        }
+#>
+}
+<#+
+        writeFooter(edmxElements.NamespaceName);
+    }
+}
+}
+
+private static SpecificationGetMethodBodyRewriter GetBodyRewriter(SpecificationsElements specificationsElements, ISemanticModel semanticModel, string serverFxServiceInterfacesNamespace, MethodDeclarationSyntax method, IEnumerable<TypeSymbol> dtoTypes, string className, bool server, Dictionary<string, string> namespacesReplacement)
+{
+    string parameterName;
+    if (className == null)
+        parameterName = null;
+    else
+        parameterName = method.ParameterList.Parameters[0].Identifier.ValueText;
+    return server ? (SpecificationGetMethodBodyRewriter)new SpecificationGetMethodBodyRewriterServer(specificationsElements, method, semanticModel, dtoTypes, serverFxServiceInterfacesNamespace, parameterName, namespacesReplacement) : new SpecificationGetMethodBodyRewriterClient(specificationsElements, method, semanticModel, dtoTypes, serverFxServiceInterfacesNamespace, parameterName, namespacesReplacement);
+}
+
+public void WriteCustomAttributes(string propertyAttributes, string propertyName, string className)
+{
+    new WritingFunctions(Write).WriteCustomAttributes(PushIndent, PopIndent, propertyAttributes, propertyName, className);
+}
+partial class WritingFunctions
+{
+public void WriteCustomAttributes(Action<string> pushIndent, Func<string> popIndent, string propertyAttributes, string propertyName, string className)
+{
+    if (propertyAttributes != null)
+    {
+        pushIndent(CodeRegion.GetIndent(1));
+#>
+<#=propertyAttributes.Replace("$PropertyName$", propertyName).Replace("$ClassName$", className)#>
+<#+
+        popIndent();
+    }
+}
+}
+
+public static string GetSpecificationsBaseTypeName(CodeGenerationTools code, SpecificationsElements specificationsElements, EntityType entityType)
+{
+    if (entityType == null)
+        return null;
+    var baseTypeLoop = entityType.BaseType;
+    string specBaseTypeName = null;
+    while (baseTypeLoop != null)
+    {
+        string baseTypeName = code.Escape(baseTypeLoop);
+        if (specificationsElements.GetMethods.ContainsKey(baseTypeName))
+        {
+            specBaseTypeName = baseTypeName;
+            break;
+        }
+        baseTypeLoop = baseTypeLoop.BaseType;
+    }
+    return specBaseTypeName;
+}
+
+public abstract class SpecificationGetMethodBodyRewriter : SpecificationMethodBodyRewriter
+{
+    private string _parameterName;
+
+    public SpecificationGetMethodBodyRewriter(SpecificationsElements specificationsElements, MethodDeclarationSyntax method, ISemanticModel semanticModel, IEnumerable<TypeSymbol> dtoTypes, string serverFxServiceInterfacesNamespace, string parameterName, Dictionary<string, string> namespacesReplacement)
+        : base(specificationsElements, specificationsElements.MethodsDependentProperties[method], semanticModel, dtoTypes, serverFxServiceInterfacesNamespace, namespacesReplacement)
+    {
+        _parameterName = parameterName;
+        Method = method;
+    }
+
+    protected MethodDeclarationSyntax Method { get; private set; }
+
+    public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
+    {
+        if (_parameterName != null && node.Identifier.ValueText == _parameterName)
+            return SyntaxFactory.IdentifierName("this");
+        return base.VisitIdentifierName(node);
+    }
+
+    public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
+    {
+        var value = (ObjectCreationExpressionSyntax)base.VisitObjectCreationExpression(node);
+        var symbol = SemanticModel.GetSymbolInfo(node.Type).Symbol;
+        if (! (symbol is TypeSymbol))
+            symbol = symbol.ContainingType;
+        string typeFullName = symbol.ToString();
+        var dtoType = DTOTypes.FirstOrDefault(dto => dto.ToString() == typeFullName);
+        if (dtoType != null)
+            value = value.WithType(SyntaxFactory.ParseTypeName(dtoType.Name));
+        return value;
+    }
+}
+
+public class SpecificationGetMethodBodyRewriterServer : SpecificationGetMethodBodyRewriter
+{
+    public SpecificationGetMethodBodyRewriterServer(SpecificationsElements specificationsElements, MethodDeclarationSyntax method, ISemanticModel semanticModel, IEnumerable<TypeSymbol> dtoTypes, string serverFxServiceInterfacesNamespace, string parameterName, Dictionary<string, string> namespacesReplacement)
+        : base(specificationsElements, method, semanticModel, dtoTypes, serverFxServiceInterfacesNamespace, parameterName, namespacesReplacement)
+    {
+    }
+
+    public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        if (node == null)
+            return null;
+        var semanticModelPerMethods = SpecificationsElements.SemanticModelPerMethods;
+        var specificationGetMethods = SpecificationsElements.GetMethods;
+        var specificationMethods = SpecificationsElements.Methods;
+        var invocationExpressionMethodSymbol = semanticModelPerMethods[Method].GetSymbolInfo(node).Symbol as MethodSymbol;
+        if (invocationExpressionMethodSymbol == null)
+            return base.VisitInvocationExpression(node);
+        MethodDeclarationSyntax invocationMethod;
+        bool nonEntitiesExtensionMethod;
+        bool returnAsIs = ! (invocationExpressionMethodSymbol.IsStatic || SpecificationsElements.GetSpecificationEquivalentMethod(ref invocationExpressionMethodSymbol)) || ! specificationMethods.Any(m => SpecificationsElements.MethodSymbolPerMethods[m].Equals(invocationExpressionMethodSymbol));
+        string invocationExpressionMethodSymbolString = invocationExpressionMethodSymbol.ToString();
+        if (returnAsIs & !(nonEntitiesExtensionMethod = invocationExpressionMethodSymbol.IsExtensionMethod && (invocationMethod = SpecificationsElements.MethodPerMethodSymbols.Where(m => m.Key.ToString() == invocationExpressionMethodSymbolString).Select(m => m.Value).FirstOrDefault()) != null && SpecificationsElements.NonEntitiesExtensionMethods.Contains(invocationMethod)))
+            return base.VisitInvocationExpression(node);
+        if (invocationExpressionMethodSymbol.IsExtensionMethod)
+        {
+            var memberAccessExpressionSyntax = node.Expression as MemberAccessExpressionSyntax;
+            ExpressionSyntax expression = null;
+            if (! (memberAccessExpressionSyntax == null || memberAccessExpressionSyntax.Expression == null ||  SemanticModel.GetSymbolInfo(memberAccessExpressionSyntax.Expression).Symbol is ITypeSymbol))
+                expression = memberAccessExpressionSyntax.Expression;
+            expression = (ExpressionSyntax)Visit(expression);
+            var arguments = node.ArgumentList.Arguments.Select(a => (ArgumentSyntax)Visit(a));
+            if (nonEntitiesExtensionMethod)
+            {
+                arguments = expression == null ? arguments : (new []{ SyntaxFactory.Argument(expression) }.Union(arguments));
+                expression = SyntaxFactory.IdentifierName("EntitiesOtherSpecifications");
+            }
+            else
+            {
+                var initialArguments = arguments;
+                arguments = expression == null ? arguments.Skip(1) : arguments;
+                expression = expression ?? initialArguments.First().Expression;
+            }
+            return SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, expression, SyntaxFactory.IdentifierName(invocationExpressionMethodSymbol.Name)), SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList<ArgumentSyntax>(arguments, arguments.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken))))); 
+        }
+        return SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, SyntaxFactory.IdentifierName("EntitiesOtherSpecifications"), SyntaxFactory.IdentifierName(invocationExpressionMethodSymbol.Name)), SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList<ArgumentSyntax>(node.ArgumentList.Arguments.Select(a => (ArgumentSyntax)Visit(a)), node.ArgumentList.Arguments.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
+    }
+}
+
+public partial class SpecificationGetMethodBodyRewriterClient : SpecificationGetMethodBodyRewriter
+{
+    public SpecificationGetMethodBodyRewriterClient(SpecificationsElements specificationsElements, MethodDeclarationSyntax method, ISemanticModel semanticModel, IEnumerable<TypeSymbol> dtoTypes, string serverFxServiceInterfacesNamespace, string parameterName, Dictionary<string, string> namespacesReplacement)
+        : base(specificationsElements, method, semanticModel, dtoTypes, serverFxServiceInterfacesNamespace, parameterName, namespacesReplacement)
+    {
+        Init();
+    }
+
+    partial void Init();
+
+    public static Func<InvocationExpressionSyntax, SyntaxNode> TransformInvocationExpression { get; set; }
+
+    public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        if (TransformInvocationExpression != null)
+        {
+            var value = TransformInvocationExpression(node);
+            if (value != node)
+                return value;
+        }
+        if (node == null)
+            return null;
+        var semanticModelPerMethods = SpecificationsElements.SemanticModelPerMethods;
+        var invocationExpressionMethodSymbol = semanticModelPerMethods[Method].GetSymbolInfo(node).Symbol as MethodSymbol;
+        if (invocationExpressionMethodSymbol == null)
+            return base.VisitInvocationExpression(node);
+        var specificationGetMethods = SpecificationsElements.GetMethods;
+        MethodDeclarationSyntax invocationMethod = null;
+        bool nonEntitiesExtensionMethod;
+        bool returnAsIs = ! (invocationExpressionMethodSymbol.IsStatic || SpecificationsElements.GetSpecificationEquivalentMethod(ref invocationExpressionMethodSymbol));
+        string invocationExpressionMethodSymbolString = invocationExpressionMethodSymbol.ToString();
+        if (returnAsIs & !(nonEntitiesExtensionMethod = (invocationMethod = SpecificationsElements.MethodPerMethodSymbols.Where(m => m.Key.ToString() == invocationExpressionMethodSymbolString).Select(m => m.Value).FirstOrDefault()) != null && invocationExpressionMethodSymbol.IsExtensionMethod && SpecificationsElements.NonEntitiesExtensionMethods.Contains(invocationMethod)))
+            return base.VisitInvocationExpression(node);
+        if (invocationExpressionMethodSymbol.IsStatic && invocationMethod != null)
+        {
+            var arguments = node.ArgumentList.Arguments.Select(a => (ArgumentSyntax)Visit(a));
+            if (SpecificationsElements.ExtensionMethods.Contains(invocationMethod) && ! SpecificationsElements.NonEntitiesExtensionMethods.Contains(invocationMethod))
+            {
+                var memberAccessExpressionSyntax = node.Expression as MemberAccessExpressionSyntax;
+                ExpressionSyntax expression = null;
+                if (! (memberAccessExpressionSyntax == null || memberAccessExpressionSyntax.Expression == null ||  SemanticModel.GetSymbolInfo(memberAccessExpressionSyntax.Expression).Symbol is ITypeSymbol))
+                    expression = memberAccessExpressionSyntax.Expression;
+                MemberAccessExpressionSyntax value;
+                List<string> classes;
+                if ((value = ClientTransformationInvocationExpressionWriteProperty(invocationExpressionMethodSymbol.Parameters[0].Type.Name, expression,  specificationGetMethods, invocationExpressionMethodSymbol, SpecificationsElements.MethodSymbolPerMethods, node)) != null)
+                    return value;
+                if (SpecificationsElements.ClassesPerInterfaces.TryGetValue(invocationExpressionMethodSymbol.Parameters[0].Type.ToString(), out classes))
+                {
+                    if (classes.Count != 1)
+                        throw new NotImplementedException();
+                    if ((value = ClientTransformationInvocationExpressionWriteProperty(classes[0], expression, specificationGetMethods, invocationExpressionMethodSymbol, SpecificationsElements.MethodSymbolPerMethods, node)) != null)
+                        return value;
+                }
+                if (expression == null)
+                {
+                    expression = arguments.First().Expression;
+                    arguments = arguments.Skip(1);
+                }
+                else
+                    expression = (ExpressionSyntax)Visit(expression);
+                return SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, expression, SyntaxFactory.IdentifierName(invocationExpressionMethodSymbol.Name)), SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList<ArgumentSyntax>(arguments, arguments.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken))))); 
+            }
+            var expressionMemberAccess = node.Expression as MemberAccessExpressionSyntax;
+            if (expressionMemberAccess != null && nonEntitiesExtensionMethod)
+                arguments = new [] { SyntaxFactory.Argument((ExpressionSyntax)Visit(expressionMemberAccess.Expression)) }.Union(arguments);
+            return SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, SyntaxFactory.IdentifierName("EntitiesOtherSpecifications"), SyntaxFactory.IdentifierName(invocationExpressionMethodSymbol.Name)), SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList<ArgumentSyntax>(arguments, arguments.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken))))); 
+        }
+        return base.VisitInvocationExpression(node);
+    }
+
+    private MemberAccessExpressionSyntax ClientTransformationInvocationExpressionWriteProperty(string className, ExpressionSyntax expression, Dictionary<string, List<MethodDeclarationSyntax>> specificationGetMethods, MethodSymbol invocationExpressionMethodSymbol, ConcurrentDictionary<MethodDeclarationSyntax, MethodSymbol> methodSymbolPerMethods, InvocationExpressionSyntax invocationExpression)
+    {
+        List<MethodDeclarationSyntax> getMethods;
+        if (specificationGetMethods.TryGetValue(className, out getMethods) && getMethods.Any(m => methodSymbolPerMethods[m].Equals(invocationExpressionMethodSymbol)))
+            return SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, (ExpressionSyntax)(expression == null ? Visit(invocationExpression.ArgumentList.Arguments[0].Expression) : Visit(expression)), SyntaxFactory.IdentifierName(GetPropertyNameFromMethodName(invocationExpressionMethodSymbol.Name))); 
+        return null;
+    }
+}
+#>

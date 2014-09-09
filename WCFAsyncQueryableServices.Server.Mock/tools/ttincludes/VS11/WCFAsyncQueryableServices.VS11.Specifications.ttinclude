@@ -1,0 +1,75 @@
+<#@ assembly name="Roslyn.Compilers"#>
+<#@ assembly name="Roslyn.Compilers.CSharp"#>
+<#@ assembly name="Roslyn.Services"#>
+<#@ assembly name="Roslyn.Services.CSharp"#>
+<#@ import namespace="Roslyn.Compilers"#>
+<#@ import namespace="Roslyn.Compilers.Common"#>
+<#@ import namespace="Roslyn.Compilers.CSharp"#>
+<#@ import namespace="Roslyn.Services"#>
+<#@ import namespace="SyntaxVisitorOfBool = Roslyn.Compilers.CSharp.SyntaxVisitor<bool>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfString = Roslyn.Compilers.CSharp.SyntaxVisitor<System.Collections.Generic.IEnumerable<string>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfSyntaxNode = Roslyn.Compilers.CSharp.SyntaxVisitor<System.Collections.Generic.IEnumerable<Roslyn.Compilers.CSharp.SyntaxNode>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfMethodDeclarationSyntax = Roslyn.Compilers.CSharp.SyntaxVisitor<System.Collections.Generic.IEnumerable<Roslyn.Compilers.CSharp.MethodDeclarationSyntax>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfClassDeclarationSyntax = Roslyn.Compilers.CSharp.SyntaxVisitor<System.Collections.Generic.IEnumerable<Roslyn.Compilers.CSharp.ClassDeclarationSyntax>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfTypeSymbol = Roslyn.Compilers.CSharp.SyntaxVisitor<System.Collections.Generic.IEnumerable<Roslyn.Compilers.CSharp.TypeSymbol>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfNamespaceSymbol = Roslyn.Compilers.CSharp.SyntaxVisitor<System.Collections.Generic.IEnumerable<Roslyn.Compilers.CSharp.NamespaceSymbol>>" #>
+<#@ import namespace="CSharpSyntaxNode = Roslyn.Compilers.CSharp.SyntaxNode" #>
+<#@ import namespace="SyntaxFactory = Roslyn.Compilers.CSharp.Syntax" #>
+<#@ import namespace="RoslynAccessibility = Roslyn.Compilers.CSharp.Accessibility" #>
+<#@ import namespace="RoslynSyntaxKind = Roslyn.Compilers.CSharp.SyntaxKind" #>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+    public static ISolution LoadSolution(string path, ITextTemplatingEngineHost host)
+    {
+        return Solution.Load(path);
+    }
+
+    public static ISymbol FindSourceDefinition(ISymbol symbol, ISolution solution)
+    {
+        return symbol.FindSourceDefinition(solution);
+    }
+
+    public static SyntaxTree GetSyntaxTree(IDocument document)
+    {
+        return (SyntaxTree)document.GetSyntaxTree();
+    }
+
+    public static Compilation GetCompilation(IProject project)
+    {
+        return (Compilation)project.GetCompilation();
+    }
+
+    public static SyntaxNode GetSyntaxRoot(IDocument document)
+    {
+        return (SyntaxNode)document.GetSyntaxRoot();
+    }
+
+    public static ISemanticModel GetSemanticModel(IDocument document)
+    {
+        return document.GetSemanticModel();
+    }
+
+    public static SyntaxKind GetKind(SyntaxNode node)
+    {
+        return node.Kind;
+    }
+
+    public static SyntaxKind GetKind(SyntaxToken node)
+    {
+        return node.Kind;
+    }
+
+    public static bool IsAssignExpression(SyntaxKind kind)
+    {
+        return kind == SyntaxKind.AssignExpression;
+    }
+
+    public const SyntaxKind SyntaxKindAssignExpression = SyntaxKind.AssignExpression;
+    public const SyntaxKind SyntaxKindMemberAccessExpression = SyntaxKind.MemberAccessExpression;
+
+    public static IProject AddDocument(IProject project, string name, string text, IEnumerable<string> folders, out DocumentId documentId)
+    {
+        return project.AddDocument(name, text, folders, out documentId);
+    }
+#>

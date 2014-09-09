@@ -1,0 +1,56 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.EF.Utility.CS.OOB.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string edmxUtilityTTIncludeName = "WCFAsyncQueryableServices.VS12.Edmx.Utility.ttinclude";
+
+private static string EDM_NS4 = "http://schemas.microsoft.com/ado/2008/10/edmx";
+private static string SSDL_NS4 = "http://schemas.microsoft.com/ado/2009/02/edm/ssdl";
+private static string CSDL_NS4 = "http://schemas.microsoft.com/ado/2008/09/edm";
+private static string MSL_NS4 = "http://schemas.microsoft.com/ado/2008/09/mapping/cs";
+private static string annotation_NS4 = "http://schemas.microsoft.com/ado/2009/02/edm/annotation";
+
+private static string EDM_NS5 = "http://schemas.microsoft.com/ado/2009/11/edmx";
+private static string SSDL_NS5 = "http://schemas.microsoft.com/ado/2009/11/edm/ssdl";
+private static string CSDL_NS5 = "http://schemas.microsoft.com/ado/2009/11/edm";
+private static string MSL_NS5 = "http://schemas.microsoft.com/ado/2009/11/mapping/cs";
+private static string annotation_NS5 = "http://schemas.microsoft.com/ado/2009/02/edm/annotation";
+
+public static string GetEDM_NS(XElement root)
+{
+	return root.Element(XName.Get("Runtime", EDM_NS5)) == null ? EDM_NS4 : EDM_NS5;
+}
+
+public static string GetSSDL_NS(XElement root)
+{
+	return root.Element(XName.Get("Runtime", EDM_NS5)) == null ? SSDL_NS4 : SSDL_NS5;
+}
+
+public static string GetCSDL_NS(XElement root)
+{
+	return root.Element(XName.Get("Runtime", EDM_NS5)) == null ? CSDL_NS4 : CSDL_NS5;
+}
+
+public static string GetMSL_NS(XElement root)
+{
+	return root.Element(XName.Get("Runtime", EDM_NS5)) == null ? MSL_NS4 : MSL_NS5;
+}
+
+public static string GetAnnotation_NS(XElement root)
+{
+	return root.Element(XName.Get("Runtime", EDM_NS5)) == null ? annotation_NS4 : annotation_NS5;
+}
+
+public static IEnumerable<EdmType> GetAllTypes(EdmItemCollection itemCollection)
+{
+	return itemCollection.GetItems<EntityType>().Cast<EdmType>().Union(itemCollection.GetItems<ComplexType>()).Union(itemCollection.GetItems<EnumType>());
+}
+
+partial class OriginalValueMembers
+{
+	IEnumerable<EdmMember> GetRelevantMembersForUpdate(MetadataWorkspace metadataWorkspace, EntitySetBase entitySet, EntityTypeBase entityType, bool partialUpdateSupported)
+	{
+		return metadataWorkspace.GetRelevantMembersForUpdate(entitySet, entityType, true);   
+	}
+}
+#>

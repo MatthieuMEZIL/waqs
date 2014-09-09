@@ -1,0 +1,274 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxServiceInterfaces(string serverFxSerializableExpressions, string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+
+fileManager.StartNewFile("QueryResult.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QueryResult")]
+public class QueryResult
+{
+	[DataMember]
+	public List<QueryResultRecord> Records { get; set; }
+
+	[DataMember]
+	public QueryResultRecord Record { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("QueryResultRecord.cs");
+	WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QueryResult")]
+public class QueryResultRecord
+{	
+	[DataMember]
+	public List<QueryResultProperty> Properties { get; set; }
+	
+	[DataMember]
+	public string SerializedValue { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("QueryResultProperty.cs");
+	WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/QueryResult")]
+public class QueryResultProperty
+{
+	[DataMember]
+	public string PropertyName { get; set; }
+
+	[DataMember]
+	public string SerializedValue { get; set; }
+
+	[DataMember]
+	public QueryResultRecord Value { get; set; }
+
+	[DataMember]
+	public List<QueryResultRecord> Values { get; set; } 
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("ISerializableExpressionProvider.cs");
+	WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq.Expressions", serverFxSerializableExpressions);
+#>
+public interface ISerializableExpressionProvider
+{
+	Expression ToExpression(SerializableExpression serializableExpression, IEnumerable<string> withSpecificationsProperties);
+	object Convert(object value);
+	Type GetOriginalType(Type type);
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("LoadPageParameter.cs");
+	WriteHeader(namespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Querying")]
+[KnownType(typeof(int))]
+[KnownType(typeof(uint))]
+[KnownType(typeof(short))]
+[KnownType(typeof(ushort))]
+[KnownType(typeof(byte))]
+[KnownType(typeof(long))]
+[KnownType(typeof(ulong))]
+[KnownType(typeof(decimal))]
+[KnownType(typeof(double))]
+[KnownType(typeof(char))]
+[KnownType(typeof(DateTime))]
+[KnownType(typeof(DateTimeOffset))]
+[KnownType(typeof(TimeSpan))]
+[KnownType(typeof(int?))]
+[KnownType(typeof(uint?))]
+[KnownType(typeof(short?))]
+[KnownType(typeof(ushort?))]
+[KnownType(typeof(byte?))]
+[KnownType(typeof(long?))]
+[KnownType(typeof(ulong?))]
+[KnownType(typeof(decimal?))]
+[KnownType(typeof(double?))]
+[KnownType(typeof(char?))]
+[KnownType(typeof(DateTime?))]
+[KnownType(typeof(DateTimeOffset?))]
+[KnownType(typeof(TimeSpan?))]
+[KnownType(typeof(string))]
+public class LoadPageParameter
+{
+	[DataMember]
+	public string PropertyName { get; set; }
+
+	[DataMember]
+	public object Value { get; set; }
+
+	[DataMember]
+	public bool Descending { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("Criticity.cs");
+	WriteHeader(namespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Errors")]
+[Flags]
+public enum Criticity
+{
+	[EnumMember]
+	None = 0,
+	[EnumMember]
+	Information = 1,
+	[EnumMember]
+	Warning = 2,
+	[EnumMember]
+	Error = 8,
+	[EnumMember]
+	Mandatory = 12
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("Error.cs");
+	WriteHeader(namespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Errors")]
+public partial class Error
+{
+	[DataMember]
+	public string Message { get; set; }
+	[DataMember]
+	public Criticity Criticity { get; set; }
+	[DataMember]
+	public string Key { get; set; }
+	[DataMember]
+	public ErrorDetail[] ErrorDetails { get; set; }
+
+	public static string GetDefineMinValueErrorMessage<T>(string propertyName, T minValue)
+	{
+		string message = null;
+		GetDefineMinValueErrorCustomMessage<T>(propertyName, minValue, ref message);
+		if (message == null)
+			message = string.Concat(propertyName, " must be more than ", minValue.ToString());
+		return message;
+	}
+	static partial void GetDefineMinValueErrorCustomMessage<T>(string propertyName, T minValue, ref string message);
+
+	public static string GetDefineMaxValueErrorMessage<T>(string propertyName, T maxValue)
+	{
+		string message = null;
+		GetDefineMaxValueErrorCustomMessage<T>(propertyName, maxValue, ref message);
+		if (message == null)
+			message = string.Concat(propertyName, " must be less than ", maxValue.ToString());
+		return message;
+	}
+	static partial void GetDefineMaxValueErrorCustomMessage<T>(string propertyName, T maxValue, ref string message);
+
+	public static string GetDefineMinLengthErrorMessage(string propertyName, int minLength)
+	{
+		string message = null;
+		GetDefineMinLengthErrorCustomMessage(propertyName, minLength, ref message);
+		if (message == null)
+			message = string.Concat(propertyName, " length must be more than ", minLength.ToString());
+		return message;
+	}
+	static partial void GetDefineMinLengthErrorCustomMessage(string propertyName, int minLength, ref string message);
+
+	public static string GetDefineMaxLengthErrorMessage(string propertyName, int maxLength)
+	{
+		string message = null;
+		GetDefineMaxLengthErrorCustomMessage(propertyName, maxLength, ref message);
+		if (message == null)
+			message = string.Concat(propertyName, " length must be less than ", maxLength.ToString());
+		return message;
+	}
+	static partial void GetDefineMaxLengthErrorCustomMessage(string propertyName, int maxLength, ref string message);
+
+	public static string GetIsNullableErrorMessage(string propertyName)
+	{
+		string message = null;
+		GetIsNullableErrorCustomMessage(propertyName, ref message);
+		if (message == null)
+			message = propertyName + " can't be null";
+		return message;
+	}
+	static partial void GetIsNullableErrorCustomMessage(string propertyName, ref string message);
+
+	public static string GetDefinePatternErrorMessage(string propertyName, string pattern)
+	{
+		string message = null;
+		GetDefinePatternErrorCustomMessage(propertyName, pattern, ref message);
+		if (message == null)
+			message = string.Concat(propertyName, " must be matched by the this pattern: ", pattern);
+		return message;
+	}
+	static partial void GetDefinePatternErrorCustomMessage(string propertyName, string pattern, ref string message);
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("ErrorDetail.cs");
+	WriteHeader(namespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Errors")]
+public class ErrorDetail
+{
+	[DataMember]
+	public Guid EntityKey { get; set; }
+	[DataMember]
+	public string PropertyName { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("QuerySerialization.cs");
+	WriteHeader(namespaceName, code, "System.Runtime.Serialization", serverFxSerializableExpressions);
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Query")]
+public class QuerySerialization
+{
+	[DataMember]
+	public SerializableExpression Expression { get; set; }
+
+	[DataMember]
+	public SerializableType SerializableType { get; set; }
+	
+	[DataMember]
+	public string[] WithSpecificationsProperties { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("QueriesSerialization.cs");
+	WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/Query")]
+public class QueriesSerialization
+{
+	[DataMember]
+	public QuerySerialization[] QuerySerializations { get; set; }
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("IService.cs");
+	WriteHeader(namespaceName, code);
+#>
+public interface IService
+{
+}
+<#+
+	WriteFooter(namespaceName);
+	fileManager.Process();
+}
+#>

@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.Client.Entities.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.WPF.Entities.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

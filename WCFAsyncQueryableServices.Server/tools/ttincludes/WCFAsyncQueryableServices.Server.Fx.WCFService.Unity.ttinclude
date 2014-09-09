@@ -1,0 +1,106 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxWCFServiceUnity(string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	fileManager.StartNewFile("WCFUnityInstanceProvider.cs");
+	WriteHeader(namespaceName, code, "System", "System.ServiceModel", "System.ServiceModel.Channels", "System.ServiceModel.Dispatcher", "Microsoft.Practices.ServiceLocation", "Microsoft.Practices.Unity");
+#>
+public class WCFUnityInstanceProvider : IInstanceProvider
+{
+	private Type _serviceType;
+
+	public WCFUnityInstanceProvider(Type serviceType)
+	{
+		_serviceType = serviceType;
+	}
+
+	public object GetInstance(InstanceContext instanceContext, Message message)
+	{
+		return ServiceLocator.Current.GetInstance<IUnityContainer>(_serviceType.FullName).Resolve(_serviceType);
+	}
+
+	public object GetInstance(InstanceContext instanceContext)
+	{
+		return GetInstance(instanceContext, null);
+	}
+
+	public void ReleaseInstance(InstanceContext instanceContext, object instance)
+	{
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("WCFUnityServiceBehavior.cs");
+WriteHeader(namespaceName, code, "System.Collections.ObjectModel", "System.ServiceModel", "System.ServiceModel.Channels", "System.ServiceModel.Description", "System.ServiceModel.Dispatcher");
+#>
+public class WCFUnityServiceBehavior : IServiceBehavior
+{
+	public void AddBindingParameters(ServiceDescription serviceDescription, ServiceHostBase serviceHostBase, Collection<ServiceEndpoint> endpoints, BindingParameterCollection bindingParameters)
+	{
+	}
+
+	public void ApplyDispatchBehavior(ServiceDescription serviceDescription, ServiceHostBase serviceHostBase)
+	{
+		foreach (ChannelDispatcherBase channelDispatcherBase in serviceHostBase.ChannelDispatchers)
+		{
+			var channelDispatcher = channelDispatcherBase as ChannelDispatcher;
+			if (channelDispatcher != null)
+				foreach (EndpointDispatcher endpointDispatcher in channelDispatcher.Endpoints)
+					endpointDispatcher.DispatchRuntime.InstanceProvider = new WCFUnityInstanceProvider(serviceDescription.ServiceType);
+		}
+	}
+
+	public void Validate(ServiceDescription serviceDescription, ServiceHostBase serviceHostBase)
+	{
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("WCFUnityServiceHost.cs");
+WriteHeader(namespaceName, code, "System", "System.ServiceModel");
+#>
+public class WCFUnityServiceHost : ServiceHost
+{
+	public WCFUnityServiceHost()
+	{
+	}
+
+	public WCFUnityServiceHost(Type serviceType, Uri[] baseAddresses)
+		: base(serviceType, baseAddresses)
+	{
+	}
+
+	protected override void OnOpening()
+	{
+		Description.Behaviors.Add(new WCFUnityServiceBehavior());
+		base.OnOpening();
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("WCFUnityServiceHostFactory.cs");
+WriteHeader(namespaceName, code, "System", "System.ServiceModel", "System.ServiceModel.Activation");
+#>
+public class WCFUnityServiceHostFactory : ServiceHostFactory
+{
+	protected override ServiceHost CreateServiceHost(Type serviceType, Uri[] baseAddresses)
+	{
+		return new WCFUnityServiceHost(serviceType, baseAddresses);
+	}
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.Process();
+}
+#>

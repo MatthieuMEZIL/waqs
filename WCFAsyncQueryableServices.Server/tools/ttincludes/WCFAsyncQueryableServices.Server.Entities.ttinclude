@@ -1,0 +1,1385 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.Entities.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerEntities(string edmxPath, string serverFxEntitiesNamespace, string namespaceName = null, string entityTypesBaseType = null, string complexTypesBaseType = null, string propertyAttributes = null)
+{
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+    var edmxElements = EdmxElements.Get(Host, ref edmxPath, namespaceName);
+    var code = edmxElements.Code;
+    CodeRegion region = new CodeRegion(this);
+    var ef = edmxElements.MetadataTools;
+
+    DefineMetadata();
+    MetadataWorkspace metadataWorkspace;
+    bool allMetadataLoaded = edmxElements.Loader.TryLoadAllMetadata(edmxElements.EdmxPath, out metadataWorkspace);
+    EdmItemCollection itemCollection = (EdmItemCollection)metadataWorkspace.GetItemCollection(DataSpace.CSpace);
+    OriginalValueMembers originalValueMembers = new OriginalValueMembers(allMetadataLoaded, metadataWorkspace, ef);
+
+    string accessibility;
+
+    // Emit Entity Types
+    foreach (EntityType entityType in edmxElements.EntityTypes.OrderBy(e => e.Name))
+    {
+        fileManager.StartNewFile(entityType.Name + ".cs");
+        WriteHeader(edmxElements.NamespaceName, code, "System", "System.Collections.Specialized", "System.ComponentModel", "System.Runtime.Serialization", serverFxEntitiesNamespace);
+        WriteEntityTypeSerializationInfo(entityType, itemCollection, code, ef, string.Format("http://{0}/Entities", edmxElements.EdmxName));
+        string entityBaseTypeName = entityType.BaseType == null ? entityTypesBaseType : code.Escape(entityType.BaseType);
+        string entityTypeName = code.Escape(entityType);
+#>
+public <#=code.SpaceAfter(code.AbstractOption(entityType))#>partial class <#=entityTypeName#> : <#=entityBaseTypeName == null ? "" : entityBaseTypeName + ", "#>IEntity
+{
+    public <#=entityTypeName#>()
+    {
+        EntitiesInitializer.Initialize(this);
+        <#=entityTypeName#>Initialize();
+    }
+    partial void <#=entityTypeName#>Initialize();
+
+<#+
+    region.Begin("Simple Properties");
+
+    foreach (EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType))
+    {
+        var propertyName = code.Escape(edmProperty);
+        accessibility = Accessibility.ForProperty(edmProperty);
+        if (IsPublic(edmProperty))
+        {
+#>
+    [DataMember]
+<#+
+        }
+        WriteCustomAttributes(propertyAttributes, propertyName, entityTypeName);
+#>
+    <#=accessibility == "internal" ? "public" : accessibility#> <#=code.Escape(edmProperty.TypeUsage)#> <#=propertyName#>
+    {
+        <#=code.SpaceAfter((accessibility = Accessibility.ForGetter(edmProperty)) == "internal" ? "public" : accessibility)#>get { return <#=code.FieldName(edmProperty)#>; }
+        <#=code.SpaceAfter((accessibility = Accessibility.ForSetter(edmProperty)) == "internal" ? "public" : accessibility)#>set
+        {
+<#+
+        if (ef.ClrType(edmProperty.TypeUsage) == typeof(byte[]) &&
+            (ef.IsKey(edmProperty) || entityType.NavigationProperties.Where(np => np.GetDependentProperties().Contains(edmProperty)).Any()))
+        {
+#>
+            if (EqualityComparer.BinaryEquals(<#=code.FieldName(edmProperty)#>, value))
+<#+
+        }
+        else
+        {
+#>
+            if (<#=code.FieldName(edmProperty)#> == value)
+<#+
+        }
+#>
+                return;
+
+            On<#=code.Escape(edmProperty)#>Changing(ref value);
+<#+
+        if (ef.IsKey(edmProperty))
+        {
+            string errorMessage = String.Format("The property '{0}' is part of the object's key and cannot be changed. Changes to key properties can only be made when the object is not being tracked or is in the Added state.", edmProperty.Name);
+#>
+            if (ChangeTracker.ChangeTrackingEnabled && ChangeTracker.State != ObjectState.Added)
+                throw new InvalidOperationException("<#=errorMessage#>");
+<#+
+        }
+        else if (originalValueMembers.IsOriginalValueMember(edmProperty))
+        {
+#>
+            ChangeTracker.RecordOriginalValue("<#=edmProperty.Name#>", <#=code.FieldName(edmProperty)#>);
+<#+
+        }
+
+        bool hasDependentProperties = entityType.NavigationProperties.Where(np=>np.GetDependentProperties().Contains(edmProperty)).Any();
+        if (hasDependentProperties)
+        {
+#>
+            if (!IsDeserializing)
+            {
+<#+
+        }
+        foreach (var np in entityType.NavigationProperties.Where(np=>np.GetDependentProperties().Contains(edmProperty)))
+        {
+            EdmProperty principalProperty = ef.GetCorrespondingPrincipalProperty(np, edmProperty);
+            if (ef.ClrType(principalProperty.TypeUsage) == typeof(byte[]))
+            {
+#>
+                if (<#=code.Escape(np)#> != null && !EqualityComparer.BinaryEquals(<#=code.Escape(np)#>.<#=code.Escape(principalProperty)#>, value))
+<#+
+            }
+            else
+            {
+#>
+                if (<#=code.Escape(np)#> != null && <#=code.Escape(np)#>.<#=code.Escape(principalProperty)#> != value)
+<#+
+            }
+#>
+                {
+<#+
+            if (!(np.GetDependentProperties().Where(p => ef.IsNullable(p)).Any() &&
+                  np.GetDependentProperties().Count() > 1))
+            {
+#>
+                    <#=code.Escape(np)#> = null;
+<#+
+            }
+            else
+            {
+#>
+                    var previousValue = <#=code.FieldName(np)#>;
+                    <#=code.FieldName(np)#> = null;
+                    Fixup<#=np.Name#>(previousValue, skipKeys: true);
+                    OnNavigationPropertyChanged("<#=np.Name#>");
+<#+
+            }
+#>
+                }
+<#+
+        }
+        if (hasDependentProperties)
+        {
+#>
+            }
+<#+
+        }
+        int? maxLength = MaxLength(edmProperty);
+        if (maxLength.HasValue)
+        {
+            if (FixedLength(edmProperty) && edmProperty.TypeUsage.ToString() == "Edm.String")
+            {
+#>
+            if (value != null)
+                value = value.PadRight(<#=maxLength#>);
+<#+
+            }
+        }
+#>
+            <#=code.FieldName(edmProperty)#> = value;
+            On<#=code.Escape(edmProperty)#>Changed(value);
+            OnPropertyChanged("<#=edmProperty.Name#>");
+        }
+    }
+    private <#=code.Escape(edmProperty.TypeUsage)#> <#=code.FieldName(edmProperty)#><#=code.StringBefore(" = ", code.CreateLiteral(edmProperty.DefaultValue))#>;
+    partial void On<#=code.Escape(edmProperty)#>Changing(ref <#=code.Escape(edmProperty.TypeUsage)#> value);
+    partial void On<#=code.Escape(edmProperty)#>Changed(<#=code.Escape(edmProperty.TypeUsage)#> value);
+<#+
+    }
+    region.End();
+
+    region.Begin("Complex Properties");
+
+    foreach(EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == entityType))
+    {
+        var propertyName = code.Escape(edmProperty);
+        accessibility = Accessibility.ForProperty(edmProperty);
+        if (IsPublic(edmProperty))
+        {
+#>
+    [DataMember]
+<#+
+        }
+        WriteCustomAttributes(propertyAttributes, propertyName, entityTypeName);
+#>
+    <#=accessibility == "internal" ? "public" : accessibility#> <#=code.Escape(edmProperty.TypeUsage)#> <#=propertyName#>
+    {
+        <#=code.SpaceAfter((accessibility = Accessibility.ForGetter(edmProperty)) == "internal" ? "public" : accessibility)#>get
+        {
+            if (!<#=InitializedTrackingField(edmProperty, code)#> && <#=code.FieldName(edmProperty)#> == null)
+            {
+                <#=code.FieldName(edmProperty)#> = new <#=code.Escape(edmProperty.TypeUsage)#>();
+                <#=code.FieldName(edmProperty)#>.ChangeTracker = ChangeTracker;
+                <#=code.FieldName(edmProperty)#>.ComplexPropertyName = "<#=code.Escape(edmProperty)#>";
+                ((INotifyComplexPropertyChanging)<#=code.FieldName(edmProperty)#>).ComplexPropertyChanging += Handle<#=edmProperty.Name#>Changing;
+            }
+            <#=InitializedTrackingField(edmProperty, code)#> = true;
+            return <#=code.FieldName(edmProperty)#>;
+        }
+        <#=code.SpaceAfter((accessibility = Accessibility.ForSetter(edmProperty)) == "internal" ? "public" : accessibility)#>set
+        {
+            if (value == null && IsDeserializing)
+                return;		
+            <#=InitializedTrackingField(edmProperty, code)#> = true;
+
+            if (Equals(<#=code.FieldName(edmProperty)#>, value))
+                return;
+
+            On<#=code.Escape(edmProperty)#>Changing(ref value);
+
+            if (<#=code.FieldName(edmProperty)#> != null)
+                ((INotifyComplexPropertyChanging)<#=code.FieldName(edmProperty)#>).ComplexPropertyChanging -= Handle<#=edmProperty.Name#>Changing;
+
+            Handle<#=edmProperty.Name#>Changing(this, null);
+            <#=code.FieldName(edmProperty)#> = value;
+            if (value != null)
+            {
+                value.ChangeTracker = ChangeTracker;
+                value.ComplexPropertyName = "<#=code.Escape(edmProperty)#>";
+            }
+            On<#=code.Escape(edmProperty)#>Changed(value);
+            OnPropertyChanged("<#=edmProperty.Name#>");
+
+            if (value != null)
+                ((INotifyComplexPropertyChanging)<#=code.FieldName(edmProperty)#>).ComplexPropertyChanging += Handle<#=edmProperty.Name#>Changing;
+        }
+    }
+    private <#=code.Escape(edmProperty.TypeUsage)#> <#=code.FieldName(edmProperty)#>;
+    private bool <#=InitializedTrackingField(edmProperty, code)#>;
+    partial void On<#=code.Escape(edmProperty)#>Changing(ref <#=code.Escape(edmProperty.TypeUsage)#> value);
+    partial void On<#=code.Escape(edmProperty)#>Changed(<#=code.Escape(edmProperty.TypeUsage)#> value);
+<#+
+    }
+
+    region.End();
+
+    region.Begin("Navigation Properties");
+
+    foreach (NavigationProperty navProperty in entityType.NavigationProperties.Where(np => np.DeclaringType == entityType))
+    {
+        var propertyName = code.Escape(navProperty);
+        NavigationProperty inverse = ef.Inverse(navProperty);
+        if (inverse != null && !IsPublicOrInternal(inverse))
+        {
+            inverse = null;
+        }
+        accessibility = Accessibility.ForReadOnlyProperty(navProperty);
+        if (IsPublic(navProperty))
+        {
+#>
+    [DataMember]
+<#+
+        }
+        WriteCustomAttributes(propertyAttributes, propertyName, entityTypeName);
+        if (navProperty.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+        {
+            string navPropFieldName = code.FieldName(navProperty);
+#>
+    <#=accessibility == "internal" ? "public" : accessibility#> TrackableCollection<<#=code.Escape(navProperty.ToEndMember.GetEntityType())#>> <#=propertyName#>
+    {
+        <#=code.SpaceAfter((accessibility = Accessibility.ForGetter(navProperty)) == "internal" ? "public" : accessibility)#>get
+        {
+            if (<#=navPropFieldName#> == null)
+            {
+                <#=navPropFieldName#> = new TrackableCollection<<#=code.Escape(navProperty.ToEndMember.GetEntityType())#>>() { Owner = this, Name = "<#=propertyName#>" };
+                <#=navPropFieldName#>.CollectionChanged += Fixup<#=navProperty.Name#>;
+            }
+            return <#=navPropFieldName#>;
+        }
+        <#=code.SpaceAfter((accessibility = Accessibility.ForSetter(navProperty)) == "internal" ? "public" : accessibility)#>set
+        {
+            if (ReferenceEquals(<#=navPropFieldName#>, value))
+                return;
+
+            if (ChangeTracker.ChangeTrackingEnabled)
+                throw new InvalidOperationException("Cannot set the FixupChangeTrackingCollection when ChangeTracking is enabled");
+
+            if (<#=navPropFieldName#> != null)
+            {
+                <#=navPropFieldName#>.CollectionChanged -= Fixup<#=navProperty.Name#>;
+<#+
+        if (ef.IsCascadeDeletePrincipal(navProperty))
+        {
+#>
+                // This is the principal end in an association that performs cascade deletes.
+                // Remove the cascade delete event handler for any entities in the current collection.
+                foreach (<#=code.Escape(navProperty.ToEndMember.GetEntityType())#> item in <#=navPropFieldName#>)
+                    ChangeTracker.ObjectStateChanging -= item.HandleCascadeDelete;
+<#+
+        }
+#>
+            }
+            <#=navPropFieldName#> = value;
+            if (<#=navPropFieldName#> != null)
+            {
+                <#=navPropFieldName#>.Owner = this;
+                <#=navPropFieldName#>.Name = "<#=propertyName#>";
+                <#=navPropFieldName#>.CollectionChanged += Fixup<#=navProperty.Name#>;
+<#+
+        if (ef.IsCascadeDeletePrincipal(navProperty))
+        {
+#>
+                // This is the principal end in an association that performs cascade deletes.
+                // Add the cascade delete event handler for any entities that are already in the new collection.
+                foreach (<#=code.Escape(navProperty.ToEndMember.GetEntityType())#> item in <#=navPropFieldName#>)
+                    ChangeTracker.ObjectStateChanging += item.HandleCascadeDelete;
+<#+
+        }
+#>
+            }
+            OnNavigationPropertyChanged("<#=navProperty.Name#>");
+        }
+    }
+    private TrackableCollection<<#=code.Escape(navProperty.ToEndMember.GetEntityType())#>> <#=navPropFieldName#>;
+<#+
+        }
+        else
+        {
+#>
+    <#=accessibility == "internal" ? "public" : accessibility#> <#=code.Escape(navProperty.ToEndMember.GetEntityType())#> <#=code.Escape(navProperty)#>
+    {
+        <#=code.SpaceAfter((accessibility = Accessibility.ForGetter(navProperty)) == "internal" ? "public" : accessibility)#>get { return <#=code.FieldName(navProperty)#>; }
+        <#=code.SpaceAfter((accessibility = Accessibility.ForSetter(navProperty)) == "internal" ? "public" : accessibility)#>set
+        {
+            if (ReferenceEquals(<#=code.FieldName(navProperty)#>, value))
+                return;
+
+            On<#=code.Escape(navProperty)#>Changing(ref value);
+<#+
+            // If this is the dependent end of an identifying relationship, the principal end can only be changed if the dependent is in the Added state and the principal's key matches the foreign key on the dependent
+            if (ef.IsPrincipalEndOfIdentifyingRelationship((AssociationEndMember)navProperty.ToEndMember))
+            {
+#>
+            if (ChangeTracker.ChangeTrackingEnabled && ChangeTracker.State != ObjectState.Added && value != null)
+            {
+<#+
+                List<EdmProperty> dependents = navProperty.GetDependentProperties().ToList();
+                int dependentCount = dependents.Count;
+                StringBuilder keyMatchCondition = new StringBuilder();
+                for (int i = 0; i < dependentCount; i++)
+                {
+                    EdmProperty dependentProperty = dependents[i];
+                    EdmProperty principalProperty = ef.GetCorrespondingPrincipalProperty(navProperty, dependentProperty);
+                    string escapedDependent = code.Escape(dependentProperty);
+                    string escapedPrincipal = code.Escape(principalProperty);
+
+                    if (i > 0)
+                        keyMatchCondition.AppendFormat(" || ");
+
+                    string equality = null;
+                    if (ef.ClrType(principalProperty.TypeUsage) == typeof(byte[]))
+                        equality = "!EqualityComparer.BinaryEquals({0}, value.{1})";
+                    else
+                        equality = "{0} != value.{1}";
+                    keyMatchCondition.AppendFormat(CultureInfo.InvariantCulture, equality, escapedDependent, escapedPrincipal);
+                }
+#>
+                // This the dependent end of an identifying relationship, so the principal end cannot be changed if it is already set,
+                // otherwise it can only be set to an entity with a primary key that is the same value as the dependent's foreign key.
+                if (<#=keyMatchCondition.ToString()#>)
+                    throw new InvalidOperationException("The principal end of an identifying relationship can only be changed when the dependent end is in the Added state.");
+            }
+<#+
+            }
+#>
+            var previousValue = <#=code.FieldName(navProperty)#>;
+            if (!(IsDeserializing || ChangeTracker.State == ObjectState.Added || ChangeTracker.ObjectsRemovedFromCollectionProperties.ContainsKey("<#=navProperty.Name#>")))
+                ChangeTracker.RecordRemovalFromCollectionProperties("<#=navProperty.Name#>", previousValue);
+            <#=code.FieldName(navProperty)#> = value;
+            Fixup<#=navProperty.Name#>(previousValue);
+            On<#=code.Escape(navProperty)#>Changed(value);
+            OnNavigationPropertyChanged("<#=navProperty.Name#>");
+        }
+    }
+    partial void On<#=code.Escape(navProperty)#>Changing(ref <#=code.Escape(navProperty.ToEndMember.GetEntityType())#> value);
+    partial void On<#=code.Escape(navProperty)#>Changed(<#=code.Escape(navProperty.ToEndMember.GetEntityType())#> value);
+    private <#=code.Escape(navProperty.ToEndMember.GetEntityType())#> <#=code.FieldName(navProperty)#>;
+<#+
+        }
+    }
+    region.End();
+
+    region.Begin("ChangeTracking");
+    if (entityType.BaseType == null)
+    {
+#>
+
+    protected virtual void OnPropertyChanged(String propertyName)
+    {
+        if (ChangeTracker.ChangeTrackingEnabled && ChangeTracker.State != ObjectState.Added && ChangeTracker.State != ObjectState.Deleted)
+        {
+            ChangeTracker.State = ObjectState.Modified;
+            if (! (IsDeserializing || ChangeTracker.ModifiedProperties.Contains(propertyName)))
+                ChangeTracker.ModifiedProperties.Add(propertyName);
+        }
+        OnCustomPropertyChanged(propertyName);
+    }
+    partial void OnCustomPropertyChanged(string propertyName);
+
+    protected virtual void OnNavigationPropertyChanged(String propertyName)
+    {
+        OnCustomNavigationPropertyChanged(propertyName);
+    }
+    partial void OnCustomNavigationPropertyChanged(string propertyName);
+
+    private ObjectChangeTracker _changeTracker;
+
+    [DataMember]
+    public ObjectChangeTracker ChangeTracker
+    {
+        get
+        {
+            if (_changeTracker == null)
+            {
+                _changeTracker = new ObjectChangeTracker();
+<#+
+foreach(EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == entityType))
+{
+#>
+                if (<#=code.FieldName(edmProperty)#> != null)
+                    <#=code.Escape(edmProperty)#>.ChangeTracker = _changeTracker;
+<#+
+}
+#>
+                _changeTracker.ObjectStateChanging += HandleObjectStateChanging;
+            }
+            return _changeTracker;
+        }
+        set
+        {
+            if(_changeTracker != null)
+                _changeTracker.ObjectStateChanging -= HandleObjectStateChanging;
+            _changeTracker = value;
+<#+
+foreach(EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == entityType))
+{
+#>
+            if (<#=code.FieldName(edmProperty)#> != null)
+                <#=code.Escape(edmProperty)#>.ChangeTracker = value;
+<#+
+}
+#>
+            if(_changeTracker != null)
+                _changeTracker.ObjectStateChanging += HandleObjectStateChanging;
+        }
+    }
+
+    private void HandleObjectStateChanging(object sender, ObjectStateChangingEventArgs e)
+    {
+        switch (e.NewState)
+        {
+            case ObjectState.Deleted:
+                IsDeleting = true;
+                ClearNavigationProperties();
+                IsDeleting = false;
+                break;
+            case ObjectState.Detached:
+                ClearNavigationProperties();
+                break;
+        }
+    }
+    
+    private bool _isDeserializing;
+    public bool IsDeserializing 
+    { 
+        get { return _isDeserializing; } 
+        set 
+        { 
+            if (_isDeserializing == value)
+                return;
+            _isDeserializing = value; 
+<#+
+foreach(EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == entityType))
+{
+#>
+            if (<#=code.Escape(edmProperty)#> != null)
+                <#=code.Escape(edmProperty)#>.IsDeserializing = value;
+<#+
+}
+#>
+        }
+    }
+    public bool IsInitializingRelationships { get; set; }
+
+
+    [OnDeserializing]
+    public void OnDeserializingMethod(StreamingContext context)
+    {
+        IsDeserializing = true;
+    }
+
+    [OnDeserialized]
+    public void OnDeserializedMethod(StreamingContext context)
+    {
+        IsDeserializing = false;
+        ChangeTracker.ChangeTrackingEnabled = true;
+    }
+<#+
+    }
+
+    // If this entity type participates in any relationships where the other end has an OnDelete
+    // cascade delete defined, or if it is the dependent in any identifying relationships, it needs
+    // an event handler to handle notifications that are fired when the parent is deleted.
+    if (ef.NeedsHandleCascadeDeleteMethod(itemCollection, entityType))
+    {
+#>
+
+    // This entity type is the dependent end in at least one association that performs cascade deletes.
+    // This event handler will process notifications that occur when the principal end is deleted.
+    internal void HandleCascadeDelete(object sender, ObjectStateChangingEventArgs e)
+    {
+        if (e.NewState == ObjectState.Deleted)
+            this.MarkAsDeleted();
+    }
+<#+
+    }
+
+    foreach(EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == entityType))
+    {
+#>
+    // <#=String.Format(CultureInfo.CurrentCulture, "Records the original values for the complex property {0}", edmProperty.Name)#>
+    private void Handle<#=edmProperty.Name#>Changing(object sender, EventArgs args)
+    {
+        if (ChangeTracker.State != ObjectState.Added && ChangeTracker.State != ObjectState.Deleted)
+        {
+            ChangeTracker.State = ObjectState.Modified;
+        }
+<#+
+        if (originalValueMembers.IsOriginalValueMember(edmProperty))
+        {
+#>
+        <#=code.Escape(edmProperty.TypeUsage)#>.RecordComplexOriginalValues("<#=edmProperty.Name#>", this.<#=code.Escape(edmProperty)#>, ChangeTracker);
+<#+
+        }
+#>
+    }
+
+<#+
+    }
+
+    List<AssociationEndMember> shadowAssociationEnds = new List<AssociationEndMember>();
+    foreach(var association in itemCollection.GetItems<AssociationType>().Where(x => !IsForeignKeyOrIdentifyingRelationship(ef, x) &&
+                                                                                ((((RefType)x.AssociationEndMembers[0].TypeUsage.EdmType).ElementType == entityType &&
+                                                                                   x.AssociationEndMembers[0].RelationshipMultiplicity != RelationshipMultiplicity.One &&
+                                                                                   x.AssociationEndMembers[1].RelationshipMultiplicity != RelationshipMultiplicity.Many) ||
+                                                                                 ((RefType)x.AssociationEndMembers[1].TypeUsage.EdmType).ElementType == entityType &&
+                                                                                   x.AssociationEndMembers[1].RelationshipMultiplicity != RelationshipMultiplicity.One &&
+                                                                                   x.AssociationEndMembers[0].RelationshipMultiplicity != RelationshipMultiplicity.Many)))
+    {
+        if (!entityType.NavigationProperties.Any(x => x.RelationshipType == association && IsPublicOrInternal(x)))
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                int targetRoleIndex = 0;
+                if (((RefType)association.AssociationEndMembers[i].TypeUsage.EdmType).ElementType == entityType)
+                {
+                    targetRoleIndex = (i + 1) % 2;
+                    shadowAssociationEnds.Add(association.AssociationEndMembers[targetRoleIndex]);
+                }
+            }
+        }
+    }
+#>
+
+    protected <#=entityType.BaseType == null ? "virtual " : "override " #>void ClearNavigationProperties()
+    {
+<#+
+    if (entityType.BaseType != null)
+    {
+#>
+        base.ClearNavigationProperties();
+<#+
+    }
+    foreach (NavigationProperty navProperty in entityType.NavigationProperties.Where(np => np.DeclaringType == entityType))
+    {
+        if (navProperty.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+        {
+#>
+        <#=code.Escape(navProperty)#>.Clear();
+<#+
+        }
+        else
+        {
+#>
+        <#=code.Escape(navProperty)#> = null;
+<#+
+            if (IsSaveReference(ef, navProperty))
+            {
+#>
+        Fixup<#=navProperty.Name#>Keys();
+<#+
+            }
+        }
+    }
+    foreach(var associationEnd in shadowAssociationEnds)
+    {
+        AssociationType association = associationEnd.DeclaringType as AssociationType;
+#>
+        <#=CreateFixupMethodName(associationEnd)#>(null, true);
+<#+
+    }
+#>
+    }
+<#+
+    region.End();
+
+    region.Begin("Association Fixup");
+#>
+    private bool IsDeleting { get; set; }
+    internal <#=entityType.BaseType == null ? "virtual" : "override"#> void Detach()
+    {
+        ChangeTracker.State = ObjectState.Detached;
+    }
+<#+
+
+    foreach (NavigationProperty navProperty in entityType.NavigationProperties.Where(np => np.DeclaringType == entityType))
+    {
+        NavigationProperty inverse = ef.Inverse(navProperty);
+
+        if (inverse != null && !IsPublicOrInternal(inverse))
+        {
+            inverse = null;
+        }
+
+        if (navProperty.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
+        {
+            var skipKeysArgument = navProperty.GetDependentProperties().Where(p=>ef.IsNullable(p)).Any()
+                ? ", bool skipKeys = false"
+                : String.Empty;
+#>
+
+    private void Fixup<#=navProperty.Name#>(<#=code.Escape(navProperty.ToEndMember.GetEntityType())#> previousValue<#= skipKeysArgument #>)
+    {
+<#+
+        if (ef.IsCascadeDeletePrincipal(navProperty))
+        {
+#>
+        // This is the principal end in an association that performs cascade deletes.
+        // Update the event listener to refer to the new dependent.
+        if (previousValue != null)
+        {
+            ChangeTracker.ObjectStateChanging -= previousValue.HandleCascadeDelete;
+        }
+
+        if (<#=code.Escape(navProperty)#> != null)
+        {
+            ChangeTracker.ObjectStateChanging += <#=code.Escape(navProperty)#>.HandleCascadeDelete;
+        }
+
+<#+
+        }
+        else if (inverse == null && ef.IsCascadeDeletePrincipal((AssociationEndMember)navProperty.ToEndMember))
+        {
+#>
+        // This is the dependent end in an association that performs cascade deletes.
+        // Update the principal's event listener to refer to the new dependent.
+        // This is a unidirectional relationship from the dependent to the principal, so the dependent end is
+        // responsible for managing the cascade delete event handler. In all other cases the principal end will manage it.
+        if (previousValue != null)
+            previousValue.ChangeTracker.ObjectStateChanging -= HandleCascadeDelete;
+
+        if (<#=code.Escape(navProperty)#> != null)
+            <#=code.Escape(navProperty)#>.ChangeTracker.ObjectStateChanging += HandleCascadeDelete;
+
+<#+
+        }
+#>
+        if (IsDeserializing)
+            return;
+
+<#+
+        if (inverse != null && IsPublicOrInternal(inverse))
+        {
+            if (inverse.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+#>
+        if (previousValue != null && previousValue.<#=code.Escape(inverse)#>.Contains(this))
+            previousValue.<#=code.Escape(inverse)#>.Remove(this);
+<#+
+            }
+            else
+            {
+#>
+        if (previousValue != null && ReferenceEquals(previousValue.<#=code.Escape(inverse)#>, this))
+            previousValue.<#=code.Escape(inverse)#> = null;
+<#+
+            }
+
+            if (inverse.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+#>
+
+        if (<#=code.Escape(navProperty)#> != null)
+        {
+            if (!<#=code.Escape(navProperty)#>.<#=code.Escape(inverse)#>.Contains(this))
+                <#=code.Escape(navProperty)#>.<#=code.Escape(inverse)#>.Add(this);
+
+<#+
+                foreach (var dependentProperty in navProperty.GetDependentProperties())
+                {
+#>
+            <#=code.Escape(dependentProperty)#> = <#=code.Escape(navProperty)#>.<#=code.Escape(ef.GetCorrespondingPrincipalProperty(navProperty, dependentProperty))#>;
+<#+
+                }
+#>
+        }
+<#+
+                if (navProperty.GetDependentProperties().Where(p=>ef.IsNullable(p)).Any())
+                {
+#>
+        else if (! (skipKeys || IsDeleting || previousValue.ChangeTracker.State == ObjectState.Detached))
+        {
+<#+
+                foreach (var dependentProperty in navProperty.GetDependentProperties().Where(p => ef.IsNullable(p)))
+                {
+#>
+            <#=code.Escape(dependentProperty)#> = null;
+<#+
+                }
+#>
+        }
+
+<#+
+                }
+            }
+            else
+            {
+#>
+
+        if (<#=code.Escape(navProperty)#> != null)
+        {
+            <#=code.Escape(navProperty)#>.<#=code.Escape(inverse)#> = this;
+<#+
+                foreach (var dependentProperty in navProperty.GetDependentProperties())
+                {
+#>
+            <#=code.Escape(dependentProperty)#> = <#=code.Escape(navProperty)#>.<#=code.Escape(ef.GetCorrespondingPrincipalProperty(navProperty, dependentProperty))#>;
+<#+
+                }
+#>
+        }
+
+<#+
+            }
+        }
+        else
+        {
+            if (navProperty.GetDependentProperties().Any())
+            {
+#>
+        if (<#=code.Escape(navProperty)#> != null)
+        {
+<#+
+                foreach (var dependentProperty in navProperty.GetDependentProperties())
+                {
+#>
+            <#=code.Escape(dependentProperty)#> = <#=code.Escape(navProperty)#>.<#=code.Escape(ef.GetCorrespondingPrincipalProperty(navProperty, dependentProperty))#>;
+<#+
+                }
+#>
+        }
+
+<#+
+                if (navProperty.GetDependentProperties().Where(p => ef.IsNullable(p)).Any())
+                {
+#>
+        else if (!skipKeys)
+        {
+<#+
+                    foreach (var dependentProperty in navProperty.GetDependentProperties().Where(p => ef.IsNullable(p)))
+                    {
+#>
+            <#=code.Escape(dependentProperty)#> = null;
+<#+
+                    }
+#>
+        }
+
+<#+
+                }
+            }
+            else if (IsForeignKeyOrIdentifyingRelationship(ef, navProperty))
+            {
+#>
+        if (<#=code.Escape(navProperty)#> != null)
+        {
+<#+
+                foreach (var fromProperty in ef.GetPrincipalProperties(navProperty))
+                {
+#>
+            <#=code.Escape(navProperty)#>.<#=code.Escape(ef.GetCorrespondingDependentProperty(navProperty, fromProperty))#> = <#=code.Escape(fromProperty)#>;
+<#+
+                }
+#>
+        }
+
+<#+
+            }
+        }
+#>
+        if (ChangeTracker.ChangeTrackingEnabled)
+        {
+            if (ChangeTracker.OriginalValues.ContainsKey("<#=navProperty.Name#>")
+                && (ChangeTracker.OriginalValues["<#=navProperty.Name#>"] == <#=code.Escape(navProperty)#>))
+                ChangeTracker.OriginalValues.Remove("<#=navProperty.Name#>");
+            else
+            {
+                ChangeTracker.RecordOriginalValue("<#=navProperty.Name#>", previousValue);
+<#+
+        if (ef.IsPrincipalEndOfIdentifyingRelationship((AssociationEndMember)navProperty.FromEndMember))
+        {
+#>
+                // This is the principal end of an identifying association, so the dependent must be deleted when the relationship is removed.
+                // If the current state of the dependent is Added, the relationship can be changed without causing the dependent to be deleted.
+                if (previousValue != null && previousValue.ChangeTracker.State != ObjectState.Added)
+                    previousValue.MarkAsDeleted();
+<#+
+        }
+        else if (inverse == null && ef.IsPrincipalEndOfIdentifyingRelationship((AssociationEndMember)navProperty.ToEndMember))
+        {
+#>
+                // This is the dependent end of an identifying association, so it must be deleted when the relationship is
+                // removed. If the current state is Added, the relationship can be changed without causing the dependent to be deleted.
+                // This is a unidirectional relationship from the dependent to the principal, so the dependent end is
+                // responsible for cascading the delete. In all other cases the principal end will manage it.
+                if (previousValue != null && ChangeTracker.State != ObjectState.Added)
+                    this.MarkAsDeleted();
+<#+
+        }
+#>
+            }
+            if (<#=code.Escape(navProperty)#> != null && !<#=code.Escape(navProperty)#>.ChangeTracker.ChangeTrackingEnabled)
+                <#=code.Escape(navProperty)#>.ChangeTracker.ChangeTrackingEnabled = true;
+<#+
+        if (IsSaveReference(ef, navProperty))
+        {
+#>
+            Fixup<#=navProperty.Name#>Keys();
+<#+
+        }
+        if (inverse == null &&
+            !IsForeignKeyOrIdentifyingRelationship(ef, navProperty) &&
+            navProperty.FromEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many &&
+            navProperty.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.One)
+        {
+#>
+            if (previousValue != null)
+                previousValue.<#=CreateFixupMethodName(navProperty.FromEndMember)#>(null, false);
+            if (<#=code.Escape(navProperty)#> != null)
+                <#=code.Escape(navProperty)#>.<#=CreateFixupMethodName(navProperty.FromEndMember)#>(this, false);
+<#+
+        }
+#>
+        }
+    }
+<#+
+        if (IsSaveReference(ef, navProperty))
+        {
+            EntityType targetType = (EntityType)navProperty.TypeUsage.EdmType;
+            List<string> keyNames = targetType.KeyMembers.Select(x => x.Name).ToList();
+#>
+
+    private void Fixup<#=navProperty.Name#>Keys()
+    {
+<#+
+            for(int k=0; k < keyNames.Count; k++)
+            {
+#>
+        const string <#=CreateKeyNameVariable(code.Escape(keyNames[k]))#> = "<#=CreateReferenceValueLookupKey(navProperty, keyNames[k])#>";
+<#+
+            }
+#>
+
+        if(ChangeTracker.ExtendedProperties.ContainsKey(<#=CreateKeyNameVariable(code.Escape(keyNames[0]))#>)<#=keyNames.Count > 1 ? " &&" : ")"#>
+<#+
+            for(int k=1; k < keyNames.Count; k++)
+            {
+#>
+           ChangeTracker.ExtendedProperties.ContainsKey(<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>)<#=k < keyNames.Count - 1 ? " &&" : ")" #>
+<#+
+            }
+#>
+        {
+            if(<#=code.Escape(navProperty)#> == null ||
+<#+
+            for(int k=0; k < keyNames.Count; k++)
+            {
+                string equality = ef.ClrType(targetType.KeyMembers[keyNames[k]].TypeUsage) == typeof(byte[]) ? "EqualityComparer.Binary" : String.Empty;
+#>
+               !<#=equality#>Equals(ChangeTracker.ExtendedProperties[<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>], <#=code.Escape(navProperty)#>.<#=code.Escape(keyNames[k])#>)<#=k < keyNames.Count - 1 ? " ||" : ")" #>
+<#+
+            }
+#>
+            {
+<#+
+            for(int k=0; k < keyNames.Count; k++)
+            {
+#>
+                ChangeTracker.RecordOriginalValue(<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>, ChangeTracker.ExtendedProperties[<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>]);
+<#+
+            }
+#>
+            }
+<#+
+            for(int k=0; k < keyNames.Count; k++)
+            {
+#>
+            ChangeTracker.ExtendedProperties.Remove(<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>);
+<#+
+            }
+#>
+        }
+    }
+<#+
+            }
+        }
+    }
+
+    foreach (NavigationProperty navProperty in entityType.NavigationProperties.Where(np => np.DeclaringType == entityType))
+    {
+        NavigationProperty inverse = ef.Inverse(navProperty);
+
+        if (inverse != null && !IsPublicOrInternal(inverse))
+            inverse = null;
+
+        if (navProperty.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+        {
+#>
+
+    private void Fixup<#=navProperty.Name#>(object sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (IsDeserializing)
+            return;
+
+        if (e.NewItems != null)
+        {
+            foreach (<#=code.Escape(navProperty.ToEndMember.GetEntityType())#> item in e.NewItems)
+            {
+<#+
+                if (inverse != null && IsPublicOrInternal(inverse))
+                {
+                    if (inverse.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
+                    {
+#>
+                item.<#=code.Escape(inverse)#> = this;
+<#+
+                    }
+                    else
+                    {
+#>
+                if (!item.<#=code.Escape(inverse)#>.Contains(this))
+                    item.<#=code.Escape(inverse)#>.Add(this);
+<#+
+                    }
+                }
+                else if (IsForeignKeyOrIdentifyingRelationship(ef, navProperty))
+                {
+                    foreach (var fromProperty in ef.GetPrincipalProperties(navProperty))
+                    {
+#>
+                item.<#=code.Escape(ef.GetCorrespondingDependentProperty(navProperty, fromProperty))#> = <#=code.Escape(fromProperty)#>;
+<#+
+                    }
+                }
+                else if (navProperty.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.ZeroOrOne)
+                {
+#>
+                item.<#=CreateFixupMethodName(navProperty.FromEndMember)#>(this, false);
+<#+
+                }
+#>
+                if (ChangeTracker != null && ChangeTracker.ChangeTrackingEnabled && item.ChangeTracker != null && item.ChangeTracker.ChangeTrackingEnabled)
+                {
+                    if (!item.ChangeTracker.ChangeTrackingEnabled)
+                        item.MarkAsAdded();
+                    ChangeTracker.RecordAdditionToCollectionProperties("<#=code.Escape(navProperty)#>", item);
+                }
+<#+
+                if (ef.IsCascadeDeletePrincipal(navProperty))
+                {
+#>
+                // This is the principal end in an association that performs cascade deletes.
+                // Update the event listener to refer to the new dependent.
+                ChangeTracker.ObjectStateChanging += item.HandleCascadeDelete;
+<#+
+                }
+#>
+            }
+        }
+
+        if (e.OldItems != null)
+        {
+            foreach (<#=code.Escape(navProperty.ToEndMember.GetEntityType())#> item in e.OldItems)
+            {
+<#+
+                if (inverse != null && IsPublicOrInternal(inverse))
+                {
+                    if (inverse.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
+                    {
+#>
+                if (ReferenceEquals(item.<#=code.Escape(inverse)#>, this))
+                {
+                    item.<#=code.Escape(inverse)#> = null;
+                }
+<#+
+                    }
+                    else
+                    {
+#>
+                if (item.<#=code.Escape(inverse)#>.Contains(this))
+                {
+                    item.<#=code.Escape(inverse)#>.Remove(this);
+                }
+<#+
+                    }
+                }
+                else if (IsForeignKeyOrIdentifyingRelationship(ef, navProperty))
+                {
+                    foreach (var fromProperty in ef.GetPrincipalProperties(navProperty))
+                    {
+                        var p = ef.GetCorrespondingDependentProperty(navProperty, fromProperty);
+                        if (ef.IsNullable(p.TypeUsage))
+                        {
+#>
+                item.<#=code.Escape(p)#> = null;
+<#+
+                        }
+                    }
+                }
+                else if (navProperty.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.ZeroOrOne)
+                {
+#>
+                item.<#=CreateFixupMethodName(navProperty.FromEndMember)#>(null, false);
+<#+
+                }
+#>
+                if (ChangeTracker != null && ChangeTracker.ChangeTrackingEnabled && item.ChangeTracker != null && item.ChangeTracker.ChangeTrackingEnabled)
+                {
+                    ChangeTracker.RecordRemovalFromCollectionProperties("<#=code.Escape(navProperty)#>", item);
+<#+
+                if (ef.IsPrincipalEndOfIdentifyingRelationship((AssociationEndMember)navProperty.FromEndMember))
+                {
+#>
+                    // Delete the dependent end of this identifying association. If the current state is Added,
+                    // allow the relationship to be changed without causing the dependent to be deleted.
+                    if (item.ChangeTracker.State != ObjectState.Added)
+                    {
+                        item.MarkAsDeleted();
+                    }
+<#+
+                }
+#>
+                }
+<#+
+                if (ef.IsCascadeDeletePrincipal(navProperty))
+                {
+#>
+                // This is the principal end in an association that performs cascade deletes.
+                // Remove the previous dependent from the event listener.
+                ChangeTracker.ObjectStateChanging -= item.HandleCascadeDelete;
+<#+
+                }
+#>
+            }
+        }
+    }
+<#+
+        }
+    }
+
+    foreach(var associationEnd in shadowAssociationEnds)
+    {
+        AssociationType association = associationEnd.DeclaringType as AssociationType;
+        EntityType targetType = ((RefType)associationEnd.TypeUsage.EdmType).ElementType as EntityType;
+        List<string> keyNames = targetType.KeyMembers.Select(x => x.Name).ToList();
+#>
+
+    internal void <#=CreateFixupMethodName(associationEnd)#>(<#=code.Escape(targetType)#> value, bool forceRemove)
+    {
+<#+
+            for(int k=0; k < keyNames.Count; k++)
+            {
+#>
+        const string <#=CreateKeyNameVariable(code.Escape(keyNames[k]))#> = "<#=CreateReferenceValueLookupKey(associationEnd, keyNames[k])#>";
+<#+
+            }
+#>
+
+        if (ChangeTracker.ChangeTrackingEnabled &&
+<#+
+        for(int k=0; k < keyNames.Count; k++)
+        {
+#>
+            ChangeTracker.ExtendedProperties.ContainsKey(<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>)<#=k < keyNames.Count - 1 ? " &&" : ")"#>
+<#+
+        }
+#>
+        {
+            if (forceRemove ||
+<#+
+        for(int k=0; k < keyNames.Count; k++)
+        {
+                string equality = ef.ClrType(targetType.KeyMembers[keyNames[k]].TypeUsage) == typeof(byte[]) ? "EqualityComparer.Binary" : String.Empty;
+#>
+                !<#=equality#>Equals(ChangeTracker.ExtendedProperties[<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>], value == null ? null : (object)value.<#=code.Escape(keyNames[k])#>)<#=k < keyNames.Count - 1 ? " ||" : ")"#>
+<#+
+        }
+#>
+            {
+<#+
+        for(int k=0; k < keyNames.Count; k++)
+        {
+#>
+                ChangeTracker.RecordOriginalValue(<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>, ChangeTracker.ExtendedProperties[<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>]);
+<#+
+        }
+#>
+                if (value == null)
+                {
+<#+
+        for(int k=0; k < keyNames.Count; k++)
+        {
+#>
+                    ChangeTracker.ExtendedProperties.Remove(<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>);
+<#+
+        }
+#>
+                }
+                else
+                {
+<#+
+        for(int k=0; k < keyNames.Count; k++)
+        {
+#>
+                    ChangeTracker.ExtendedProperties[<#=CreateKeyNameVariable(code.Escape(keyNames[k]))#>] = value.<#=code.Escape(keyNames[k])#>;
+<#+
+        }
+#>
+                }
+            }
+        }
+    }
+<#+
+    }
+
+    region.End();
+#>
+ 
+<#+
+    region.Begin("EntityKey");
+#>
+    private Guid? _dataTransferEntityKey;
+    [DataMember]
+    public <#=entityBaseTypeName == null ? "virtual" : "override"#> Guid DataTransferEntityKey 
+    { 
+        get { return _dataTransferEntityKey ?? (_dataTransferEntityKey = Guid.NewGuid()).Value; }
+        set { _dataTransferEntityKey = value; } 
+    }
+<#+
+    region.End();
+#>
+
+    void IEntity.RemoveNavigationProperties()
+    {
+<#+
+        foreach (var np in entityType.NavigationProperties)
+        {
+            if (np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+#>
+        <#=code.Escape(np)#>.Clear();
+<#+
+            }
+            else
+            {
+#>
+        <#=code.Escape(np)#> = null;
+<#+
+            }
+        }
+#>
+    }
+}
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+}
+
+// Emit Complex Types
+foreach (ComplexType complex in itemCollection.GetItems<ComplexType>().OrderBy(e => e.Name))
+{
+    var complexTypeName = code.Escape(complex);
+    fileManager.StartNewFile(complex.Name + ".cs");
+    WriteHeader(edmxElements.NamespaceName, code, "System", "System.ComponentModel", "System.Globalization", "System.Runtime.Serialization", serverFxEntitiesNamespace);
+#>
+
+[DataContract(IsReference = true, Namespace = "http://<#=edmxElements.EdmxName#>/Entities")]
+public partial class <#=complexTypeName#> : <#=complexTypesBaseType == null ? "" : complexTypesBaseType + ", "#>INotifyComplexPropertyChanging
+{
+<#+
+    region.Begin("Simple Properties");
+
+    foreach(EdmProperty edmProperty in complex.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == complex))
+    {
+        var propertyName = code.Escape(edmProperty);
+        accessibility = Accessibility.ForProperty(edmProperty);
+        if (IsPublic(edmProperty))
+        {
+#>
+    [DataMember]
+<#+
+        }
+        WriteCustomAttributes(propertyAttributes, propertyName, complexTypeName);
+#>
+    <#=accessibility == "internal" ? "public" : accessibility#> <#=code.Escape(edmProperty.TypeUsage)#> <#=propertyName#>
+    {
+        <#=code.SpaceAfter((accessibility = Accessibility.ForGetter(edmProperty)) == "internal" ? "public" : accessibility)#>get { return <#=code.FieldName(edmProperty)#>; }
+        <#=code.SpaceAfter((accessibility = Accessibility.ForSetter(edmProperty)) == "internal" ? "public" : accessibility)#>set
+        {
+            if (<#=code.FieldName(edmProperty)#> != value)
+            {
+                On<#=code.Escape(edmProperty)#>Changing(ref value);
+                OnComplexPropertyChanging();
+                <#=code.FieldName(edmProperty)#> = value;
+                On<#=code.Escape(edmProperty)#>Changed(value);
+                OnPropertyChanged("<#=edmProperty.Name#>");
+            }
+        }
+    }
+    private <#=code.Escape(edmProperty.TypeUsage)#> <#=code.FieldName(edmProperty)#><#=code.StringBefore(" = ", code.CreateLiteral(edmProperty.DefaultValue))#>;
+    partial void On<#=code.Escape(edmProperty)#>Changing(ref <#=code.Escape(edmProperty.TypeUsage)#> value);
+    partial void On<#=code.Escape(edmProperty)#>Changed(<#=code.Escape(edmProperty.TypeUsage)#> value);
+<#+
+    }
+
+    region.End();
+
+    region.Begin("Complex Properties");
+
+    foreach(EdmProperty edmProperty in complex.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == complex))
+    {
+        var propertyName = code.Escape(edmProperty);
+        if (IsPublic(edmProperty))
+        {
+#>
+    [DataMember]
+<#+
+        }
+        WriteCustomAttributes(propertyAttributes, propertyName, complexTypeName);
+        accessibility = Accessibility.ForProperty(edmProperty);
+#>
+    <#=accessibility == "internal" ? "public" : accessibility#> <#=code.Escape(edmProperty.TypeUsage)#> <#=propertyName#>
+    {
+        <#=code.SpaceAfter((accessibility = Accessibility.ForGetter(edmProperty)) == "internal" ? "public" : accessibility)#>get
+        {
+            if (!<#=InitializedTrackingField(edmProperty, code)#> && <#=code.FieldName(edmProperty)#> == null)
+            {
+                <#=code.FieldName(edmProperty)#> = new <#=code.Escape(edmProperty.TypeUsage)#>();
+                ((INotifyComplexPropertyChanging)<#=code.FieldName(edmProperty)#>).ComplexPropertyChanging += HandleComplexPropertyChanging;
+            }
+            <#=InitializedTrackingField(edmProperty, code)#> = true;
+            return <#=code.FieldName(edmProperty)#>;
+        }
+        <#=code.SpaceAfter((accessibility = Accessibility.ForSetter(edmProperty)) == "internal" ? "public" : accessibility)#>set
+        {
+            <#=InitializedTrackingField(edmProperty, code)#> = true;
+            if (Equals(<#=code.FieldName(edmProperty)#>, value))
+                return;
+            if (<#=code.FieldName(edmProperty)#> != null)
+            {
+                ((INotifyComplexPropertyChanging)<#=code.FieldName(edmProperty)#>).ComplexPropertyChanging -= HandleComplexPropertyChanging;
+            }
+
+            On<#=code.Escape(edmProperty)#>Changing(ref value);
+            OnComplexPropertyChanging();
+            if (! (IsDeserializing || ChangeTracker.OriginalValues.ContainsKey("<#=edmProperty.Name#>")))
+                ChangeTracker.OriginalValues.Add("<#=edmProperty.Name#>", <#=code.FieldName(edmProperty)#>);
+            <#=code.FieldName(edmProperty)#> = value;
+            On<#=code.Escape(edmProperty)#>Changed(value);
+            OnPropertyChanged("<#=edmProperty.Name#>");
+
+            if (value != null)
+            {
+                ((INotifyComplexPropertyChanging)value).ComplexPropertyChanging += HandleComplexPropertyChanging;
+            }
+        }
+    }
+    private <#=code.Escape(edmProperty.TypeUsage)#> <#=code.FieldName(edmProperty)#>;
+    partial void On<#=code.Escape(edmProperty)#>Changing(ref <#=code.Escape(edmProperty.TypeUsage)#> value);
+    partial void On<#=code.Escape(edmProperty)#>Changed(<#=code.Escape(edmProperty.TypeUsage)#> value);
+    private bool <#=InitializedTrackingField(edmProperty, code)#>;
+<#+
+    }
+
+    region.End();
+
+    region.Begin("ChangeTracking");
+#>
+    public bool IsDeserializing { get; internal set; }
+    
+    public ObjectChangeTracker ChangeTracker { get; internal set; }
+
+    public string ComplexPropertyName { get; internal set; }
+
+    private void OnComplexPropertyChanging()
+    {
+        if (_complexPropertyChanging != null)
+        {
+            _complexPropertyChanging(this, new EventArgs());
+        }
+    }
+
+    event EventHandler INotifyComplexPropertyChanging.ComplexPropertyChanging { add { _complexPropertyChanging += value; } remove { _complexPropertyChanging -= value; } }
+    private event EventHandler _complexPropertyChanging;
+
+    private void OnPropertyChanged(String propertyName)
+    {
+        if (ChangeTracker != null && ChangeTracker.ChangeTrackingEnabled && ChangeTracker.State != ObjectState.Added && ChangeTracker.State != ObjectState.Deleted)
+        {
+            ChangeTracker.State = ObjectState.Modified;
+            if (!(IsDeserializing || ChangeTracker.ModifiedProperties.Contains(ComplexPropertyName)))
+                ChangeTracker.ModifiedProperties.Add(ComplexPropertyName);
+        }
+        OnCustomPropertyChanged(propertyName);
+    }
+    partial void OnCustomPropertyChanged(string propertyName);
+
+<#+
+    if(complex.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == complex).Count() > 0)
+    {
+#>
+
+    private void HandleComplexPropertyChanging(object sender, EventArgs args)
+    {
+        // Bubble the event to all listeners because something changed in a nested complex property
+        OnComplexPropertyChanging();
+    }
+<#+
+    }
+#>
+
+    public static void RecordComplexOriginalValues(String parentPropertyName, <#=code.Escape(complex)#> complexObject, ObjectChangeTracker changeTracker)
+    {
+        if (String.IsNullOrEmpty(parentPropertyName))
+        {
+            throw new ArgumentException("String parameter cannot be null or empty.", "parentPropertyName");
+        }
+
+        if (changeTracker == null)
+        {
+            throw new ArgumentNullException("changeTracker");
+        }
+<#+
+        foreach(EdmProperty complexProperty in complex.Properties)
+        {
+            if (complexProperty.TypeUsage.EdmType is ComplexType)
+            {
+#>
+        <#=code.Escape(complexProperty.TypeUsage)#>.RecordComplexOriginalValues(String.Format(CultureInfo.InvariantCulture, "{0}.<#=complexProperty.Name#>", parentPropertyName), complexObject == null ? null : complexObject.<#=code.Escape(complexProperty)#>, changeTracker);
+<#+
+            }
+            else
+            {
+#>
+        changeTracker.RecordOriginalValue(String.Format(CultureInfo.InvariantCulture, "{0}.<#=complexProperty.Name#>", parentPropertyName), complexObject == null ? null : (object)complexObject.<#=code.Escape(complexProperty)#>);
+<#+
+            }
+        }
+#>
+    }
+<#+
+    region.End();
+#>
+}
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+
+    WriteSpecificTypes(fileManager, itemCollection, code, edmxElements.EdmxName, edmxElements.NamespaceName);
+}
+
+if (!VerifyTypesAreCaseInsensitiveUnique(itemCollection))
+{
+    return;
+}
+
+fileManager.Process();
+}
+#>

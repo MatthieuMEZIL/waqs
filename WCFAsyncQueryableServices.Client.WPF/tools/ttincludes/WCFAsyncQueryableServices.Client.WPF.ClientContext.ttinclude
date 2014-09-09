@@ -1,0 +1,67 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ClientContext.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string propertyDescriptorNamespace = "System.ComponentModel";
+
+void WriteClientContextConstructor(string contextName, string edmxName)
+{
+#>
+	public <#=contextName#>(Func<I<#=edmxName#>Service> serviceFactory)
+		: base(serviceFactory)
+	{
+	}
+<#+
+}
+
+void ClientContextInterfacesNamespaceAddProperty()
+{
+#>
+	private List<KeyValuePair<Type, Func<PropertyDescriptor>>> _customPropertyDescriptors;
+	private List<KeyValuePair<Type, Func<PropertyDescriptor>>> CustomPropertyDescriptors
+	{
+		get { return _customPropertyDescriptors ?? (_customPropertyDescriptors = new List<KeyValuePair<Type,Func<PropertyDescriptor>>>()); }
+	}
+	public void AddProperty<T>(string name, object value)
+		where T : IBindableObject, IDynamicType
+	{
+		CustomPropertyDescriptors.Add(new KeyValuePair<Type, Func<PropertyDescriptor>>(typeof(T), () => new DynamicType<T>.CustomPropertyDescriptor<object>(name, value)));
+	}
+	public void AddProperty<T, PropertyT>(string name, Func<T, PropertyT> get, Action<T, PropertyT> set = null, string[] properties = null)
+		where T : IBindableObject, IDynamicType
+	{
+		CustomPropertyDescriptors.Add(new KeyValuePair<Type, Func<PropertyDescriptor>>(typeof(T), () => new DynamicType<T>.CustomPropertyDescriptor<PropertyT>(name, get, set, properties)));
+	}
+
+	protected virtual void AddPropertyDescriptorToEntity(object entity)
+	{
+		var dynamicType = entity as IDynamicType;
+		if (dynamicType != null && _customPropertyDescriptors != null)
+			foreach (var propertyDescriptor in _customPropertyDescriptors.Where(cpd => cpd.Key.IsAssignableFrom(entity.GetType())))
+					dynamicType.AddOrReplacePropertyDescriptor(propertyDescriptor.Value());
+	}
+
+	protected virtual void RemovePropertyDescriptorToEntity(object entity)
+	{
+		var dynamicType = entity as IDynamicType;
+		if (dynamicType != null && _customPropertyDescriptors != null)
+			foreach (var propertyDescriptor in _customPropertyDescriptors.Where(cpd => cpd.Key.IsAssignableFrom(entity.GetType())))
+				dynamicType.RemovePropertyDescriptor(propertyDescriptor.Value());
+	}
+<#+
+}
+
+void AddPropertyDescriptorToEntity(string entity)
+{
+#>
+		AddPropertyDescriptorToEntity(<#=entity#>);
+<#+
+}
+
+void RemovePropertyDescriptorToEntity(string entity)
+{
+#>
+		RemovePropertyDescriptorToEntity(<#=entity#>);
+<#+
+}
+#>

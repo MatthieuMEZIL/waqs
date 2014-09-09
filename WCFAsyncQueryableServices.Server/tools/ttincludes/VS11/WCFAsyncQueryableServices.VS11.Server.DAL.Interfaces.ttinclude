@@ -1,0 +1,23 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Specifications.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.VS11.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Server.DAL.Interfaces.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteEdmFunction(CodeGenerationTools code, TypeUsage returnType, string returnTypeFullName, EdmFunction edmFunction, string paramList)
+{
+	if (edmFunction.IsComposableAttribute)
+	{
+#>
+	IQueryable<<#=returnTypeFullName#>> <#=code.Escape(edmFunction)#>(<#=paramList#>);
+	Expression <#=code.Escape(edmFunction)#>Expression(<#=paramList#>);
+<#+
+	}
+	else 
+	{
+#>
+	<#=returnType == null ? "int" : "IEnumerable<" + returnTypeFullName + ">"#> <#=code.Escape(edmFunction)#>(<#=paramList#>);
+<#+
+	}
+}
+#>

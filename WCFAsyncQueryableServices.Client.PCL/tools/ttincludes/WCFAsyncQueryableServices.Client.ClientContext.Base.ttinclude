@@ -1,0 +1,99 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+IEnumerable<MethodDeclarationSyntax> GetServiceMethod(SpecificationsElements specificationsElements, EdmxElements edmxElements, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, MethodDeclarationSyntax specificationServiceMethod, string clientEntitiesNamespace, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace)
+{
+	ISemanticModel semanticModel;
+	bool executeOnServer;
+	IEnumerable<ParameterSyntax> parameters;
+	bool returnEntity, returnEntities, returnDTO, returnDTOs;
+	MethodSymbol specificationServiceMethodSymbol;
+	return GetServiceMethod(specificationsElements, edmxElements, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationServiceMethod, clientEntitiesNamespace, dtoTypes, dtoNamespace, out semanticModel, out executeOnServer, out parameters, out returnEntity, out returnEntities, out returnDTO, out returnDTOs, out specificationServiceMethodSymbol);
+}
+IEnumerable<MethodDeclarationSyntax> GetServiceMethod(SpecificationsElements specificationsElements, EdmxElements edmxElements, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, MethodDeclarationSyntax specificationServiceMethod, string clientEntitiesNamespace, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, out ISemanticModel semanticModel, out bool executeOnServer, out IEnumerable<ParameterSyntax> parameters, out bool returnEntity, out bool returnEntities, out bool returnDTO, out bool returnDTOs, out MethodSymbol specificationServiceMethodSymbol)
+{
+	semanticModel = specificationsElements.SemanticModelPerMethods[specificationServiceMethod];
+	if (specificationsElements.OverrideMethods.Contains(specificationServiceMethod))
+	{
+		executeOnServer = false;
+		parameters = null;
+		returnEntity = false;
+		returnEntities = false;
+		returnDTO = false;
+		returnDTOs = false;
+		specificationServiceMethodSymbol = null;
+		return new MethodDeclarationSyntax[0];
+	}
+	specificationServiceMethodSymbol = (MethodSymbol)semanticModel.GetDeclaredSymbol(specificationServiceMethod);
+	var specificationServiceMethodSymbolValue = specificationServiceMethodSymbol;
+
+	var semanticModelValue = semanticModel;
+	var returnType = (TypeSyntax)new TypeRewriter(semanticModel, n => 
+		{
+			TypeSyntax t = n;
+			if (specificationsElements.ReplaceInterface(ref t, semanticModelValue, withInterfaceSpecifications: true))
+				return (NameSyntax)t;
+			return n;
+		}).Visit(specificationServiceMethod.ReturnType);
+
+	List<NamedTypeSymbol> interfaces;
+	returnEntity = edmxElements.EntityTypes.Any(et => string.Concat(serverEntitiesNamespace, ".", et.Name) == specificationServiceMethodSymbolValue.ReturnType.ToString() || specificationsElements.InterfacesPerClasses.TryGetValue(et.Name, out interfaces) && interfaces.Any(i => i.ToString() == specificationServiceMethodSymbolValue.ReturnType.ToString()));
+	returnDTO = dtoTypes.Any(dto => dto.ToString() == specificationServiceMethodSymbolValue.ReturnType.ToString());
+	returnEntities = edmxElements.EntityTypes.Any(et => specificationServiceMethodSymbolValue.ReturnType.ToString() == string.Concat("System.Collections.Generic.IEnumerable<", serverEntitiesNamespace, ".", et.Name, ">") || specificationsElements.InterfacesPerClasses.TryGetValue(et.Name, out interfaces) && interfaces.Any(i => specificationServiceMethodSymbolValue.ReturnType.ToString() == string.Concat("System.Collections.Generic.IEnumerable<", i.ToString(), ">"))) || specificationServiceMethodSymbolValue.ReturnType.AllInterfaces.Any(i => edmxElements.EntityTypes.Any(et => i.ToString() == string.Concat("System.Collections.Generic.IEnumerable<", serverEntitiesNamespace, ".", et.Name, ">") || specificationsElements.InterfacesPerClasses.TryGetValue(et.Name, out interfaces) && interfaces.Any(i2 => specificationServiceMethodSymbolValue.ReturnType.ToString() == string.Concat("System.Collections.Generic.IEnumerable<", i2.ToString(), ">"))));
+	returnDTOs = dtoTypes.Any(dto => specificationServiceMethodSymbolValue.ReturnType.ToString() == string.Concat("System.Collections.Generic.IEnumerable<", dto.ToString(), ">") || specificationServiceMethodSymbolValue.ReturnType.AllInterfaces.Any(i => i.ToString() == string.Concat("System.Collections.Generic.IEnumerable<", dto.ToString(), ">")));
+	executeOnServer = ! specificationsElements.IsApplicableOnClient(specificationServiceMethod);
+	parameters = specificationServiceMethod.ParameterList.Parameters;
+	parameters = parameters.Where(p => ! specificationsElements.IsContextOrService(((ParameterSymbol)semanticModelValue.GetDeclaredSymbol(p)).Type)).Select(p => SyntaxFactory.Parameter(p.AttributeLists, SyntaxFactory.TokenList(), (TypeSyntax)new TypeRewriter(semanticModelValue, t => 
+	{
+		var type = (TypeSyntax)t;
+		TypeSymbol typeSymbol;
+		if (! specificationsElements.ReplaceInterface(ref type, semanticModelValue) && specificationsElements.ClassesPerInterfaces.ContainsKey((typeSymbol = (TypeSymbol)semanticModelValue.GetSymbolInfo(t).Symbol).ToString()))
+			return (NameSyntax)SyntaxFactory.ParseTypeName(typeSymbol.Name + "Specifications");
+		return (NameSyntax)type;
+	}).Visit(p.Type), p.Identifier, p.Default)).ToList();
+	var typeSyntax = (TypeSyntax)new TypeRewriter(semanticModel, nameSyntax =>
+	{
+		TypeSyntax ts = nameSyntax;
+		if (specificationsElements.ReplaceInterface(ref ts, semanticModelValue))
+			return SyntaxFactory.ParseName(ts.ToString());
+		var typeSymbol = (TypeSymbol)semanticModelValue.GetSymbolInfo(nameSyntax).Symbol;
+		if (typeSymbol.ContainingNamespace.ToString() == serverEntitiesNamespace)
+			return SyntaxFactory.ParseName(string.Concat(clientEntitiesNamespace, ".", typeSymbol.Name));
+		var typeSymbolName = typeSymbol.ToString();
+		if (dtoTypes.Any(dtoType => typeSymbolName == dtoType.ToString()))
+			return SyntaxFactory.ParseName(string.Concat(dtoNamespace, ".", typeSymbol.Name));
+		return nameSyntax;
+	}, (originalGenericName, getGenericName) => 
+	{
+		var genericNameSyntax = getGenericName();
+		if (originalGenericName.TypeArgumentList.Arguments.Count == 1)
+		{
+			var subTypeSymbol = semanticModelValue.GetSymbolInfo(originalGenericName.TypeArgumentList.Arguments[0]).Symbol;
+			if (specificationServiceMethodSymbolValue.ReturnType.AllInterfaces.Any(i => i.ToString() == string.Concat("System.Collections.Generic.IEnumerable<", subTypeSymbol.ToString(), ">")))
+				return SyntaxFactory.GenericName("System.Collections.Generic.IEnumerable").WithTypeArgumentList(genericNameSyntax.TypeArgumentList);
+		}
+		return genericNameSyntax;
+	}).Visit(specificationServiceMethod.ReturnType);
+	if (executeOnServer)
+	{
+		if (specificationServiceMethodSymbol.ReturnsVoid)
+			typeSyntax = SyntaxFactory.IdentifierName("Task");
+		else
+		{
+			var returnTypeAsGenericNameSyntax = typeSyntax as GenericNameSyntax;
+			typeSyntax = SyntaxFactory.GenericName("Task")
+				.WithTypeArgumentList(
+					SyntaxFactory.TypeArgumentList(
+						SyntaxFactory.SeparatedList(
+							new TypeSyntax[] { typeSyntax }, 
+							new SyntaxToken[0])));
+		}
+	}
+	var allParameters = parameters;
+	if (executeOnServer && (returnEntity || returnEntities || returnDTO || returnDTOs))
+		allParameters = allParameters.Union(new [] {SyntaxFactory.Parameter(SyntaxFactory.Identifier("mergeOption")).WithType(SyntaxFactory.ParseTypeName("MergeOption?")).WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression))), SyntaxFactory.Parameter(SyntaxFactory.Identifier("defaultState")).WithType(SyntaxFactory.ParseTypeName("ObjectState")).WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.ParseExpression("ObjectState.Unchanged"))), SyntaxFactory.Parameter(SyntaxFactory.Identifier("cancel")).WithType(SyntaxFactory.ParseTypeName("Func<bool>")).WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)))});
+	return new MethodDeclarationSyntax[] { SyntaxFactory.MethodDeclaration(typeSyntax, specificationServiceMethod.Identifier.ValueText)
+		.WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(allParameters, allParameters.Skip(1).Select(v => SyntaxFactory.Token(SyntaxKind.CommaToken)))))};
+}
+#>

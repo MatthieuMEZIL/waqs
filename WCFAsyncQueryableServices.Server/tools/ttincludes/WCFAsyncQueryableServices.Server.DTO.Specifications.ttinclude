@@ -1,0 +1,70 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.Entities.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.DTO.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerDTOSpecifications(SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string namespaceName = null)
+{
+	var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+	var dtoTypes = GetClasses(dtoPathes).ToList();
+	if (dtoTypes.Count == 0)
+		return;
+	var dtoNamespaces = GetNamespaces(dtoPathes).Select(n => n.ToString()).ToList();
+	var specificationsElements = SpecificationsElements.Get(Host, dtoPathes, specificationPathes, dtoTypes, namespaceName, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, SpecificationsElements.Type.Server);
+
+	foreach (var dtoType in dtoTypes)
+	{
+		var className = dtoType.Name;
+		var members = new ConcurrentDictionary<string, List<MemberDeclarationSyntax>>();
+
+		bool hasSpecification = AddServiceAndSubMethods(specificationsElements, dtoType, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName, members, dtoTypes, namespaceName, true);
+
+		if (hasSpecification)
+		{
+			fileManager.StartNewFile(className + ".specifications.cs");
+
+			var compilationUnits = specificationsElements.CompilationUnitPerClass[className];
+
+			List<string> usings;
+			if (specificationsElements.Usings.TryGetValue(className, out usings))
+				usings = usings.Except(dtoNamespaces.Select(ns => ns.ToString())).ToList();
+			else
+				usings = new List<string>();
+			if (! usings.Contains("System"))
+				usings.Add("System");
+			if (specificationsElements.ValidateMethods.ContainsKey(className))
+			{
+				if (! usings.Contains("System.Collections.Generic"))
+					usings.Add("System.Collections.Generic");
+				if (! usings.Contains(serverFxServiceInterfacesNamespace))
+					usings.Add(serverFxServiceInterfacesNamespace);
+			}
+
+			string codeValue = SyntaxFactory.CompilationUnit()
+				.WithExterns(SyntaxFactory.List<ExternAliasDirectiveSyntax>(compilationUnits.SelectMany(cu => cu.Externs)))
+				.WithUsings(SyntaxFactory.List<UsingDirectiveSyntax>(usings.OrderBy(u => u).Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u)))))
+				.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(
+					new []
+					{
+						SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(namespaceName))
+							.WithMembers(
+								SyntaxFactory.List<MemberDeclarationSyntax>(
+									new [] 
+									{
+										SyntaxFactory.ClassDeclaration(className)
+											.WithModifiers(SyntaxFactory.TokenList(new [] { SyntaxFactory.Token(SyntaxKind.PartialKeyword) }))
+											.WithMembers(SyntaxFactory.List(members.Values.SelectMany(m => m)))
+									}))
+					}))
+				.NormalizeWhitespace()
+				.ToString();
+			WriteCopyright();
+#>
+<#=codeValue#>			
+<#+
+		}
+	}
+	fileManager.Process();
+}
+#>

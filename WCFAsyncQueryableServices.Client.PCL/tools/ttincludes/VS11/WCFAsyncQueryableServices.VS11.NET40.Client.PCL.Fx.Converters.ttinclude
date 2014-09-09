@@ -1,0 +1,4 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Client.Fx.Converters.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

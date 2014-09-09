@@ -1,0 +1,557 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteClientFxEntitiesTracking(string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	MetadataLoader loader = new MetadataLoader(this);
+	CodeRegion region = new CodeRegion(this, 1);
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	fileManager.StartNewFile("EqualityComparer.cs");
+	WriteHeader(namespaceName, code, "System.Linq");
+#>
+public static partial class EqualityComparer
+{
+	public static bool BinaryEquals(object binaryValue1, object binaryValue2)
+	{
+		if (ReferenceEquals(binaryValue1, binaryValue2))
+			return true;
+
+		var array1 = binaryValue1 as byte[];
+		var array2 = binaryValue2 as byte[];
+
+		if (array1 != null && array2 != null)
+		{
+			if (array1.Length != array2.Length)
+				return false;
+
+			return !array1.Where((t, i) => t != array2[i]).Any();
+		}
+
+		return false;
+	}
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ExtendedPropertiesDictionary.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[CollectionDataContract(Name = "ExtendedPropertiesDictionary", Namespace = "http://WCFAsyncQueryableServices/EntityTracking",
+	ItemName = "ExtendedProperties", KeyName = "Name", ValueName = "ExtendedProperty")]
+public class ExtendedPropertiesDictionary : Dictionary<string, object> { }
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("INotifyComplexPropertyChanging.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public interface INotifyComplexPropertyChanging
+{
+	event EventHandler ComplexPropertyChanging;
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("IObjectWithChangeTracker.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public partial interface IObjectWithChangeTracker
+{
+	ObjectChangeTracker ChangeTracker { get; }
+	
+	event Action<IObjectWithChangeTracker, ObjectState> StateChanged;
+
+	bool HasTemporaryKey { get; }
+
+	bool IsDeserializing { get; }
+
+	bool IsInitializingRelationships { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObjectChangeTracker.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Runtime.Serialization", "System.Linq");
+#>
+[DataContract(IsReference = true, Namespace = "http://WCFAsyncQueryableServices/EntityTracking")]
+public partial class ObjectChangeTracker
+{
+	private ObjectState _objectState = ObjectState.Detached;
+	[DataMember]
+	public ObjectState State
+	{
+		get { return _objectState; }
+		set
+		{
+			if (_objectState == value)
+				return;
+			if (_isDeserializing || _changeTrackingEnabled || value == ObjectState.Detached)
+			{
+				_objectState = value;
+				if (value == ObjectState.Detached)
+					IsDetaching = true;
+				OnObjectStateChanged(value);
+				IsDetaching = false;
+			}
+		}
+	}
+	public ObjectState? DetachedPreviousState { get; set; }
+
+	public void ClientContextDispose()
+	{
+		DetachedPreviousState = _objectState;
+		_objectState = ObjectState.Detached;
+	}
+		
+	protected virtual void OnObjectStateChanged(ObjectState newState)
+	{
+		EvaluateHasChanges();
+		if (ObjectStateChanged != null)
+			ObjectStateChanged(this, new ObjectStateChangedEventArgs { NewState = newState });
+	}
+	public event EventHandler<ObjectStateChangedEventArgs> ObjectStateChanged;
+	
+	private bool _changeTrackingEnabled;
+	public bool ChangeTrackingEnabled
+	{
+		get { return _changeTrackingEnabled && State != ObjectState.Detached; }
+		set { _changeTrackingEnabled = value; }
+	}
+		
+	public bool IsAttaching { get; set; }
+
+	public bool IsDetaching { get; private set; }
+	
+	private ObjectsRemovedFromCollectionProperties _objectsRemovedFromCollections;
+	[DataMember]
+	public ObjectsRemovedFromCollectionProperties ObjectsRemovedFromCollectionProperties
+	{
+		get
+		{
+			if (_objectsRemovedFromCollections == null)
+			{
+				_objectsRemovedFromCollections = new ObjectsRemovedFromCollectionProperties();
+				_objectsRemovedFromCollections.CollectionChanged += ObjectsCollectionChanged;
+			}
+
+			return _objectsRemovedFromCollections;
+		}
+		set
+		{
+			if (_objectsRemovedFromCollections != null)
+				_objectsRemovedFromCollections.CollectionChanged -= ObjectsCollectionChanged;
+			_objectsRemovedFromCollections = value;
+			if (_objectsRemovedFromCollections != null)
+				_objectsRemovedFromCollections.CollectionChanged += ObjectsCollectionChanged;
+		}
+	}
+
+	private void ObjectsCollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+	{
+		EvaluateHasChanges();
+	}
+
+	private OriginalValuesDictionary _originalValues;
+	[DataMember]
+	public OriginalValuesDictionary OriginalValues
+	{
+		get
+		{
+			if (_originalValues == null)
+			{
+				_originalValues = new OriginalValuesDictionary();
+				_originalValues.CollectionChanged += ObjectsCollectionChanged;
+			}
+
+			return _originalValues;
+		}
+		set
+		{
+			if (_originalValues != null)
+				_originalValues.CollectionChanged -= ObjectsCollectionChanged;
+			_originalValues = value;
+			if (_originalValues != null)
+				_originalValues.CollectionChanged += ObjectsCollectionChanged;
+		}
+	}
+	
+	private List<string> _modifiedProperties;
+	[DataMember]
+	public List<string> ModifiedProperties
+	{
+		get { return _modifiedProperties ?? (_modifiedProperties = new List<string>()); }
+		set { _modifiedProperties = value; }
+	}
+
+	private List<string> _validationProperties;
+	public List<string> ValidationProperties
+	{
+		get { return _validationProperties ?? (_validationProperties = new List<string>()); }
+	}
+	
+	private ExtendedPropertiesDictionary _extendedProperties;
+	[DataMember]
+	public ExtendedPropertiesDictionary ExtendedProperties
+	{
+		get { return _extendedProperties ?? (_extendedProperties = new ExtendedPropertiesDictionary()); }
+		set { _extendedProperties = value; }
+	}
+	
+	private ObjectsAddedToCollectionProperties _objectsAddedToCollections;
+	[DataMember]
+	public ObjectsAddedToCollectionProperties ObjectsAddedToCollectionProperties
+	{
+		get
+		{
+			if (_objectsAddedToCollections == null)
+			{
+				_objectsAddedToCollections = new ObjectsAddedToCollectionProperties();
+				_objectsAddedToCollections.CollectionChanged += ObjectsCollectionChanged;
+			}
+
+			return _objectsAddedToCollections;
+		}
+		set
+		{
+			if (_objectsAddedToCollections != null)
+				_objectsAddedToCollections.CollectionChanged -= ObjectsCollectionChanged;
+			_objectsAddedToCollections = value;
+			if (_objectsAddedToCollections != null)
+				_objectsAddedToCollections.CollectionChanged += ObjectsCollectionChanged;
+		}
+	}
+	[DataMember]
+	public ObjectsAddedToCollectionProperties SerializedAdded {get; set; }
+	
+	private bool _isDeserializing;
+	
+	[OnDeserializing]
+	public void OnDeserializingMethod(StreamingContext context)
+	{
+		_isDeserializing = true;
+	}
+	
+	[OnDeserialized]
+	public void OnDeserializedMethod(StreamingContext context)
+	{
+		_isDeserializing = false;
+	}
+	
+	public void AcceptChanges(bool setUnchangedState = true)
+	{
+		OriginalValues.Clear();
+		ObjectsAddedToCollectionProperties.Clear();
+		ObjectsRemovedFromCollectionProperties.Clear();
+		ModifiedProperties.Clear();
+		ValidationProperties.Clear();
+		_objectState = ObjectState.Unchanged;
+		if (setUnchangedState)
+			OnObjectStateChanged(ObjectState.Unchanged);
+	}
+	
+	public void RecordOriginalValue(string propertyName, object value)
+	{
+		IObjectWithChangeTracker valueAsObjectWithChangeTracker = value as IObjectWithChangeTracker;
+		if (ChangeTrackingEnabled && _objectState != ObjectState.Added && (valueAsObjectWithChangeTracker == null || ! valueAsObjectWithChangeTracker.IsInitializingRelationships) && !OriginalValues.ContainsKey(propertyName))
+			OriginalValues[propertyName] = value;
+	}
+	
+	public void RecordAdditionToCollectionProperties(string propertyName, IObjectWithChangeTracker value)
+	{
+		if (ChangeTrackingEnabled && ! (value == null || value.IsInitializingRelationships))
+		{
+			if (ObjectsRemovedFromCollectionProperties.ContainsKey(propertyName) && ObjectsRemovedFromCollectionProperties[propertyName].Contains(value))
+			{
+				ObjectsRemovedFromCollectionProperties[propertyName].Remove(value);
+				if (ObjectsRemovedFromCollectionProperties[propertyName].Count == 0)
+					ObjectsRemovedFromCollectionProperties.Remove(propertyName);
+				return;
+			}
+	
+			ObjectList addedObjectList;
+			if (! ObjectsAddedToCollectionProperties.TryGetValue(propertyName, out addedObjectList))
+				ObjectsAddedToCollectionProperties.Add(propertyName, new ObjectList {value});
+			else if (! addedObjectList.Contains(value))
+				addedObjectList.Add(value);
+		}
+	}
+	
+	public void RecordRemovalFromCollectionProperties(string propertyName, IObjectWithChangeTracker value)
+	{
+		if (value != null)
+		{
+			if (ObjectsAddedToCollectionProperties.ContainsKey(propertyName) && ObjectsAddedToCollectionProperties[propertyName].Contains(value))
+			{
+				ObjectsAddedToCollectionProperties[propertyName].Remove(value);
+				if (ObjectsAddedToCollectionProperties[propertyName].Count == 0)
+					ObjectsAddedToCollectionProperties.Remove(propertyName);
+				return;
+			}
+			if (ChangeTrackingEnabled && !(value == null || value.IsInitializingRelationships))
+			{
+				ObjectList removedObjectList;
+				if (! ObjectsRemovedFromCollectionProperties.TryGetValue(propertyName, out removedObjectList))
+					ObjectsRemovedFromCollectionProperties.Add(propertyName, new ObjectList {value});
+				else if (! removedObjectList.Contains(value))
+					removedObjectList.Add(value);
+			}
+		}
+	}
+
+	public bool Saving { get; set; }
+
+	private bool _hasChanges;
+	public bool HasChanges
+	{
+		get { return _hasChanges; }
+		set
+		{
+			if (_hasChanges != value)
+			{
+				_hasChanges = value;
+				OnHasChangesChanged(value);
+			}
+		}
+	}
+
+	protected virtual void OnHasChangesChanged(bool newValue)
+	{
+		if (HasChangesChanged != null)
+			HasChangesChanged(newValue);
+	}
+	public event Action<bool> HasChangesChanged;
+
+	private void EvaluateHasChanges()
+	{
+		HasChanges = ChangeTrackingEnabled && (State != ObjectState.Unchanged || ObjectsRemovedFromCollectionProperties.Count != 0 || OriginalValues.Count != 0 || ObjectsAddedToCollectionProperties.Count != 0);
+	}
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObjectState.cs");
+WriteHeader(namespaceName, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://WCFAsyncQueryableServices/EntityTracking")]
+[Flags]
+public enum ObjectState
+{
+	[EnumMember]
+	Detached = 0,
+	[EnumMember]
+	Unchanged = 1,
+	[EnumMember]
+	Added = 2,
+	[EnumMember]
+	Modified = 4,
+	[EnumMember]
+	Deleted = 8,
+	[EnumMember]
+	CascadeDeleted = 0x18
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObjectList.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization");
+#>
+[CollectionDataContract(ItemName = "ObjectValue", Namespace = "http://WCFAsyncQueryableServices/EntityTracking")]
+public class ObjectList : List<object> { }
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObservableDictionary.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Collections.Specialized");
+#>
+public class ObservableDictionary<K, T> : Dictionary<K, T>, INotifyCollectionChanged 
+{
+	public new void Add(K key, T value)
+	{
+		base.Add(key, value);
+		OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, new KeyValuePair<K, T>(key, value), 0 /*index does not make sense with Dictionary*/));
+	}
+
+	public new void Remove(K key)
+	{
+		base.Remove(key);
+		OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, key, 0 /*index does not make sense with Dictionary*/));
+	}
+
+	public new void Clear()
+	{
+		base.Clear();
+		CollectionChanged(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+	}
+
+	protected virtual void OnCollectionChanged(NotifyCollectionChangedEventArgs args)
+	{
+		if (CollectionChanged != null)
+			CollectionChanged(this, args);
+	}
+	public event NotifyCollectionChangedEventHandler CollectionChanged;
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObjectsAddedToCollectionProperties.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[CollectionDataContract(Name = "ObjectsAddedToCollectionProperties", Namespace = "http://WCFAsyncQueryableServices/EntityTracking", ItemName = "AddedObjectsForProperty", KeyName = "CollectionPropertyName", ValueName = "AddedObjects")]
+public class ObjectsAddedToCollectionProperties : ObservableDictionary<string, ObjectList>
+{
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObjectsRemovedFromCollectionProperties.cs");
+WriteHeader(namespaceName, code, "System.Runtime.Serialization");
+#>
+[CollectionDataContract(Name = "ObjectsRemovedFromCollectionProperties", Namespace = "http://WCFAsyncQueryableServices/EntityTracking", ItemName = "DeletedObjectsForProperty", KeyName = "CollectionPropertyName", ValueName = "DeletedObjects")]
+public class ObjectsRemovedFromCollectionProperties : ObservableDictionary<string, ObjectList>
+{
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObjectStateChangedEventArgs.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public class ObjectStateChangedEventArgs : EventArgs
+{
+	public ObjectState NewState { get; set; }
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ObjectWithChangeTrackerExtensions.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public static class ObjectWithChangeTrackerExtensions
+{
+	public static T MarkAsDeleted<T>(this T trackingItem) where T : class, IObjectWithChangeTracker
+	{
+		if (trackingItem == null)
+			throw new ArgumentNullException("trackingItem");
+
+		trackingItem.ChangeTracker.ChangeTrackingEnabled = true;
+		trackingItem.ChangeTracker.State = ObjectState.Deleted;
+		return trackingItem;
+	}
+
+	public static T MarkAsCascadeDeleted<T>(this T trackingItem) where T : class, IObjectWithChangeTracker
+	{
+		if (trackingItem == null)
+			throw new ArgumentNullException("trackingItem");
+
+		trackingItem.ChangeTracker.ChangeTrackingEnabled = true;
+		trackingItem.ChangeTracker.State = ObjectState.CascadeDeleted;
+		return trackingItem;
+	}
+
+	public static T MarkAsAdded<T>(this T trackingItem) where T : class, IObjectWithChangeTracker
+	{
+		if (trackingItem == null)
+			throw new ArgumentNullException("trackingItem");
+	
+		trackingItem.ChangeTracker.ChangeTrackingEnabled = true;
+		trackingItem.ChangeTracker.State = ObjectState.Added;
+		return trackingItem;
+	}
+	
+	public static T MarkAsUnchanged<T>(this T trackingItem) where T : class, IObjectWithChangeTracker
+	{
+		if (trackingItem == null)
+			throw new ArgumentNullException("trackingItem");
+	
+		trackingItem.ChangeTracker.ChangeTrackingEnabled = true;
+		trackingItem.ChangeTracker.State = ObjectState.Unchanged;
+		return trackingItem;
+	}
+	
+	public static void StartTracking(this IObjectWithChangeTracker trackingItem)
+	{
+		if (trackingItem == null)
+			throw new ArgumentNullException("trackingItem");
+	
+		trackingItem.ChangeTracker.ChangeTrackingEnabled = true;
+	}
+	
+	public static void StopTracking(this IObjectWithChangeTracker trackingItem)
+	{
+		if (trackingItem == null)
+			throw new ArgumentNullException("trackingItem");
+	
+		trackingItem.ChangeTracker.ChangeTrackingEnabled = false;
+	}
+	
+	public static void AcceptChanges(this IObjectWithChangeTracker trackingItem)
+	{
+		if (trackingItem == null)
+			throw new ArgumentNullException("trackingItem");
+	
+		trackingItem.ChangeTracker.AcceptChanges();
+	}
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("OriginalValuesDictionary.cs");
+WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Runtime.Serialization", "System.Collections.Specialized");
+#>
+[CollectionDataContract(Name = "OriginalValuesDictionary", Namespace = "http://WCFAsyncQueryableServices/EntityTracking", ItemName = "OriginalValues", KeyName = "Name", ValueName = "OriginalValue")]
+public class OriginalValuesDictionary : ObservableDictionary<string, object>
+{
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("IEntity.cs");
+WriteHeader(namespaceName, code);
+#>
+public partial interface IEntity : IObjectWithChangeTracker
+{
+	bool HasChanges { get; }
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("IEntityWithErrors.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public partial interface IEntityWithErrors : IEntity
+{
+	bool HasErrors { get; }
+	event Action HasErrorsChanged;
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("IEntityCollection.cs");
+WriteHeader(namespaceName, code, "System.Collections", "System.Collections.Generic", "System.Collections.Specialized");
+#>
+public partial interface IEntityCollection<T> : ICollection<T>, INotifyCollectionChanged, IList
+{
+	void Attach(T item, bool attaching = false);
+	void Detach(T item);
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("TrackableCollectionBase.cs");
+WriteHeader(namespaceName, code, "System.Collections", "System.Collections.Generic");
+#>
+[IsKnownByServer]
+public abstract partial class TrackableCollectionBase<T> : IEnumerable<T>
+{
+	public abstract bool Contains(T item);
+	public abstract IEnumerator<T> GetEnumerator();
+	IEnumerator IEnumerable.GetEnumerator()
+	{
+		return GetEnumerator();
+	}
+}
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.StartNewFile("IsKnownByServerAttribute.cs");
+	WriteHeader(namespaceName, code, "System");
+#>
+public class IsKnownByServerAttribute : Attribute
+{
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.Process();
+}
+#>

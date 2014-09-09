@@ -1,0 +1,270 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ assembly name="System.Core" #>
+<#@ assembly name="System.Data" #>
+<#@ assembly name="System.Data.Entity" #>
+<#@ assembly name="System.Data.Entity.Design" #>
+<#@ assembly name="Roslyn.Compilers"#>
+<#@ assembly name="Roslyn.Compilers.CSharp"#>
+<#@ assembly name="Roslyn.Services"#>
+<#@ assembly name="Roslyn.Services.CSharp"#>
+<#@ assembly name="System.Xml" #>
+<#@ assembly name="System.Xml.Linq" #>
+<#@ assembly name="EnvDTE" #>
+<#@ assembly name="EnvDTE80" #>
+<#@ import namespace="System" #>
+<#@ import namespace="System.IO" #>
+<#@ import namespace="System.Diagnostics" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ import namespace="System.Data.Entity.Design" #>
+<#@ import namespace="System.Data.Metadata.Edm" #>
+<#@ import namespace="System.Data.Mapping" #>
+<#@ import namespace="System.Globalization" #>
+<#@ import namespace="System.Security.Cryptography" #>
+<#@ import namespace="Roslyn.Compilers.Common"#>
+<#@ import namespace="Roslyn.Compilers.CSharp"#>
+<#@ import namespace="Roslyn.Services"#>
+<#@ import namespace="System.Xml" #>
+<#@ import namespace="System.Xml.Linq" #>
+<#@ import namespace="EnvDTE" #>
+<#@ output extension=".cs"#>
+
+<#+ 
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteViewGeneration(string edmxPath, string dalNamespace)
+{
+    var edmxElements = EdmxElements.Get(Host, ref edmxPath, null);
+
+    string edmxFilePath = Path.Combine(Path.GetDirectoryName(Host.TemplateFile), edmxPath);
+    if (File.Exists(edmxFilePath))
+    {
+        string hashKey = null;
+        string contextName = edmxElements.Code.Escape(edmxElements.Container);
+        string storeContainerName = edmxElements.StoreContainerName;
+        var value = new DALViewVisitor(edmxElements.EdmxName, dalNamespace, contextName, hashKey, storeContainerName).Visit(Syntax.ParseCompilationUnit(GenerateViews(edmxFilePath))).NormalizeWhitespace().ToString();
+#>
+<#=value#>
+<#+
+    }
+    else
+        Error(String.Format("No views were generated. Cannot find file {0}. Ensure the project has an EDMX file and the file name of the .tt file is of the form [edmx-file-name].Views.tt", edmxFilePath));
+
+}
+#>
+
+<#+
+private string GenerateViews(string edmxFilePath)
+{
+    String generatedViews = String.Empty;
+    try
+    {
+        using (StreamWriter writer = new StreamWriter(new MemoryStream()))
+        {
+            XmlReader csdlReader = null;
+            XmlReader mslReader = null;
+            XmlReader ssdlReader = null;
+
+            // Crack open the EDMX file and get readers over the CSDL, MSL and SSDL portions
+            Version version = GetConceptualMappingAndStorageReaders(edmxFilePath, out csdlReader, out mslReader, out ssdlReader);
+            
+            //Workaround
+            ssdlReader.MoveToContent();
+            var ssdl = XElement.Parse(ssdlReader.ReadOuterXml());
+            if (ssdl.Name.LocalName == "Schema")
+            {
+                var providerManifestToken = ssdl.Attribute("ProviderManifestToken");
+                int providerManifestTokenValue;
+                if (providerManifestToken != null && int.TryParse(providerManifestToken.Value, out providerManifestTokenValue) && providerManifestTokenValue > 2008)
+                    providerManifestToken.Value = "2008";
+                ssdlReader = ssdl.CreateReader();
+            }
+
+            // Initialize item collections
+            EdmItemCollection edmItems = new EdmItemCollection(new XmlReader[] { csdlReader });
+            StoreItemCollection storeItems = new StoreItemCollection(new XmlReader[] { ssdlReader });
+            StorageMappingItemCollection mappingItems = new StorageMappingItemCollection(edmItems, storeItems, new XmlReader[] { mslReader });
+
+            // Initialize the view generator to generate views in C#
+            EntityViewGenerator viewGenerator = new EntityViewGenerator();
+            viewGenerator.LanguageOption = LanguageOption.GenerateCSharpCode;
+            IList<EdmSchemaError> errors = viewGenerator.GenerateViews(mappingItems, writer, version);
+
+            foreach (EdmSchemaError e in errors)
+            {
+                // log error
+                Error(e.Message);
+            }
+
+            MemoryStream memStream = writer.BaseStream as MemoryStream;
+            generatedViews = Encoding.UTF8.GetString(memStream.ToArray());
+        }
+    }
+    catch (Exception ex)
+    {
+        // log error
+        Error(ex.ToString());
+    }
+
+    return generatedViews;
+}
+
+private Version GetConceptualMappingAndStorageReaders(string edmxFile, out XmlReader csdlReader, out XmlReader mslReader, out XmlReader ssdlReader)
+{
+    csdlReader = null;
+    mslReader = null;
+    ssdlReader = null;
+
+    XNamespace edmxns;
+    XNamespace csdlns;
+    XNamespace mslns;
+    XNamespace ssdlns;
+
+    Version version = null;
+    
+    XDocument edmxDoc = XDocument.Load(edmxFile);
+    if (edmxDoc != null)
+    {
+        XElement edmxNode;
+        version = SetXmlNamespaces(edmxDoc, out edmxNode, out edmxns, out csdlns, out mslns, out ssdlns);
+
+        if (edmxNode != null)
+        {
+            
+            XElement runtimeNode = edmxNode.Element(edmxns + "Runtime");
+            if (runtimeNode != null)
+            {
+                // Create XmlReader over CSDL in EDMX
+                XElement conceptualModelsNode = runtimeNode.Element(edmxns + "ConceptualModels");
+                if (conceptualModelsNode != null)
+                {
+                    XElement csdlContent = conceptualModelsNode.Element(csdlns + "Schema");
+                    if (csdlContent != null)
+                    {
+                        csdlReader = csdlContent.CreateReader();
+                    }
+                }
+
+                // Create XmlReader over MSL in EDMX
+                XElement mappingsNode = runtimeNode.Element(edmxns + "Mappings");
+                if (mappingsNode != null)
+                {
+                    XElement mslContent = mappingsNode.Element(mslns + "Mapping");
+                    if (mslContent != null)
+                    {
+                        mslReader = mslContent.CreateReader();
+                    }
+                }
+
+                // Create XmlReader over SSDL in EDMX
+                XElement storageModelsNode = runtimeNode.Element(edmxns + "StorageModels");
+                if (storageModelsNode != null)
+                {
+                    XElement ssdlContent = storageModelsNode.Element(ssdlns + "Schema");
+                    if (ssdlContent != null)
+                    {
+                        ssdlReader = ssdlContent.CreateReader();
+                    }
+                }
+            }
+        }
+    }
+    return version;
+}
+
+public class DALViewVisitor : SyntaxRewriter
+{
+    private string _edmxName;
+    private string _dalNamespace;
+    private string _contextName;
+    private string _hashKey;
+    public string _storeContainerName;
+    private bool _getView;
+
+    public DALViewVisitor(string edmxName, string dalNamespace, string contextName, string hashKey, string storeContainerName)
+    {
+        _edmxName = edmxName;
+        _dalNamespace = dalNamespace;
+        _contextName = contextName;
+        _hashKey = hashKey;
+        _storeContainerName = storeContainerName;
+    }
+
+    public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)
+    {
+        var value = (CompilationUnitSyntax)base.VisitCompilationUnit(node);
+        value = value.WithUsings(Syntax.List(Syntax.UsingDirective(Syntax.ParseName("System")), Syntax.UsingDirective(Syntax.ParseName("System.Data.Entity.Core.Mapping")), Syntax.UsingDirective(Syntax.ParseName("System.Data.Entity.Core.Metadata.Edm")), Syntax.UsingDirective(Syntax.ParseName("System.Data.Entity.Infrastructure.MappingViews"))));
+        return value;
+    }
+
+    public override SyntaxNode VisitAttribute(AttributeSyntax node)
+    {
+        if (node.Name.ToString() == "System.Data.Mapping.EntityViewGenerationAttribute")
+            return node.WithName(Syntax.ParseName("DbMappingViewCacheTypeAttribute")).WithArgumentList(Syntax.AttributeArgumentList(Syntax.SeparatedList(new[] { Syntax.AttributeArgument(Syntax.ParseExpression(string.Concat("typeof(", _dalNamespace, ".", _contextName, ")"))), (AttributeArgumentSyntax)Visit(node.ArgumentList.Arguments.Single()) }, new[] { Syntax.Token(SyntaxKind.CommaToken) })));
+        return base.VisitAttribute(node);
+    }
+
+    public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
+    {
+        var value = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
+        if (node.Identifier.ValueText.StartsWith("ViewsForBaseEntitySets"))
+        {
+            value = value.WithIdentifier(Syntax.Identifier(string.Concat(_edmxName, _contextName, "ViewsForBaseEntitySets")));
+            if (_hashKey == null)
+                value = value.AddMembers(Syntax.ParseCompilationUnit("private static string _mappingHashValue;").Members[0]).AddMembers(Syntax.ParseCompilationUnit("public override string MappingHashValue { get { return _mappingHashValue ?? ComputeMappingHashValue(); }}").Members[0]).AddMembers(Syntax.ParseCompilationUnit(string.Concat("public static string ComputeMappingHashValue() { return _mappingHashValue = ((StorageMappingItemCollection)new ", _dalNamespace, ".", _contextName, "().MetadataWorkspace.GetItemCollection(DataSpace.CSSpace)).ComputeMappingHashValue(); }")).Members[0]);
+            else
+                value = value.AddMembers(Syntax.ParseCompilationUnit(string.Concat("public override string MappingHashValue { get { return \"", _hashKey, "\"; }}")).Members[0]);
+        }
+        return value;
+    }
+
+    public override SyntaxNode VisitQualifiedName(QualifiedNameSyntax node)
+    {
+        if (node.ToString() == "System.Data.Mapping.EntityViewContainer")
+            return Syntax.ParseName("DbMappingViewCache");
+        return base.VisitQualifiedName(node);
+    }
+
+    public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
+    {
+        if (node.ToString().StartsWith("ViewsForBaseEntitySets"))
+            return Syntax.ParseName(string.Concat(_edmxName, _contextName, "ViewsForBaseEntitySets"));
+        return node;
+    }
+
+    public override SyntaxNode VisitConstructorDeclaration(ConstructorDeclarationSyntax node)
+    {
+        return null;
+    }
+
+    public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
+    {
+        if (node.Identifier.ValueText == "GetViewAt")
+        {
+            var getViewMethods = node.Parent.ChildNodes().OfType<MethodDeclarationSyntax>().Where(m => Regex.IsMatch(m.Identifier.ValueText, @"GetView\d")).ToList();
+            var test = Regex.Match(getViewMethods[0].GetLeadingTrivia().ToString(), @"/// return view for ([^\r]*)").Groups[1].Value;
+            return Syntax.ParseCompilationUnit(string.Concat("public override DbMappingView GetView(EntitySetBase extent){if (extent == null) throw new ArgumentNullException(\"extent\");  var extentName = extent.EntityContainer.Name + \".\" + extent.Name; ", node.Parent.ChildNodes().OfType<MethodDeclarationSyntax>().Where(m => Regex.IsMatch(m.Identifier.ValueText, @"GetView\d")).Select(m => string.Concat("if (extentName == \"", Regex.Match(m.GetLeadingTrivia().ToString(), @"/// return view for ([^\r]*)").Groups[1].Value, "\") return ", m.Identifier.ValueText, "();")).Aggregate((s1, s2) => s1 + s2), "return null;}")).Members[0];
+        }
+        MethodDeclarationSyntax value;
+        if (node.Identifier.ValueText.StartsWith("GetView"))
+        {
+            _getView = true;
+            value = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
+            _getView = false;
+            value = value.WithReturnType(Syntax.ParseTypeName("DbMappingView")).WithModifiers(value.Modifiers.Add(Syntax.Token(SyntaxKind.StaticKeyword)));
+        }
+        else
+            value = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
+        return value;
+    }
+
+    public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
+    {
+        if (_getView && node.Type.ToString() == "System.Collections.Generic.KeyValuePair<string, string>")
+            return node.WithType(Syntax.ParseTypeName("DbMappingView")).WithArgumentList(Syntax.ArgumentList(Syntax.SeparatedList(node.ArgumentList.Arguments[1])));
+        return base.VisitObjectCreationExpression(node);
+    }
+}
+#>

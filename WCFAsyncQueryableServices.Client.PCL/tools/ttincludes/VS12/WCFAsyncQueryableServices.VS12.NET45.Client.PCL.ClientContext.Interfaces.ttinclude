@@ -1,0 +1,16 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.Client.PCL.ClientContext.Interfaces.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void DispatcherInvoke(string body)
+{
+#>UIThread.Dispatcher.Invoke(() => <#=body#>);
+<#+
+}
+
+void DispatcherCatchInvoke(string body)
+{
+#>UIThread.Dispatcher.Invoke(() => <#=body#>);
+<#+
+}
+#>

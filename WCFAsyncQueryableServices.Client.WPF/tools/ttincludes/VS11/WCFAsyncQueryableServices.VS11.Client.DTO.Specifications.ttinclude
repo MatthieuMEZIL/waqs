@@ -1,0 +1,7 @@
+<#@ include file="WCFAsyncQueryableServices.VS11.Specifications.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.VS11.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.DTO.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

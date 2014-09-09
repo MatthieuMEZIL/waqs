@@ -1,0 +1,165 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ClientContext.Base.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.DTO.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClientClientContextInterfaces(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxQueryResultNamespace, string clientEntitiesNamespace, string serverEntitiesNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName = null, bool useAsyncPrefix = true)
+{
+    string asyncSuffix = useAsyncPrefix ? "Async" : "";
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+    DefineMetadata();
+    var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+    var code = edmxElements.Code;
+    var dtoTypes = GetClasses(dtoPathes).ToList();
+    var dtoNamespaces = GetNamespaces(dtoPathes).Select(n => n.ToString()).ToList();
+    var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, serverEntitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Client);
+    var edmxName = edmxElements.EdmxName;
+    var container = edmxElements.Container;
+    var itemCollection = edmxElements.ItemCollection;
+    string contextName = edmxName + "ClientContext";
+
+    var entities = edmxElements.EntityTypes.Where(e => IsPublic(e)).ToList();
+
+    List<string> specificationMethodsUsings;
+    IEnumerable<string> usings = new string[] { "System", "System.Collections.Generic", "System.Threading.Tasks", clientFxClientContextNamespace, clientFxClientContextInterfacesNamespace, clientFxClientContextInterfacesNamespace + ".Errors", clientFxEntitiesTrackingNamespace };
+    if (specificationsElements.Usings.TryGetValue("@ServiceContract", out specificationMethodsUsings))
+    {
+        bool withDto = false;
+        specificationMethodsUsings = specificationMethodsUsings.Where(u => 
+            {
+                var value = dtoNamespaces.Contains(u);
+                if (value)
+                    withDto = true;
+                return ! value;
+            }).Select(u => 
+            {
+                string newUsing;
+                if (namespacesReplacement.TryGetValue(u, out newUsing))
+                    return newUsing;
+                return u;
+            }).ToList();
+        if (withDto)
+            specificationMethodsUsings.Add(dtoNamespace);		    
+        usings = usings.Union(specificationMethodsUsings);
+    }
+    usings = usings.Union(new [] { namespaceName + ".Serialization" });
+    fileManager.StartNewFile(string.Format("I{0}.cs", contextName));
+    WriteHeader(edmxElements.NamespaceName, code, usings.OrderBy(u => u).ToArray());
+#>
+public partial interface I<#=contextName#> : IClientContext<I<#=contextName#>>
+{
+<#+
+    foreach (EntityType entityType in entities)
+    {
+        var entityTypeName = code.Escape(entityType);
+        var entityTypeFullName = string.Format("{0}.{1}", clientEntitiesNamespace, entityTypeName);
+        string entityTypeNamePlurial = GetPlurial(code, container, entityType);
+#>
+    IClientEntitySet<I<#=contextName#>, <#=entityTypeFullName#>> <#=entityTypeNamePlurial#> { get; }
+<#+
+    }
+    foreach (EntityType entityType in entities)
+    {
+        var entityTypeName = code.Escape(entityType);
+        var entityTypeFullName = string.Format("{0}.{1}", clientEntitiesNamespace, entityTypeName);
+        string entityTypeNamePlurial = GetPlurial(code, container, entityType);
+#>
+    void RefreshCurrentValues(<#=entityTypeFullName#> entityInCache, <#=entityTypeFullName#> entity);
+<#+
+    }
+#>
+    DateTime DbDateTime { get; }
+    Task<DateTime> GetDbDateTime<#=asyncSuffix#>();
+<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string typeName = edmxElements.Code.Escape(edmType);
+#>
+    Task<Error[]> ValidateOnServer<#=asyncSuffix#>(<#=typeName#> entity);
+<#+
+    }
+    foreach (var specificationServiceMethod in specificationsElements.AllServiceMethods)
+    {
+        ISemanticModel semanticModel;
+        bool executeOnServer;
+        IEnumerable<ParameterSyntax> parameters;
+        bool returnEntity, returnEntities, returnDTO, returnDTOs;
+        MethodSymbol specificationServiceMethodSymbol;
+        foreach (var specificationServiceMethodLoop in GetServiceMethod(specificationsElements, edmxElements, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationServiceMethod, clientEntitiesNamespace, dtoTypes, dtoNamespace, out semanticModel, out executeOnServer, out parameters, out returnEntity, out returnEntities, out returnDTO, out returnDTOs, out specificationServiceMethodSymbol))
+        {
+            if (specificationServiceMethodLoop == null)
+                continue;
+            var specificationServiceMethodValue = specificationServiceMethodLoop;
+            if (executeOnServer)
+                specificationServiceMethodValue = specificationServiceMethodValue.WithIdentifier(SyntaxFactory.Identifier(specificationServiceMethodValue.Identifier.ValueText + asyncSuffix));
+#>
+    <#=specificationServiceMethodValue.NormalizeWhitespace().ToString()#>;
+<#+
+        }
+    }
+#>
+    new <#=edmxName#>SerializableContext GetModifiedEntities();
+    <#=edmxName#>SerializableContext GetSerializableContext(<#=edmxName#>SerializableContext modifiedEntities);
+    Task<<#=edmxName#>SerializableContext> TrySaving<#=asyncSuffix#>(Func<Task<<#=edmxName#>SerializableContext>> saveChanges<#=asyncSuffix#>);
+    void Refresh(<#=edmxName#>SerializableContext originalSerializableContext, <#=edmxName#>SerializableContext newSerializableContext);
+}
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+
+    string errorNamespaceName = edmxElements.NamespaceName + ".Errors";
+    fileManager.StartNewFile(edmxName + "ErrorKeys.cs");
+    WriteHeader(errorNamespaceName, code);
+#>
+public enum <#=edmxName#>ErrorKeys
+{
+    Unknown<#+
+    foreach (var validateMethod in specificationsElements.ValidateMethods.SelectMany(kvp => kvp.Value))
+    {
+#>,
+    <#=validateMethod.Identifier.ValueText#><#+
+    }
+#> 
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile(edmxName + "ErrorsExtension.cs");
+    WriteHeader(errorNamespaceName, code, "System", "System.Linq", clientFxClientContextInterfacesNamespace + ".Errors");
+#>
+public static class <#=edmxName#>ErrorsExtension
+{
+    public static <#=edmxName#>ErrorKeys GetKeyValue(this Error error)
+    {
+        if (error.Key == null)
+            return <#=edmxName#>ErrorKeys.Unknown;
+        return <#=GetEnumValues(edmxName + "ErrorKeys")#>.FirstOrDefault(t => Enum.GetName(typeof(<#=edmxName#>ErrorKeys), t) == error.Key);
+    }
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    WriteSpecificClasses(fileManager, code, contextName, dtoNamespace, clientFxComponentModelNamespace, clientFxEntitiesNamespace, clientFxEntitiesTrackingNamespace, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxQueryResultNamespace, clientEntitiesNamespace, serverEntitiesNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName);
+
+    fileManager.StartNewFile(edmxName + "SerializableContext.cs");
+    WriteHeader(namespaceName + ".Serialization", code, "System", "System.Collections.Generic", "System.Runtime.Serialization", clientFxClientContextInterfacesNamespace);
+#>
+[DataContract(Namespace="http://<#=edmxName#>/SerializableContext")]
+public partial class <#=edmxName#>SerializableContext : ISerializableContext
+{
+<#+
+    foreach (EntitySet entitySet in container.BaseEntitySets.OfType<EntitySet>().Where(es => IsPublic(es.ElementType)))
+    {
+#>
+    [DataMember]
+    public List<<#=clientEntitiesNamespace#>.<#=code.Escape(entitySet.ElementType)#>> <#=code.Escape(entitySet)#> { get; set; }
+
+<#+
+    }
+#>
+}
+<#+
+    WriteFooter(namespaceName + ".Serialization");
+
+    fileManager.Process();
+}
+#>

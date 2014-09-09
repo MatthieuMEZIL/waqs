@@ -1,0 +1,28 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ClientContext.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string propertyDescriptorNamespace = null;
+
+void WriteClientContextConstructor(string contextName, string edmxName)
+{
+#>
+	public <#=contextName#>(<#=edmxName#>ServiceFactory serviceFactory)
+		: base(() => serviceFactory.GetNewService())
+	{
+	}
+<#+
+}
+
+void ClientContextInterfacesNamespaceAddProperty()
+{
+}
+
+void AddPropertyDescriptorToEntity(string entity)
+{
+}
+
+void RemovePropertyDescriptorToEntity(string entity)
+{
+}
+#>

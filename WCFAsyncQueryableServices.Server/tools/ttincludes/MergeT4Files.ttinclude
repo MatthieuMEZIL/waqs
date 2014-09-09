@@ -1,0 +1,46 @@
+<#@ template language="C#" hostspecific="true"#>
+<#@ output extension=".ttinclude"#>
+<#@ import namespace="System.Text"#>
+<#@ import namespace="System.Text.RegularExpressions"#>
+<#@ import namespace="System.Collections.Generic"#>
+<#@ import namespace="System.IO" #>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void LocalTTIncludesMerge(string mainTTInclude)
+{
+	var ttIncludes = new List<string>() { mainTTInclude };
+	var headerSB = new StringBuilder();
+	var bodySB = new StringBuilder();
+	LocalTTIncludesMerge(mainTTInclude, ttIncludes, headerSB, bodySB);
+#>
+<#=headerSB#>
+<#=bodySB#>
+<#+
+}
+void LocalTTIncludesMerge(string mainTTInclude, List<string> ttIncludes, StringBuilder headerSB, StringBuilder bodySB)
+{
+	using (var sr = new StreamReader(Host.ResolvePath(mainTTInclude)))
+	{
+		string line;
+		while ((line = sr.ReadLine()) != null && Regex.IsMatch(line, @"^\s*<" + "#@"))
+		{
+			line = Regex.Replace(line, string.Concat("<", "#@\\s*include\\s+file\\s*=\\s*\"([^\"]+)\"\\s*#", ">"), m => 
+				{
+					var newTTInclude = m.Groups[1].Value;
+					if (! ttIncludes.Contains(newTTInclude))
+					{
+						ttIncludes.Add(newTTInclude);
+						LocalTTIncludesMerge(newTTInclude, ttIncludes, headerSB, bodySB);
+					}
+					return "";
+				});
+			headerSB.Append(line);
+		}
+		if (line == null)
+			return;
+		bodySB.Append(line);
+		bodySB.Append(sr.ReadToEnd());
+	}
+}
+#>
