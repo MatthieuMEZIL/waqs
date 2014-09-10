@@ -410,7 +410,7 @@
                                                         SyntaxFactory.ParseExpression(
                                                             string.Concat(
                                                                 "ChangeTracker.State == ObjectState.Added || ChangeTracker.State == ObjectState.Modified && ChangeTracker.ModifiedProperties.Contains(\"",
-                                                                metadata.Property, "\"))")),
+                                                                metadata.Property, "\")")),
                                                         SyntaxFactory.Block(
                                                             statements)),
                                                     SyntaxFactory.ParseStatement("return null;")))

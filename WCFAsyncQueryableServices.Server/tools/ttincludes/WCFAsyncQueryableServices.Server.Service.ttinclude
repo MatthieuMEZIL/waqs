@@ -1,4 +1,4 @@
-<#@ include file="WCFAsyncQueryableServices.Service.Base.ttinclude"#>
+﻿<#@ include file="WCFAsyncQueryableServices.Service.Base.ttinclude"#>
 <#+
 // Copyright (c) Matthieu MEZIL.  All rights reserved.
     private void WriteServerService(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, string dtoWCFNamespace, SpecificationPath entitiesPath, string serverFxCommonNamespace, string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxServiceNamespace, string serverFxSerializableExpressionsNamespace, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, string serverServiceInterfacesNamespace, string serverDALInterfacesNamespace, bool isParallel, string namespaceName, string relativePath)
@@ -2186,7 +2186,7 @@ foreach (EntityType entityType in edmxElements.EntityTypes)
         string beginTag = "<" + "#";
         string endTag = "#" + ">";
         var edmxUtilityTTIncludeNameValue = edmxUtilityTTIncludeName;
-        if (! string.IsNullOrEmpty(edmxUtilityTTIncludeNameValue))
+        if (! string.IsNullOrEmpty(relativePath))
             edmxUtilityTTIncludeNameValue = Regex.Replace(edmxUtilityTTIncludeName, @"^((.?)*)\.ttinclude$", m => string.Concat(relativePath, m.Groups[1].Value, ".merge.ttinclude"));
 #>
 <#="<" + "#@" #> template language="C#" hostspecific="true"<#=endTag #>

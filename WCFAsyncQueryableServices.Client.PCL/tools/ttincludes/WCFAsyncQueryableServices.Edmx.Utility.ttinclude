@@ -930,7 +930,7 @@ public IEnumerable<string> WriteKeysTypes(EdmxElements edmxElements, EntityFrame
     string beginTag = "<" + "#";
     string endTag = "#" + ">";
     var edmxUtilityTTIncludeNameValue = edmxUtilityTTIncludeName;
-    if (! string.IsNullOrEmpty(edmxUtilityTTIncludeNameValue))
+    if (! string.IsNullOrEmpty(relativePath))
         edmxUtilityTTIncludeNameValue = Regex.Replace(edmxUtilityTTIncludeName, @"^((.?)*)\.ttinclude$", m => string.Concat(relativePath, m.Groups[1].Value, ".merge.ttinclude"));
 #>
 <#="<" + "#@"#> template language="C#" hostspecific="true"<#=endTag#>
