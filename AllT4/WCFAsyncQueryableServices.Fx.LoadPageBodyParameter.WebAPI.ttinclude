@@ -1,0 +1,85 @@
+<#+
+void WriteLoadPageBodyParametersClass()
+{
+#>
+public class LoadPageBodyParameters : ICustomJsonSerializable
+{
+    public SerializableExpression QueryExpression { get; set; }
+    public string[] WithSpecificationsProperties { get; set; }
+    public LoadPageParameter[] Identifiers { get; set; }
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        int value;
+        if (alreadySerialized.TryGetValue(this, out value))
+        {
+            result.Append(string.Concat("\"$Id", value.ToString(), "\""));
+            return result;
+        }
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        if (QueryExpression != null)
+        {
+            result.Append("\",\"QueryExpression\":");
+            int indexTmp = index;
+            ((ICustomJsonSerializable)QueryExpression).Serialize(result, alreadySerialized, ref index);
+        }
+        if (!(WithSpecificationsProperties == null || WithSpecificationsProperties.Length == 0))
+        {
+            result.Append("\",\"WithSpecificationsProperties\":");
+            int indexTmp = index;
+            result.Append(JsonExtension.GetJson(WithSpecificationsProperties));
+        }
+        if (!(Identifiers == null || Identifiers.Length == 0))
+        {
+            result.Append(",\"Identifiers\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromEnumerable(result, Identifiers, lpp => ((ICustomJsonSerializable)lpp).Serialize(result, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+        return result;
+    }
+
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "QueryExpression"))
+        {
+            QueryExpression = JsonExtension.CreateFromJson<SerializableExpression>(jr, alreadyDeserialized, getTypes);
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "WithSpecificationsProperties"))
+        {
+            WithSpecificationsProperties = JsonExtension.ArrayFromJson(jr, () => (string)jr.Value, true); 
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "Identifiers"))
+            Identifiers = JsonExtension.ArrayFromJson(jr, () => JsonExtension.CreateFromJson<LoadPageParameter>(jr, alreadyDeserialized, getTypes));
+    }
+}
+<#+
+}
+#>

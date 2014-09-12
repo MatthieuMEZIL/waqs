@@ -1,0 +1,37 @@
+<#@ include file="WCFAsyncQueryableServices.Entities.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Entities.Specifications.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Json.T4Helper.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+static string _jsonNamespace;
+static string[] _additionalUsings;
+
+void WriteClientEntities(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName, string entityTypesBaseType, string complexTypesBaseType, string propertyAttributes, int? take, int? skip, int defaultTake, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteClientEntities(edmxPath, specificationPathes, dtoPathes, dtoNamespace, serverEntitiesPath, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxComponentModelNamespace, clientFxEntitiesNamespace, clientFxEntitiesTrackingNamespace, serverFxCommonNamespace, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, namespacesReplacement, namespaceName, entityTypesBaseType, complexTypesBaseType, propertyAttributes, take, skip, defaultTake);
+}
+
+void WriteClientEntities(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName, string entityTypesBaseType, string complexTypesBaseType, string propertyAttributes, int? take, int? skip, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteClientEntities(edmxPath, specificationPathes, dtoPathes, dtoNamespace, serverEntitiesPath, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxComponentModelNamespace, clientFxEntitiesNamespace, clientFxEntitiesTrackingNamespace, serverFxCommonNamespace, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, namespacesReplacement, namespaceName, entityTypesBaseType, complexTypesBaseType, propertyAttributes, take, skip);
+}
+
+void WriteClientEntities(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName, string entityTypesBaseType, string complexTypesBaseType, string propertyAttributes, int defaultTake, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteClientEntities(edmxPath, specificationPathes, dtoPathes, dtoNamespace, serverEntitiesPath, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxComponentModelNamespace, clientFxEntitiesNamespace, clientFxEntitiesTrackingNamespace, serverFxCommonNamespace, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, namespacesReplacement, namespaceName, entityTypesBaseType, complexTypesBaseType, propertyAttributes, defaultTake:defaultTake);
+}
+
+void WriteClientEntities(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName, string entityTypesBaseType, string complexTypesBaseType, string propertyAttributes, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteClientEntities(edmxPath, specificationPathes, dtoPathes, dtoNamespace, serverEntitiesPath, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxComponentModelNamespace, clientFxEntitiesNamespace, clientFxEntitiesTrackingNamespace, serverFxCommonNamespace, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, namespacesReplacement, namespaceName, entityTypesBaseType, complexTypesBaseType, propertyAttributes);
+}
+#>

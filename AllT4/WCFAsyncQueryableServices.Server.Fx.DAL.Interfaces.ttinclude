@@ -1,0 +1,2492 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxDALInterfaces(string serverFxCommonNamespace, string serverFxEntitiesNamespace, string namespaceName = null)
+{
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    if (namespaceName == null)
+        namespaceName = code.EscapeNamespace(code.VsNamespaceSuggestion());
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    fileManager.StartNewFile("IEntitySet.cs");
+    WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Linq", serverFxEntitiesNamespace);
+#>
+public interface IEntitySet<T> : IWAQSQuery<T>
+    where T : class, IEntity
+{
+    void Add(T item);
+    void Attach(T item);
+    void AttachAsModified(T item);
+    void AttachAsDeleted(T item);
+    void Detach(T item);
+    void Delete(T item);
+
+    IEnumerable<T> Local { get; }
+
+    WCFAsyncQueryableServices.DAL.Interfaces.MergeOption MergeOption { get; set; }
+    IQueryable<T> WithMergeOption(MergeOption mergeOption);
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IDataContext.cs");
+    List<string> idataContextUsings = new List<string>() { "System", "System.Collections.Generic", "System.Linq.Expressions", serverFxEntitiesNamespace };
+    CompleteIDataContextUsings(idataContextUsings);
+    WriteHeader(namespaceName, code, idataContextUsings.ToArray());
+#>
+public interface IDataContext : IDisposable
+{
+    void SaveChanges(bool acceptChanges = true);
+    
+    void ApplyChanges<TEntity>(IEntitySet<TEntity> entitySet, TEntity entity) where TEntity : class, IEntity;
+
+    Expression GetExpression(Type type, string propertyName, ParameterExpression parameterExpression);
+
+    Expression GetExpression(Type type, string methodName, List<Expression> arguments, ParameterExpression parameterExpression);
+
+    void AttachRelationship<TEntity1, TEntity2>(TEntity1 entity1, TEntity2 entity2, string collectionName) where TEntity1 : class where TEntity2 : class;
+
+    void LoadMetadata();
+<#+ CompleteIDataContextUsings(); #>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("MergeOption.cs");
+    WriteHeader(namespaceName, code);
+#>
+public enum MergeOption
+{
+    AppendOnly,
+    OverwriteChanges,
+    PreserveChanges,
+    NoTracking
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IObjectContext.cs");
+    WriteHeader(namespaceName + ".L2E", code, "System", "System.Linq.Expressions", namespaceName);
+#>
+public interface IObjectContext : IDataContext
+{
+    MergeOption DefaultMergeOption { get; set; }
+    bool UseWAQSProvider { get; set; }
+    Expression GetDbDateTimeExpression();
+    Expression GetDateExpression(Expression dateTimeExpresion);
+    Expression AddYearsExpression(Expression dateTimeExpresion, Expression yearsExpresion);
+    Expression AddYearsOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion);
+    Expression AddMonthsExpression(Expression dateTimeExpresion, Expression monthsExpresion);
+    Expression AddMonthsOffsetExpression(Expression dateTimeOffsetExpresion, Expression monthsExpresion);
+    Expression AddDaysExpression(Expression dateTimeExpresion, Expression daysExpresion);
+    Expression AddDaysOffsetExpression(Expression dateTimeOffsetExpresion, Expression daysExpresion);
+    Expression DiffDaysExpression(Expression dateTime1Expresion, Expression dateTime2Expresion);
+    Expression DiffDaysOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion);
+    Expression AddHoursExpression(Expression dateTimeExpresion, Expression hoursExpresion);
+    Expression AddHoursOffsetExpression(Expression dateTimeOffsetExpresion, Expression hoursExpresion);
+    Expression DiffHoursExpression(Expression dateTime1Expresion, Expression dateTime2Expresion);
+    Expression DiffHoursOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion);
+    Expression AddMinutesExpression(Expression dateTimeExpresion, Expression minutesExpresion);
+    Expression AddMinutesOffsetExpression(Expression dateTimeOffsetExpresion, Expression minutesExpresion);
+    Expression DiffMinutesExpression(Expression dateTime1Expresion, Expression dateTime2Expresion);
+    Expression DiffMinutesOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion);
+    Expression AddSecondsExpression(Expression dateTimeExpresion, Expression secondsExpresion);
+    Expression AddSecondsOffsetExpression(Expression dateTimeOffsetExpresion, Expression secondsExpresion);
+    Expression DiffSecondsExpression(Expression dateTime1Expresion, Expression dateTime2Expresion);
+    Expression DiffSecondsOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion);
+    Expression AddMillisecondsExpression(Expression dateTimeExpresion, Expression millisecondsExpresion);
+    Expression AddMillisecondsOffsetExpression(Expression dateTimeOffsetExpresion, Expression millisecondsExpresion);
+    Expression DiffMillisecondsExpression(Expression dateTime1Expresion, Expression dateTime2Expresion);
+    Expression DiffMillisecondsOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion);
+    Expression AbsInt16Expression(Expression value);
+    Expression AbsInt32Expression(Expression value);
+    Expression AbsInt64Expression(Expression value);
+    Expression AbsSingleExpression(Expression value);
+    Expression AbsDoubleExpression(Expression value);
+    Expression AbsDecimalExpression(Expression value);
+    Expression CeilingDoubleExpression(Expression value);
+    Expression CeilingDecimalExpression(Expression value);
+    Expression FloorDoubleExpression(Expression value);
+    Expression FloorDecimalExpression(Expression value);
+    Expression PowDoubleExpression(Expression value, Expression exponent);
+    Expression RoundToEvenDoubleExpression(Expression value);
+    Expression RoundToEvenDecimalExpression(Expression value);
+    Expression RoundToEvenDoubleExpression(Expression value, Expression digits);
+    Expression RoundToEvenDecimalExpression(Expression value, Expression digits);
+    Expression RoundAwayFromZeroDoubleExpression(Expression value);
+    Expression RoundAwayFromZeroDecimalExpression(Expression value);
+    Expression RoundAwayFromZeroDoubleExpression(Expression value, Expression digits);
+    Expression RoundAwayFromZeroDecimalExpression(Expression value, Expression digits);
+    Expression TruncateDoubleExpression(Expression value);
+    Expression TruncateDecimalExpression(Expression value);
+    Expression LessThanString(Expression s1Expresion, Expression s2Expresion);
+    Expression GreaterThanString(Expression s1Expresion, Expression s2Expresion);
+    DateTime GetDbDateTime();
+    DateTime DbDateTime { get; }
+}
+<#+
+    WriteFooter(namespaceName + ".L2E");
+
+    fileManager.StartNewFile("WAQSL2EExpressionTransformation.cs");
+    WriteHeader(namespaceName + ".L2E", code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection");
+#>
+public static class WAQSL2EExpressionTransformation
+{
+    public static Expression TransformProperty(MemberExpression expression, IObjectContext objectContext, Func<Expression, Expression> transformExp)
+    {
+        var propertyInfo = expression.Member as PropertyInfo;
+        if (propertyInfo == null)
+            return expression;
+        return TransformProperty(transformExp(expression.Expression), propertyInfo, objectContext) ?? expression;
+    }
+
+    public static Expression TransformProperty(Expression source, PropertyInfo property, IObjectContext objectContext)
+    {
+        if (property.Name == "Date" && source.Type == typeof(DateTime))
+            return objectContext.GetDateExpression(source);
+        BinaryExpression subtractExpression = source as BinaryExpression;
+        if (subtractExpression != null && subtractExpression.NodeType == ExpressionType.Subtract && source.Type == typeof(TimeSpan))
+        {
+            if (subtractExpression.Left.Type == typeof(DateTime))
+            {
+                switch (property.Name)
+                {
+                    case "Days":
+                        return objectContext.DiffDaysExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Hours":
+                        return objectContext.DiffHoursExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Minutes":
+                        return objectContext.DiffMinutesExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Seconds":
+                        return objectContext.DiffSecondsExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Milliseconds":
+                        return objectContext.DiffMillisecondsExpression(subtractExpression.Right, subtractExpression.Left);
+                }
+            }
+            else if (subtractExpression.Left.Type == typeof(DateTimeOffset))
+            {
+                switch (property.Name)
+                {
+                    case "Days":
+                        return objectContext.DiffDaysOffsetExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Hours":
+                        return objectContext.DiffHoursOffsetExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Minutes":
+                        return objectContext.DiffMinutesOffsetExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Seconds":
+                        return objectContext.DiffSecondsOffsetExpression(subtractExpression.Right, subtractExpression.Left);
+                    case "Milliseconds":
+                        return objectContext.DiffMillisecondsOffsetExpression(subtractExpression.Right, subtractExpression.Left);
+                }
+            }
+        }
+        return null;
+    }
+
+    public static Expression TransformMethodCall(MethodCallExpression expression, IObjectContext objectContext, Func<Expression, Expression> transformExp)
+    {
+        return TransformMethodCall(transformExp(expression.Object), expression.Method, expression.Arguments.Select(a => transformExp(a)).ToList(), objectContext) ?? expression;
+    }
+
+    public static Expression TransformMethodCall(Expression source, MethodInfo method, List<Expression> arguments, IObjectContext objectContext)
+    {
+        if (source != null && arguments.Count == 1)
+        {
+            if (source.Type == typeof(DateTime) && method.DeclaringType == typeof(DateTime))
+            {
+                switch (method.Name)
+                {
+                    case "AddYears":
+                        return objectContext.AddYearsExpression(source, arguments[0]);
+                    case "AddMonths":
+                        return objectContext.AddMonthsExpression(source, arguments[0]);
+                    case "AddDays":
+                        return objectContext.AddDaysExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddHours":
+                        return objectContext.AddHoursExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddMinutes":
+                        return objectContext.AddMinutesExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddSeconds":
+                        return objectContext.AddSecondsExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddMilliseconds":
+                        return objectContext.AddMillisecondsExpression(source, ConvertDoubleToInt(arguments[0]));
+                }
+            }
+            else if (source.Type == typeof(DateTimeOffset) && method.DeclaringType == typeof(DateTimeOffset))
+            {
+                switch (method.Name)
+                {
+                    case "AddYears":
+                        return objectContext.AddYearsOffsetExpression(source, arguments[0]);
+                    case "AddMonths":
+                        return objectContext.AddMonthsOffsetExpression(source, arguments[0]);
+                    case "AddDays":
+                        return objectContext.AddDaysOffsetExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddHours":
+                        return objectContext.AddHoursOffsetExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddMinutes":
+                        return objectContext.AddMinutesOffsetExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddSeconds":
+                        return objectContext.AddSecondsOffsetExpression(source, ConvertDoubleToInt(arguments[0]));
+                    case "AddMilliseconds":
+                        return objectContext.AddMillisecondsOffsetExpression(source, ConvertDoubleToInt(arguments[0]));
+                }
+            }
+        }
+        if (source == null && method.DeclaringType == typeof(Math))
+        {
+            var parameters = method.GetParameters();
+            switch (method.Name)
+            {
+                case "Abs":
+                    if (parameters.Length == 1)
+                    {
+                        if (parameters[0].ParameterType == typeof(short))
+                            return objectContext.AbsInt16Expression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(int))
+                            return objectContext.AbsInt32Expression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(long))
+                            return objectContext.AbsInt64Expression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(float))
+                            return objectContext.AbsSingleExpression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(double))
+                            return objectContext.AbsDoubleExpression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(decimal))
+                            return objectContext.AbsDecimalExpression(arguments[0]);
+                    }
+                    throw new NotImplementedException();
+                case "Ceiling":
+                    if (parameters.Length == 1)
+                    {
+                        if (parameters[0].ParameterType == typeof(double))
+                            return objectContext.CeilingDoubleExpression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(decimal))
+                            return objectContext.CeilingDecimalExpression(arguments[0]);
+                    }
+                    throw new NotImplementedException();
+                case "Floor":
+                    if (parameters.Length == 1)
+                    {
+                        if (parameters[0].ParameterType == typeof(double))
+                            return objectContext.FloorDoubleExpression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(decimal))
+                            return objectContext.FloorDecimalExpression(arguments[0]);
+                    }
+                    throw new NotImplementedException();
+                case "Pow":
+                    if (parameters.Length == 2)
+                    {
+                        if (parameters[0].ParameterType == typeof(double) && parameters[1].ParameterType == typeof(double))
+                            return objectContext.PowDoubleExpression(arguments[0], arguments[1]);
+                    }
+                    break;
+                case "Round":
+                    switch (parameters.Length)
+                    {
+                        case 1: 
+                            if (parameters[0].ParameterType == typeof(double))
+                                return objectContext.RoundToEvenDoubleExpression(arguments[0]);
+                            if (parameters[0].ParameterType == typeof(decimal))
+                                return objectContext.RoundToEvenDecimalExpression(arguments[0]);
+                            throw new NotImplementedException();
+                        case 2:
+                            if (parameters[0].ParameterType == typeof(double))
+                            {
+                                if (parameters[1].ParameterType == typeof(int))
+                                    return objectContext.RoundToEvenDoubleExpression(arguments[0], arguments[1]);
+                                if (parameters[1].ParameterType == typeof(MidpointRounding))
+                                {
+                                    MidpointRounding midpointRouting;
+                                    var constantExp = arguments[1] as ConstantExpression;
+                                    if (constantExp != null)
+                                        midpointRouting = (MidpointRounding)constantExp.Value;
+                                    else
+                                        midpointRouting = Expression.Lambda<Func<MidpointRounding>>(arguments[1]).Compile()();
+                                    if (midpointRouting == MidpointRounding.ToEven)
+                                        return objectContext.RoundToEvenDoubleExpression(arguments[0]);
+                                    if (midpointRouting == MidpointRounding.AwayFromZero)
+                                        return objectContext.RoundAwayFromZeroDoubleExpression(arguments[0]);
+                                }
+                            }
+                            else if (parameters[0].ParameterType == typeof(decimal))
+                            {
+                                if (parameters[1].ParameterType == typeof(int))
+                                    return objectContext.RoundToEvenDecimalExpression(arguments[0], arguments[1]);
+                                if (parameters[1].ParameterType == typeof(MidpointRounding))
+                                {
+                                    MidpointRounding midpointRouting;
+                                    var constantExp = arguments[1] as ConstantExpression;
+                                    if (constantExp != null)
+                                        midpointRouting = (MidpointRounding)constantExp.Value;
+                                    else
+                                        midpointRouting = Expression.Lambda<Func<MidpointRounding>>(arguments[1]).Compile()();
+                                    if (midpointRouting == MidpointRounding.ToEven)
+                                        return objectContext.RoundToEvenDecimalExpression(arguments[0]);
+                                    if (midpointRouting == MidpointRounding.AwayFromZero)
+                                        return objectContext.RoundAwayFromZeroDecimalExpression(arguments[0]);
+                                }
+                            }
+                            break;
+                        case 3:
+                            if (parameters[1].ParameterType == typeof(int) && parameters[2].ParameterType == typeof(MidpointRounding))
+                            {
+                                MidpointRounding midpointRouting;
+                                var constantExp = arguments[2] as ConstantExpression;
+                                if (constantExp != null)
+                                    midpointRouting = (MidpointRounding)constantExp.Value;
+                                else
+                                    midpointRouting = Expression.Lambda<Func<MidpointRounding>>(arguments[2]).Compile()();
+                                if (parameters[0].ParameterType == typeof(double))
+                                {
+                                    if (midpointRouting == MidpointRounding.ToEven)
+                                        return objectContext.RoundToEvenDoubleExpression(arguments[0], arguments[1]);
+                                    if (midpointRouting == MidpointRounding.AwayFromZero)
+                                        return objectContext.RoundAwayFromZeroDoubleExpression(arguments[0], arguments[1]);
+                                }
+                                else if (parameters[0].ParameterType == typeof(decimal))
+                                {
+                                    if (midpointRouting == MidpointRounding.ToEven)
+                                        return objectContext.RoundToEvenDecimalExpression(arguments[0], arguments[1]);
+                                    if (midpointRouting == MidpointRounding.AwayFromZero)
+                                        return objectContext.RoundAwayFromZeroDecimalExpression(arguments[0], arguments[1]);
+                                }
+                            }
+                            break;
+                    }
+                    throw new NotImplementedException();
+                case "Truncate":
+                    if (parameters.Length == 1)
+                    {
+                        if (parameters[0].ParameterType == typeof(double))
+                            return objectContext.TruncateDoubleExpression(arguments[0]);
+                        if (parameters[0].ParameterType == typeof(decimal))
+                            return objectContext.TruncateDecimalExpression(arguments[0]);
+                    }
+                    throw new NotImplementedException();
+            }
+        }
+        return null;
+    }
+
+    private static Expression ConvertDoubleToInt(Expression exp)
+    {
+        MemberExpression me;
+        if (! (exp is ConstantExpression) && ((me = exp as MemberExpression) == null || me.Expression.NodeType != ExpressionType.Constant))
+            return Expression.Convert(exp, typeof(int));
+        int value = (int)Expression.Lambda<Func<double>>(exp).Compile()();
+        return Expression.Constant(value);
+    }
+
+    public static Expression TransformBinary(BinaryExpression expression, IObjectContext objectContext, Func<Expression, Expression> transformExp)
+    {
+        return TransformBinary(expression.NodeType.ToString(), transformExp(expression.Left), transformExp(expression.Right), objectContext) ?? expression;
+    }
+
+    public static Expression TransformBinary(string nodeType, Expression leftExpression, Expression rightExpression, IObjectContext objectContext)
+    {
+        bool dateTimeExp = leftExpression.Type == typeof(DateTime);
+        if ((dateTimeExp || leftExpression.Type == typeof(DateTimeOffset)) && rightExpression.Type == typeof(TimeSpan))
+        {
+            bool subtract = false;
+            switch (nodeType)
+            {
+                case "Add":
+                    break;
+                case "Subtract":
+                    subtract = true;
+                    break;
+                default:
+                    return null;
+            }
+        
+            Expression daysExp, hoursExp, minutesExp, secondsExp, milliSecondsExp;
+            var rightNew = rightExpression as NewExpression;
+            MemberExpression rightMember = null;
+            ConstantExpression constantExpression = null;
+        
+            bool argsCountValid = false;
+            if (rightNew != null && (argsCountValid = (rightNew.Arguments.Count > 3)) && ((constantExpression = rightNew.Arguments[0] as ConstantExpression) != null || (rightMember = rightNew.Arguments[0] as MemberExpression) != null && rightMember.Expression is ConstantExpression))
+            {
+                var days = constantExpression == null ? Expression.Lambda<Func<int>>(rightMember).Compile()() : (int)constantExpression.Value;
+                if (subtract)
+                    days = -days;
+                Expression<Func<int>> fieldConstant = () => days;
+                daysExp = days == 0 ? null : fieldConstant.Body;
+            }
+            else if (argsCountValid)
+            {
+                daysExp = Expression.MakeMemberAccess(rightExpression, typeof(TimeSpan).GetProperty("Days"));
+                if (subtract)
+                    daysExp = Expression.MakeUnary(ExpressionType.Negate, daysExp, typeof(int));
+            }
+            else
+                daysExp = null;
+        
+            argsCountValid = false;
+            if (rightNew != null && (argsCountValid = (rightNew.Arguments.Count > 2)) && ((constantExpression = rightNew.Arguments[rightNew.Arguments.Count == 3 ? 0 : 1] as ConstantExpression) != null || (rightMember = rightNew.Arguments[rightNew.Arguments.Count == 3 ? 0 : 1] as MemberExpression) != null && rightMember.Expression is ConstantExpression))
+            {
+                var hours = constantExpression == null ? Expression.Lambda<Func<int>>(rightMember).Compile()() : (int)constantExpression.Value;
+                if (subtract)
+                    hours = -hours;
+                Expression<Func<int>> fieldConstant = () => hours;
+                hoursExp = hours == 0 ? null : fieldConstant.Body;
+            }
+            else if (argsCountValid)
+            {
+                hoursExp = Expression.MakeMemberAccess(rightExpression, typeof(TimeSpan).GetProperty("Hours"));
+                if (subtract)
+                    hoursExp = Expression.MakeUnary(ExpressionType.Negate, hoursExp, typeof(int));
+            }
+            else
+                hoursExp = null;
+        
+            argsCountValid = false;
+            if (rightNew != null && (argsCountValid = (rightNew.Arguments.Count > 2)) && ((constantExpression = rightNew.Arguments[rightNew.Arguments.Count == 3 ? 1 : 2] as ConstantExpression) != null || (rightMember = rightNew.Arguments[rightNew.Arguments.Count == 3 ? 1 : 2] as MemberExpression) != null && rightMember.Expression is ConstantExpression))
+            {
+                var minutes = constantExpression == null ? Expression.Lambda<Func<int>>(rightMember).Compile()() : (int)constantExpression.Value;
+                if (subtract)
+                    minutes = -minutes;
+                Expression<Func<int>> fieldConstant = () => minutes;
+                minutesExp = minutes == 0 ? null : fieldConstant.Body;
+            }
+            else if (argsCountValid)
+            {
+                minutesExp = Expression.MakeMemberAccess(rightExpression, typeof(TimeSpan).GetProperty("Minutes"));
+                if (subtract)
+                    minutesExp = Expression.MakeUnary(ExpressionType.Negate, minutesExp, typeof(int));
+            }
+            else
+                minutesExp = null;
+        
+            argsCountValid = false;
+            if (rightNew != null && (argsCountValid = (rightNew.Arguments.Count > 2)) && ((constantExpression = rightNew.Arguments[rightNew.Arguments.Count == 3 ? 2 : 3] as ConstantExpression) != null || (rightMember = rightNew.Arguments[rightNew.Arguments.Count == 3 ? 2 : 3] as MemberExpression) != null && rightMember.Expression is ConstantExpression))
+            {
+                var seconds = constantExpression == null ? Expression.Lambda<Func<int>>(rightMember).Compile()() : (int)constantExpression.Value;
+                if (subtract)
+                    seconds = -seconds;
+                Expression<Func<int>> fieldConstant = () => seconds;
+                secondsExp = seconds == 0 ? null : fieldConstant.Body;
+            }
+            else if (argsCountValid)
+            {
+                secondsExp = Expression.MakeMemberAccess(rightExpression, typeof(TimeSpan).GetProperty("Seconds"));
+                if (subtract)
+                    secondsExp = Expression.MakeUnary(ExpressionType.Negate, secondsExp, typeof(int));
+            }
+            else
+                secondsExp = null;
+        
+            argsCountValid = false;
+            if (rightNew != null && (argsCountValid = (rightNew.Arguments.Count > 4)) && ((constantExpression = rightNew.Arguments[4] as ConstantExpression) != null || (rightMember = rightNew.Arguments[4] as MemberExpression) != null && rightMember.Expression is ConstantExpression))
+            {
+                var milliseconds = constantExpression == null ? Expression.Lambda<Func<int>>(rightMember).Compile()() : (int)constantExpression.Value;
+                if (subtract)
+                    milliseconds = -milliseconds;
+                Expression<Func<int>> fieldConstant = () => milliseconds;
+                milliSecondsExp = milliseconds == 0 ? null : fieldConstant.Body;
+            }
+            else if (argsCountValid)
+            {
+                milliSecondsExp = Expression.MakeMemberAccess(rightExpression, typeof(TimeSpan).GetProperty("Milliseconds"));
+                if (subtract)
+                    milliSecondsExp = Expression.MakeUnary(ExpressionType.Negate, milliSecondsExp, typeof(int));
+            }
+            else
+                milliSecondsExp = null;
+        
+            var value = leftExpression;
+            if (daysExp != null)
+            {
+                if (dateTimeExp)
+                    value = objectContext.AddDaysExpression(value, daysExp);
+                else
+                    value = objectContext.AddDaysOffsetExpression(value, daysExp);
+            }
+            if (hoursExp != null)
+            {
+                if (dateTimeExp)
+                    value = objectContext.AddHoursExpression(value, hoursExp);
+                else 
+                    value = objectContext.AddHoursOffsetExpression(value, hoursExp);
+            }
+            if (minutesExp != null)
+            {
+                if (dateTimeExp)
+                    value = objectContext.AddMinutesExpression(value, minutesExp);
+                else
+                    value = objectContext.AddMinutesOffsetExpression(value, minutesExp);
+            }
+            if (secondsExp != null)
+            {
+                if (dateTimeExp)
+                    value = objectContext.AddSecondsExpression(value, secondsExp);
+                else
+                    value = objectContext.AddSecondsOffsetExpression(value, secondsExp);
+            }
+            if (milliSecondsExp != null)
+            {
+                if (dateTimeExp)
+                    value = objectContext.AddMillisecondsExpression(value, milliSecondsExp);
+                else
+                    value = objectContext.AddMillisecondsOffsetExpression(value, milliSecondsExp);
+            }
+            return value;
+        }
+        return null;
+    }
+}
+<#+
+    WriteFooter(namespaceName + ".L2E");
+
+    fileManager.StartNewFile("QueryableInclude.cs");
+    WriteHeader(namespaceName, code, "System");
+#>
+public class QueryableInclude
+{
+    public IWAQSQueryBase[] Queries { get; set; }
+    public Func<object, object[], object> Load { get; set; }
+    public string Path { get; set; }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IWAQSQueryBase.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq.Expressions");
+#>
+public interface IWAQSQueryBase
+{
+    IDataContext DataContext { get; }
+    IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> QueryableIncludes { get; set; }
+    IEnumerable<string> WithSpecifications { get; set; }
+    Func<Expression, Expression> ExpressionTransformation { get; }
+    bool FromQuery { get; set; }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IWAQSQueryValue.cs");
+    WriteHeader(namespaceName, code, "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks");
+#>
+public interface IWAQSQueryValue : IWAQSQueryBase
+{
+    WAQSQueryProvider WAQSQueryProvider { get; }
+    Expression Expression { get; }
+    object Execute();
+<#+
+    CompleteIWAQSQueryValue();
+#>
+}
+public interface IWAQSQueryValue<T> : IWAQSQueryValue
+{
+    new T Execute();
+<#+
+    CompleteIWAQSQueryValueOfT();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IWAQSQuery.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks");
+#>
+public interface IWAQSQuery : IWAQSQueryBase, IQueryable, IOrderedQueryable
+{
+    IAsyncQueryProviderFactory AsyncQueryProviderFactory { get; }
+<#+
+    CompleteIWAQSQuery();
+#>
+}
+public interface IWAQSQuery<out T> : IWAQSQuery, IQueryable<T>, IOrderedQueryable<T>
+{
+<#+
+    CompleteIWAQSQueryOfT();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("WAQSQueryValue.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks");
+#>
+public class WAQSQueryValue : IWAQSQueryValue
+{
+    public WAQSQueryValue(IWAQSQueryValue waqsQueryValue)
+        : this(waqsQueryValue.WAQSQueryProvider, waqsQueryValue.DataContext, waqsQueryValue.Expression)
+    {
+    }	
+    public WAQSQueryValue(WAQSQueryProvider waqsQueryProvider, IDataContext dataContext, Expression expression)
+    {
+        WAQSQueryProvider = waqsQueryProvider;
+        DataContext = dataContext;
+        Expression = expression;
+    }
+    
+    private static Dictionary<Type, Type> _withTypes;
+    protected internal static Dictionary<Type, Type> WithTypes
+    {
+        get { return _withTypes ?? (_withTypes = new Dictionary<Type, Type>()); }
+    }
+
+    public WAQSQueryProvider WAQSQueryProvider { get; private set; }
+    public IDataContext DataContext { get; private set; }
+    public Expression Expression { get; private set; }
+    public IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> QueryableIncludes { get; set; }
+    public IEnumerable<string> WithSpecifications { get; set; }
+    public Func<Expression, Expression> ExpressionTransformation
+    {
+        get { return WAQSQueryProvider.ExpressionTransformation; }
+    }
+    public bool FromQuery { get; set; }
+
+    public object Execute()
+    {
+        return WAQSQueryProvider.Execute(Expression);
+    }
+<#+
+    CompleteWAQSQueryValue();
+#>
+}
+public class WAQSQueryValue<T> : WAQSQueryValue, IWAQSQueryValue<T>
+{
+    public WAQSQueryValue(IWAQSQueryValue<T> waqsQueryValue)
+        : this(waqsQueryValue.WAQSQueryProvider, waqsQueryValue.DataContext, waqsQueryValue.Expression)
+    {
+    }	
+    public WAQSQueryValue(WAQSQueryProvider waqsQueryProvider, IDataContext dataContext, Expression expression)
+        : base(waqsQueryProvider, dataContext, expression)
+    {
+    }
+
+    public new T Execute()
+    {
+        return WAQSQueryProvider.Execute<T>(Expression);
+    }
+<#+
+    CompleteWAQSQueryValueOfT();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IncludeMethodAttribute.cs");
+    WriteHeader(namespaceName, code, "System");
+#>
+public class IncludeMethodAttribute : Attribute
+{
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("WAQSQuery.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks", serverFxCommonNamespace, serverFxEntitiesNamespace);
+#>
+public class WAQSQuery : IWAQSQuery
+{
+    private IQueryable _queryable;
+                
+    public WAQSQuery(IWAQSQuery source)
+        : this(source.DataContext, source, source.AsyncQueryProviderFactory, source.ExpressionTransformation)
+    {
+    }
+    public WAQSQuery(IDataContext dataContext, IQueryable queryable, IAsyncQueryProviderFactory asyncQueryProviderFactory, Func<Expression, Expression> expressionTransformation)
+    {
+        DataContext = dataContext;
+        _queryable = queryable;
+        AsyncQueryProviderFactory = asyncQueryProviderFactory;
+        ExpressionTransformation = expressionTransformation;
+    }
+                
+    private static Dictionary<Type, WithType> _withTypes;
+    public static Dictionary<Type, WithType> WithTypes
+    {
+        get { return _withTypes ?? (_withTypes = new Dictionary<Type, WithType>()); }
+    }
+                
+    public IDataContext DataContext { get; private set; }
+    public IAsyncQueryProviderFactory AsyncQueryProviderFactory { get; private set; }
+    public Func<Expression, Expression> ExpressionTransformation { get; private set; }
+    public bool FromQuery { get; set; }
+                
+    public Type ElementType
+    {
+        get { return _queryable.ElementType; }
+    }
+                
+    public Expression Expression
+    {
+        get { return _queryable.Expression; }
+    }
+                
+    private IQueryProvider _provider;
+    public IQueryProvider Provider
+    {
+        get { return _provider ?? (_provider = new WAQSQueryProvider(DataContext, _queryable.Provider, AsyncQueryProviderFactory, ExpressionTransformation)); }
+    }
+    
+    private Expression InitWith()
+    {
+        return ApplyWith().Expression;
+    }
+    
+    private IEnumerable<T> GetEnumerableWithoutInclude<T>(Func<IQueryProvider, Tuple<IEnumerator, Func<T>>> enumeratorFactory)
+    {
+        var enumerator = enumeratorFactory(((WAQSQueryProvider)Provider).SourceProvider);
+        while (enumerator.Item1.MoveNext())
+        {
+            EntitiesInitializer.FromQuery = true;
+            var o = enumerator.Item2();
+            EntitiesInitializer.FromQuery = false;
+            WithType withType;
+            if (WAQSQuery.WithTypes.TryGetValue(typeof(T), out withType))
+                o = (T)withType.TransformToOriginalType(o);
+            yield return o;
+        }
+    }
+    
+    protected IEnumerable<T> GetEnumerable<T>()
+    {
+        var expression = InitWith();
+        try
+        {
+            if (!(FromQuery || QueryableIncludes == null) && QueryableIncludes.Any())
+            {
+                var value = new List<T>(GetEnumerableWithoutInclude<T>(provider => GetQueryEnumerator<T>(provider, expression)));
+                LoadIncludes(this, value: value, withValue: true);
+                return value;
+            }
+            return GetEnumerableWithoutInclude<T>(provider => GetQueryEnumerator<T>(provider, expression));
+        }
+        finally
+        {
+            EntitiesInitializer.FromQuery = false;
+        }
+    }
+            
+    protected internal virtual IQueryable ApplyWith()
+    {
+        return this;
+    }
+    
+    protected virtual Tuple<IEnumerator, Func<T>> GetQueryEnumerator<T>(IQueryProvider provider, Expression expression)
+    {
+        var q = provider.CreateQuery(expression);
+        var enumerator = q.GetEnumerator();
+        return new Tuple<IEnumerator, Func<T>>(enumerator, () => (T)enumerator.Current);
+    }
+                
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerable<object>().GetEnumerator();
+    }
+                
+    public IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> QueryableIncludes { get; set; }
+    public IEnumerable<string> WithSpecifications { get; set; }
+                
+    protected internal static object LoadIncludes(IWAQSQueryBase queryBase, Dictionary<string, object> addedIncludesPathes = null, object value = null, bool withValue = false, string path = null)
+    {
+        if (addedIncludesPathes == null)
+            addedIncludesPathes = new Dictionary<string, object>();
+        if (!withValue)
+        {
+            var query = queryBase as IWAQSQuery;
+            IWAQSQueryValue queryValue;
+            if (query != null)
+            {
+                var queryType = query.GetType();
+                if (!queryType.IsGenericType)
+                    throw new InvalidOperationException();
+                query.FromQuery = true;
+                value = typeof(Enumerable).GetMethod("ToList").MakeGenericMethod(queryType.GetGenericArguments()[0]).Invoke(null, new object[] { query });
+            }
+            else if ((queryValue = queryBase as IWAQSQueryValue) != null)
+            {
+                queryValue.FromQuery = true;
+                value = queryValue.Execute();
+            }
+            else
+                throw new InvalidOperationException();
+        }
+        if (queryBase.QueryableIncludes != null)
+            foreach (var include in queryBase.QueryableIncludes)
+            {
+                var queryableInclude = include(queryBase);
+                object includeValue = null;
+                bool includeWithValue = false;
+                if (queryableInclude.Path == null || !(includeWithValue = addedIncludesPathes.TryGetValue(queryableInclude.Path, out includeValue)))
+                    queryableInclude.Load(value, queryableInclude.Queries.Select(q => LoadIncludes(q, addedIncludesPathes, includeValue, includeWithValue, queryableInclude.Path)).ToArray());
+                else
+                    foreach (var query in queryableInclude.Queries)
+                        LoadIncludes(query, addedIncludesPathes, includeValue, includeWithValue, queryableInclude.Path);
+            }
+        return value;
+    }
+<#+
+    CompleteWAQSQuery();
+#>
+}
+                
+public class WAQSQuery<T> : WAQSQuery, IWAQSQuery<T>
+{
+    public WAQSQuery(IWAQSQuery<T> source)
+        : this(source.DataContext, source, source.AsyncQueryProviderFactory, source.ExpressionTransformation)
+    {
+    }
+    public WAQSQuery(IDataContext dataContext, IQueryable<T> queryable, IAsyncQueryProviderFactory asyncQueryProviderFactory, Func<Expression, Expression> expressionTransformation)
+        : base(dataContext, queryable, asyncQueryProviderFactory, expressionTransformation)
+    {
+    }
+    
+    protected override Tuple<IEnumerator, Func<T2>> GetQueryEnumerator<T2>(IQueryProvider provider, Expression expression)
+    {
+        if (typeof(T2) != typeof(T))
+            return base.GetQueryEnumerator<T2>(provider, expression);
+        var q = provider.CreateQuery<T2>(expression);
+        var enumerator = q.GetEnumerator();
+        return new Tuple<IEnumerator, Func<T2>>(enumerator, () => enumerator.Current);
+    }
+            
+    protected internal override IQueryable ApplyWith()
+    {
+        if (WithSpecifications == null || !WithSpecifications.Any())
+            return this;
+            
+        WithType withType;
+        if (!WithTypes.TryGetValue(typeof(T), out withType))
+            throw new InvalidOperationException();
+        ParameterExpression lambdaParameter = Expression.Parameter(typeof(T));
+        var bindings = new List<MemberAssignment>();
+        bindings.Add(Expression.Bind(withType.Type.GetProperty(typeof(T).Name), lambdaParameter));
+        foreach (var with in WithSpecifications)
+            bindings.Add(Expression.Bind(withType.Type.GetProperty(with), DataContext.GetExpression(typeof(T), with, lambdaParameter)));
+        var expression = Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == "Select" && m.GetParameters()[1].ParameterType.GetGenericArguments()[0].GetGenericArguments().Length == 2).MakeGenericMethod(typeof(T), withType.Type), Expression, Expression.Lambda(Expression.MemberInit(Expression.New(withType.Type.GetConstructor(new Type[0])), bindings), lambdaParameter));
+        return Provider.CreateQuery<T>(expression);
+    }
+                
+    public IEnumerator<T> GetEnumerator()
+    {
+        return GetEnumerable<T>().GetEnumerator();
+    }
+                
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
+    }
+<#+
+    CompleteWAQSQueryOfT();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("WithType.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq.Expressions");
+#>
+public class WithType
+{
+    public Type Type { get; set; }
+    public Func<object, object> TransformToOriginalType { get; set; }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("WAQSQueryProvider.cs");
+    WriteHeader(namespaceName, code, "System", "System.Linq", "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks", serverFxCommonNamespace, serverFxEntitiesNamespace);
+#>
+public class WAQSQueryProvider : IQueryProvider
+{
+    private IDataContext _dataContext;
+    
+    public WAQSQueryProvider(IDataContext dataContext, IQueryProvider sourceProvider, IAsyncQueryProviderFactory asyncQueryProviderFactory, Func<Expression, Expression> expressionTransformation)
+    {
+        _dataContext = dataContext;
+        WAQSQueryProvider waqsQueryProvider;
+        while ((waqsQueryProvider = sourceProvider as WAQSQueryProvider) != null)
+            sourceProvider = waqsQueryProvider.SourceProvider;
+        SourceProvider = sourceProvider;
+        AsyncQueryProviderFactory = asyncQueryProviderFactory;
+        ExpressionTransformation = expressionTransformation;
+    }
+                     
+    internal IQueryProvider SourceProvider { get; private set; }
+    public IAsyncQueryProviderFactory AsyncQueryProviderFactory { get; private set; }
+    public Func<Expression, Expression> ExpressionTransformation { get; private set; }   
+                            
+    public IQueryable<TElement> CreateQuery<TElement>(Expression expression)
+    {
+        return new WAQSQuery<TElement>(_dataContext, SourceProvider.CreateQuery<TElement>(expression), AsyncQueryProviderFactory, ExpressionTransformation);
+    }
+                            
+    public IQueryable CreateQuery(Expression expression)
+    {
+        return new WAQSQuery(_dataContext, SourceProvider.CreateQuery(expression), AsyncQueryProviderFactory, ExpressionTransformation);
+    }
+                    
+    private TResult Execute<TResult>(Expression expression, Func<Expression, TResult> execute, Func<TResult, TResult> fromWith = null)
+    {
+        bool fromQuery = EntitiesInitializer.FromQuery;
+        if (! fromQuery)
+            EntitiesInitializer.FromQuery = true;
+        var result = execute(expression);
+        if (fromWith != null)
+            result = fromWith(result);
+        if (!fromQuery)
+        {
+            if (!(CurrentQuery == null || CurrentQuery.QueryableIncludes == null))
+                WAQSQuery.LoadIncludes(CurrentQuery, value: new TResult[] { result }, withValue: true);
+            EntitiesInitializer.FromQuery = false;
+        }
+        return result;
+    }
+                        
+    public TResult Execute<TResult>(Expression expression)
+    {
+        Func<TResult, TResult> fromWith = null;
+        if (CurrentQuery != null && CurrentQuery.WithSpecifications != null && CurrentQuery.WithSpecifications.Any())
+        {
+            var query = ((WAQSQuery)CurrentQuery).ApplyWith();
+            expression = Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == ((MethodCallExpression)expression).Method.Name && m.GetParameters().Length == 1).MakeGenericMethod(typeof(TResult)), query.Expression);
+            fromWith = item =>
+            {
+                WithType withType;
+                if (WAQSQuery.WithTypes.TryGetValue(typeof (TResult), out withType))
+                    item = (TResult)withType.TransformToOriginalType(item);
+                return item;
+            };
+        }
+        return Execute<TResult>(expression, e => SourceProvider.Execute<TResult>(e), fromWith);
+    }
+                                
+    public object Execute(Expression expression)
+    {
+        return Execute<object>(expression, e => SourceProvider.Execute(e));
+    }
+                    
+    public IWAQSQuery CurrentQuery { get; set; }
+<#+
+    CompleteWAQSQueryProvider();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("QueryableExtensions.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Threading", "System.Threading.Tasks", serverFxCommonNamespace, serverFxEntitiesNamespace);
+#>
+public static class QueryableExtensions
+{
+    private static Expression<Func<T1, TResult>> GetExpression<TSource, T1, TResult>(IWAQSQuery<TSource> source, Expression<Func<T1, TResult>> exp)
+    {
+        if (exp != null)
+            exp = (Expression<Func<T1, TResult>>)source.ExpressionTransformation(exp);
+        return exp;
+    }
+
+    private static Expression<Func<T1, T2, TResult>> GetExpression<TSource, T1, T2, TResult>(IWAQSQuery<TSource> source, Expression<Func<T1, T2, TResult>> exp)
+    {
+        if (exp != null)
+            exp = (Expression<Func<T1, T2, TResult>>)source.ExpressionTransformation(exp);
+        return exp;
+    }
+
+    public static bool All<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        return Queryable.All(source, GetExpression(source, predicate));
+    }
+
+    public static bool Any<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        return Queryable.Any(source, GetExpression(source, predicate));
+    }
+
+    public static decimal? Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, decimal?>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static decimal Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, decimal>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static double? Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, double?>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static double Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, double>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static float? Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, float?>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static float Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, float>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static double? Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, int?>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static double Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, int>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static double? Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, long?>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static double Average<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, long>> selector)
+    {
+        return Queryable.Average(source, GetExpression(source, selector));
+    }
+
+    public static IWAQSQuery<TResult> Cast<TResult>(this IWAQSQuery source)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.Cast<TResult>(source));
+    }
+
+    public static int Count<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        return Queryable.Count(source, GetExpression(source, predicate));
+    }
+                                            
+    public static IWAQSQuery<TSource> DefaultIfEmpty<TSource>(this IWAQSQuery<TSource> source)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.DefaultIfEmpty(source));
+    }
+                                            
+    public static IWAQSQuery<TSource> Distinct<TSource>(this IWAQSQuery<TSource> source)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.Distinct(source));
+    }
+                                            
+    public static IWAQSQuery<TSource> Except<TSource>(this IWAQSQuery<TSource> source1, IWAQSQuery<TSource> source2)
+    {
+        return (IWAQSQuery<TSource>)Queryable.Except(source1, source2);
+    }
+                    
+    public static TSource First<TSource>(this IWAQSQuery<TSource> source)
+    {
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Take(1);
+        return Queryable.First(source);
+    }
+                    
+    public static TSource First<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        predicate = GetExpression(source, predicate);
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Where(predicate).Take(1);
+        return Queryable.First(source, predicate);
+    }
+                    
+    public static TSource FirstOrDefault<TSource>(this IWAQSQuery<TSource> source)
+    {
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Take(1);
+        return Queryable.FirstOrDefault(source);
+    }
+                    
+    public static TSource FirstOrDefault<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        predicate = GetExpression(source, predicate);
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Where(predicate).Take(1);
+        return Queryable.FirstOrDefault(source, predicate);
+    }
+                                            
+    public static IWAQSQuery<IGrouping<TKey, TSource>> GroupBy<TSource, TKey>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector)
+    {
+        return CreateWAQSQuery<IGrouping<TKey, TSource>>(source.DataContext, Queryable.GroupBy(source, GetExpression(source, keySelector)), source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+    }
+
+    public static IWAQSQuery<TResult> GroupBy<TSource, TKey, TResult>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector, Expression<Func<TKey, IEnumerable<TSource>, TResult>> resultSelector)
+    {
+        return CreateWAQSQuery<TResult>(source.DataContext, Queryable.GroupBy(source, GetExpression(source, keySelector), GetExpression(source, resultSelector)), source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+    }
+
+    public static IWAQSQuery<IGrouping<TKey, TElement>> GroupBy<TSource, TKey, TElement>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector, Expression<Func<TSource, TElement>> elementSelector)
+    {
+        return CreateWAQSQuery<IGrouping<TKey, TElement>>(source.DataContext, Queryable.GroupBy(source, GetExpression(source, keySelector), GetExpression(source, elementSelector)), source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+    }
+
+    public static IWAQSQuery<TResult> GroupBy<TSource, TKey, TElement, TResult>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector, Expression<Func<TSource, TElement>> elementSelector, Expression<Func<TKey, IEnumerable<TElement>, TResult>> resultSelector)
+    {
+        return CreateWAQSQuery<TResult>(source.DataContext, Queryable.GroupBy(source, GetExpression(source, keySelector), GetExpression(source, elementSelector), GetExpression(source, resultSelector)), source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+    }
+                                            
+    public static IWAQSQuery<TResult> GroupJoin<TOuter, TInner, TKey, TResult>(this IWAQSQuery<TOuter> outer, IEnumerable<TInner> inner, Expression<Func<TOuter, TKey>> outerKeySelector, Expression<Func<TInner, TKey>> innerKeySelector, Expression<Func<TOuter, IEnumerable<TInner>, TResult>> resultSelector)
+    {
+        return CreateWAQSQuery<TResult>(outer.DataContext, Queryable.GroupJoin(outer, inner, GetExpression(outer, outerKeySelector), GetExpression(outer, innerKeySelector), GetExpression(outer, resultSelector)), outer.AsyncQueryProviderFactory, outer.ExpressionTransformation);
+    }
+                                                
+    public static IWAQSQuery<TSource> Intersect<TSource>(this IWAQSQuery<TSource> source1, IWAQSQuery<TSource> source2)
+    {
+        return CreateWAQSQuery<TSource>(source1.DataContext, Queryable.Intersect(source1, source2), source1.AsyncQueryProviderFactory, source1.ExpressionTransformation);
+    }
+                                                
+    public static IWAQSQuery<TResult> Join<TOuter, TInner, TKey, TResult>(this IWAQSQuery<TOuter> outer, IWAQSQuery<TInner> inner, Expression<Func<TOuter, TKey>> outerKeySelector, Expression<Func<TInner, TKey>> innerKeySelector, Expression<Func<TOuter, TInner, TResult>> resultSelector)
+    {
+        return CreateWAQSQuery<TResult>(outer.DataContext, Queryable.Join(outer, inner, GetExpression(outer, outerKeySelector), GetExpression(inner, innerKeySelector), GetExpression(outer, resultSelector)), inner.AsyncQueryProviderFactory, inner.ExpressionTransformation);
+    }
+
+    public static long LongCount<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        return Queryable.LongCount(source, GetExpression(source, predicate));
+    }
+
+    public static TResult Max<TSource, TResult>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TResult>> selector)
+    {
+        return Queryable.Max(source, GetExpression(source, selector));
+    }
+
+    public static TResult Min<TSource, TResult>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TResult>> selector)
+    {
+        return Queryable.Min(source, GetExpression(source, selector));
+    }
+
+    public static IWAQSQuery<TResult> OfType<TResult>(this IWAQSQuery source)
+    {
+        if (source.ElementType == typeof(TResult))
+            return (IWAQSQuery<TResult>)source;
+        return ApplyIncludesAndWiths(source, Queryable.OfType<TResult>(source));
+    }
+                                                
+    public static IWAQSQuery<TSource> OrderBy<TSource, TKey>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.OrderBy(source, GetExpression(source, keySelector)));
+    }
+                                                
+    public static IWAQSQuery<TSource> OrderByDescending<TSource, TKey>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.OrderByDescending(source, GetExpression(source, keySelector)));
+    }
+                                                
+    public static IWAQSQuery<TSource> Reverse<TSource>(this IWAQSQuery<TSource> source)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.Reverse(source));
+    }
+                                                
+    public static IWAQSQuery<TResult> Select<TSource, TResult>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TResult>> selector)
+    {
+        if (selector.Body == selector.Parameters[0])
+            return (IWAQSQuery<TResult>)source;
+        return CreateWAQSQuery<TResult>(source.DataContext, Queryable.Select(source, GetExpression(source, selector)), source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+    }
+                                                
+    public static IWAQSQuery<TResult> SelectMany<TSource, TResult>(this IWAQSQuery<TSource> source, Expression<Func<TSource, IEnumerable<TResult>>> selector)
+    {
+        return CreateWAQSQuery<TResult>(source.DataContext, Queryable.SelectMany(source, GetExpression(source, selector)), source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+    }
+                                                
+    public static IWAQSQuery<TResult> SelectMany<TSource, TCollection, TResult>(this IWAQSQuery<TSource> source, Expression<Func<TSource, IEnumerable<TCollection>>> collectionSelector, Expression<Func<TSource, TCollection, TResult>> resultSelector)
+    {
+        return CreateWAQSQuery<TResult>(source.DataContext, Queryable.SelectMany(source, GetExpression(source, collectionSelector), GetExpression(source, resultSelector)), source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+    }
+                        
+    public static TSource Single<TSource>(this IWAQSQuery<TSource> source)
+    {
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Take(1);
+        return Queryable.Single(source);
+    }
+                        
+    public static TSource Single<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        predicate = GetExpression(source, predicate);
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Where(predicate).Take(1);
+        return Queryable.Single(source, predicate);
+    }
+                        
+    public static TSource SingleOrDefault<TSource>(this IWAQSQuery<TSource> source)
+    {
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Take(1);
+        return Queryable.SingleOrDefault(source);
+    }
+                        
+    public static TSource SingleOrDefault<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        predicate = GetExpression(source, predicate);
+        ((WAQSQueryProvider)source.Provider).CurrentQuery = source.Where(predicate).Take(1);
+        return Queryable.SingleOrDefault(source, predicate);
+    }
+                                                
+    public static IWAQSQuery<TSource> Skip<TSource>(this IWAQSQuery<TSource> source, int count)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.Skip(source, count));
+    }
+                                                
+    public static IWAQSQuery<TSource> Take<TSource>(this IWAQSQuery<TSource> source, int count)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.Take(source, count));
+    }
+
+    public static decimal? Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, decimal?>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static decimal Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, decimal>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static double? Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, double?>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static double Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, double>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static float? Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, float?>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static float Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, float>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static int? Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, int?>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static int Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, int>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static long? Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, long?>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+
+    public static long Sum<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, long>> selector)
+    {
+        return Queryable.Sum(source, GetExpression(source, selector));
+    }
+                
+    public static IWAQSQuery<TSource> ThenBy<TSource, TKey>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.ThenBy(source, GetExpression(source, keySelector)));
+    }
+                                                
+    public static IWAQSQuery<TSource> ThenByDescending<TSource, TKey>(this IWAQSQuery<TSource> source, Expression<Func<TSource, TKey>> keySelector)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.ThenByDescending(source, GetExpression(source, keySelector)));
+    }
+                                                
+    public static IWAQSQuery<TSource> Union<TSource>(this IWAQSQuery<TSource> source1, IWAQSQuery<TSource> source2)
+    {
+        return CreateWAQSQuery<TSource>(source1.DataContext, Queryable.Union(source1, source2), source1.AsyncQueryProviderFactory, source1.ExpressionTransformation);
+    }
+                                                
+    public static IWAQSQuery<TSource> Where<TSource>(this IWAQSQuery<TSource> source, Expression<Func<TSource, bool>> predicate)
+    {
+        return ApplyIncludesAndWiths(source, Queryable.Where(source, GetExpression(source, predicate)));
+    }
+                                            
+                                            
+                                            
+    public static Expression<Func<T, bool>> BuildOr<T>(IEnumerable<Expression<Func<T, bool>>> exps)
+    {
+        if (exps == null || !exps.Any())
+            return Expression.Lambda<Func<T, bool>>(Expression.Constant(true, typeof(bool)), Expression.Parameter(typeof(T), "p" + Guid.NewGuid().ToString("N")));
+        var parameterExpression = Expression.Parameter(typeof(T), "p" + Guid.NewGuid().ToString("N"));
+        return Expression.Lambda<Func<T, bool>>(exps.Select(e => e.Body.ReplaceParameter(e.Parameters[0], parameterExpression)).Aggregate((e1, e2) => Expression.OrElse(e1, e2)), parameterExpression);
+    }
+                                            
+                                            
+                                            
+    public static IWAQSQuery<TSource> Include<TSource, TInclude>(IWAQSQuery<TSource> source, params Func<IWAQSQueryBase, QueryableInclude>[] includes)
+    {
+        return CreateWAQSQuery<TSource>(source, source.QueryableIncludes == null ? includes : source.QueryableIncludes.Union(includes), source.WithSpecifications);
+    }
+                                
+    public static IWAQSQueryValue<TSource> Include<TSource, TInclude>(IWAQSQueryValue<TSource> source, params Func<IWAQSQueryBase, QueryableInclude>[] includes)
+    {
+        return CreateWAQSQueryValue<TSource>(source.WAQSQueryProvider, source.DataContext, source.Expression, source.QueryableIncludes.Union(includes), source.WithSpecifications);
+    }
+    
+    public static IWAQSQuery<OneT> IncludeOneToMany<OneT, ManyT>(IWAQSQuery<OneT> source, IWAQSQuery<ManyT> manyEntitySet, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<OneT, ManyT, bool>> anyExp, Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection)
+        where OneT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return IncludeOneToMany<OneT, OneT, ManyT>(source, manyEntitySet, exp, anyExp, queryTransform, fkTest, getTrackableCollection);
+    }
+    
+    public static IWAQSQuery<OneBaseT> IncludeOneToMany<OneBaseT, OneT, ManyT>(IWAQSQuery<OneBaseT> source, IWAQSQuery<ManyT> manyEntitySet, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<OneT, ManyT, bool>> anyExp, Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection)
+        where OneT : class, OneBaseT
+        where OneBaseT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return Include<OneBaseT, ManyT>(source, onesQuery =>
+        {
+            var include = new QueryableInclude();
+            var onesQueryAsWAQSQuery = onesQuery as IWAQSQuery<OneBaseT>;
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            if (onesQueryAsWAQSQuery == null)
+            {
+                subQuery = CreateQuery(qt => CreateOneToOne((IWAQSQueryValue<OneBaseT>)onesQuery, exp, q => qt == null ? q.Select(e => e.Select(e2 => e2)) : q.Select(qt).Select(e => e.Select(e2 => e2))), queryTransform);
+                load = (oneValues, manyValues) => IncludeOneOneToMany(source.DataContext, oneValues, manyValues, getTrackableCollection);
+            }
+            else
+            {
+                subQuery = CreateOneToManyQuery(onesQueryAsWAQSQuery.OfType<OneT>(), manyEntitySet, anyExp, ref queryTransform);
+                if (queryTransform == null || queryTransform.Body is ParameterExpression)
+                {
+                    string path = ((MemberExpression)exp.Body).Member.Name;
+                    include.Path = path;
+                }
+                load = (oneValues, manyValues) => IncludeOneToMany(oneValues, manyValues, fkTest, getTrackableCollection);
+            }
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+    
+    public static IWAQSQuery<OneT> IncludeOneToMany<OneT, ManyT>(IWAQSQuery<OneT> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection)
+        where OneT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return IncludeOneToMany<OneT, OneT, ManyT>(source, exp, queryTransform, fkTest, getTrackableCollection);
+    }
+        
+    public static IWAQSQuery<OneBaseT> IncludeOneToMany<OneBaseT, OneT, ManyT>(IWAQSQuery<OneBaseT> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection)
+        where OneT : class, OneBaseT
+        where OneBaseT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return Include<OneBaseT, ManyT>(source, onesQuery =>
+        {
+            var include = new QueryableInclude();
+            var onesQueryAsAsyncQueryable = onesQuery as IWAQSQuery<OneBaseT>;
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            if (onesQueryAsAsyncQueryable == null)
+            {
+                subQuery = CreateQuery(qt => CreateOneToOne((IWAQSQueryValue<OneBaseT>)onesQuery, exp, q => q.Select(qt)), queryTransform);
+                load = (oneValues, manyValues) => IncludeOneOneToMany(source.DataContext, oneValues, manyValues, getTrackableCollection);
+            }
+            else
+            {
+                subQuery = CreateOneToManyQuery(onesQueryAsAsyncQueryable.OfType<OneT>(), exp, ref queryTransform);
+                if (queryTransform == null || queryTransform.Body is ParameterExpression)
+                {
+                    string path = ((MemberExpression)exp.Body).Member.Name;
+                    include.Path = path;
+                }
+                load = (oneValues, manyValues) => IncludeOneToMany(oneValues, manyValues, fkTest, getTrackableCollection);
+            }
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    private static QueryT CreateQuery<QueryT, ExpressionT>(Func<Expression<ExpressionT>, QueryT> getQuery, Expression<ExpressionT> queryTransform)
+        where QueryT : IWAQSQueryBase
+    {
+        return CreateQuery<QueryT, ExpressionT>(getQuery, ref queryTransform);
+    }
+                                            
+    private static QueryT CreateQuery<QueryT, ExpressionT>(Func<Expression<ExpressionT>, QueryT> getQuery, ref Expression<ExpressionT> queryTransform)
+        where QueryT : IWAQSQueryBase
+    {
+        var includeExpressionVisitor = new IncludeExpressionVisitor<QueryT>();
+        queryTransform = (Expression<ExpressionT>)includeExpressionVisitor.Visit(queryTransform);
+        var value = getQuery(queryTransform);
+        foreach (var includeAction in includeExpressionVisitor.IncludeActions)
+            value = includeAction(value);
+        return value;
+    }
+                                            
+    private static IWAQSQuery<ManyT> CreateOneToManyQuery<OneT, ManyT>(IWAQSQuery<OneT> source, IWAQSQuery<ManyT> manyEntitySet, Expression<Func<OneT, ManyT, bool>> exp, ref Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform)
+    {
+        var oParameter = Expression.Parameter(typeof(OneT), "o" + Guid.NewGuid().ToString("N"));
+        var mParameter = Expression.Parameter(typeof(ManyT), "m" + Guid.NewGuid().ToString("N"));
+        var query = Where(manyEntitySet, Expression.Lambda<Func<ManyT, bool>>(Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == "Any" && m.GetParameters().Length == 2).MakeGenericMethod(typeof(OneT)), source.Expression, Expression.Lambda(exp.Body.ReplaceParameter(spe =>
+        {
+            switch (exp.Parameters.IndexOf(spe))
+            {
+                case 0:
+                    return oParameter;
+                case 1:
+                    return mParameter;
+                default:
+                    throw new InvalidOperationException();
+            }
+        }), oParameter)), mParameter));
+        return CreateQuery(qt => qt == null ? query : (IWAQSQuery<ManyT>)query.Provider.CreateQuery<ManyT>(qt.Body.ReplaceParameter(qt.Parameters[0], query.Expression).UseQueryable()), ref queryTransform);
+    }
+    
+    private static IWAQSQuery<ManyT> CreateOneToManyQuery<OneT, ManyT>(IWAQSQuery<OneT> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, ref Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform)
+    {
+        return CreateQuery(qt => CreateWAQSQuery<ManyT>(source.DataContext, source.Select(exp).Select(qt), source.AsyncQueryProviderFactory, source.ExpressionTransformation), ref queryTransform);
+    }                                        
+    private static IWAQSQueryValue<ToTResult> CreateOneToOne<FromBaseT, FromT, ToT, ToTResult>(IWAQSQueryValue<FromBaseT> source, Expression<Func<FromT, ToT>> exp, Func<IWAQSQuery<ToT>, IWAQSQuery<ToTResult>> transformExp)
+        where FromT : FromBaseT
+    {
+        var methodCallExpression = (MethodCallExpression)source.Expression;
+        MethodInfo method;
+        var baseQuery = CreateToOne<FromBaseT>(source, methodCallExpression, out method).OfType<FromT>();
+        return CreateWAQSQueryValue<ToTResult>(source.WAQSQueryProvider, source.DataContext, Expression.Call(methodCallExpression.Object, method.GetGenericMethodDefinition().MakeGenericMethod(typeof(ToTResult)), new[] { transformExp(baseQuery.Select(exp)).Expression }));
+    }
+                                            
+    private static IWAQSQuery<FromT> CreateToOne<FromT>(IWAQSQueryBase source, MethodCallExpression methodCallExpression, out MethodInfo method)
+    {
+        switch (methodCallExpression.Method.Name)
+        {
+            case "First":
+            case "FirstOrDefault":
+            case "Single":
+            case "SingleOrDefault":
+            case "Last":
+            case "LastOrDefault":
+                IWAQSQuery<FromT> baseQuery = CreateWAQSQuery<FromT>((IWAQSQuery<FromT>)methodCallExpression.Arguments[0]);
+                switch (methodCallExpression.Arguments.Count)
+                {
+                    case 1:
+                        method = methodCallExpression.Method;
+                        break;
+                    case 2:
+                        method = methodCallExpression.Method.DeclaringType.GetMethods().First(m => m.Name == methodCallExpression.Method.Name && m.GetParameters().Length == 1);
+                        baseQuery = Where(baseQuery, (Expression<Func<FromT, bool>>)methodCallExpression.Arguments[1]);
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+                return baseQuery;
+            default:
+                throw new NotImplementedException();
+        }
+    }
+                                            
+    private static IEnumerable<ManyT> IncludeOneToMany<OneT, ManyT>(object oneValues, object[] manyValues, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return ((IEnumerable<object>)manyValues[0]).Cast<ManyT>();
+    }
+        
+    public static IWAQSQueryValue<OneT> IncludeOneOneToMany<OneT, ManyT>(IWAQSQueryValue<OneT> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return IncludeOneOneToMany<OneT, OneT, ManyT>(source, exp, queryTransform, getTrackableCollection, manyToMany);
+    }
+        
+    public static IWAQSQueryValue<OneBaseT> IncludeOneOneToMany<OneBaseT, OneT, ManyT>(IWAQSQueryValue<OneBaseT> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : class, OneBaseT
+        where OneBaseT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return Include<OneBaseT, ManyT>(source, onesQuery =>
+        {
+            var include = new QueryableInclude();
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            subQuery = CreateQuery(qt => CreateOneToOne((IWAQSQueryValue<OneBaseT>)onesQuery, exp, q => qt == null ? q.Select(e => e.Select(e2 => e2)) : q.Select(qt).Select(e => e.Select(e2 => e2))), ref queryTransform);
+            if (queryTransform == null || queryTransform.Body is ParameterExpression)
+            {
+                string path = ((MemberExpression)exp.Body).Member.Name;
+                include.Path = path;
+            }
+            load = (oneValues, manyValues) => IncludeOneOneToMany(onesQuery.DataContext, oneValues, manyValues, getTrackableCollection, manyToMany);
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+        
+    public static IWAQSQueryValue<OneT> IncludeOneOneToMany<OneT, ManyT>(IWAQSQueryValue<OneT> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return IncludeOneOneToMany<OneT, OneT, ManyT>(source, exp, queryTransform, getTrackableCollection, manyToMany);
+    }
+        
+    public static IWAQSQueryValue<OneBaseT> IncludeOneOneToMany<OneBaseT, OneT, ManyT>(IWAQSQueryValue<OneBaseT> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : class, OneBaseT
+        where OneBaseT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        return Include<OneBaseT, ManyT>(source, onesQuery =>
+        {
+            var include = new QueryableInclude();
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            subQuery = CreateQuery(qt => CreateOneToOne((IWAQSQueryValue<OneBaseT>)onesQuery, exp, q => q.Select(qt)), ref queryTransform);
+            if (queryTransform == null || queryTransform.Body is ParameterExpression)
+            {
+                string path = ((MemberExpression)exp.Body).Member.Name;
+                include.Path = path;
+            }
+            load = (oneValues, manyValues) => IncludeOneOneToMany(onesQuery.DataContext, oneValues, manyValues, getTrackableCollection, manyToMany);
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    private static object IncludeOneOneToMany<OneT, ManyT>(IDataContext context, object oneValues, object[] manyValues, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : class, IEntity
+        where ManyT : class, IEntity
+    {
+        var one = (OneT)oneValues;
+        if (one == null)
+            return null;
+        var many = ((IEnumerable<object>)manyValues[0]).Cast<ManyT>();
+        if (manyToMany)
+            foreach (var manyElt in many)
+                getTrackableCollection(one).Attach(manyElt, context);
+        return many;
+    }
+        
+    public static IWAQSQueryValue<IEnumerable<OneT>> IncludeManyOneToMany<OneT, ManyT>(IWAQSQueryValue<IEnumerable<OneT>> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return IncludeManyOneToMany<OneT, OneT, ManyT>(source, exp, queryTransform, fkTest, getTrackableCollection, manyToMany);
+    }
+        
+    public static IWAQSQueryValue<IEnumerable<OneBaseT>> IncludeManyOneToMany<OneBaseT, OneT, ManyT>(IWAQSQueryValue<IEnumerable<OneBaseT>> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : OneBaseT
+        where OneBaseT : IEntity
+        where ManyT : IEntity
+    {
+        return Include<IEnumerable<OneBaseT>, ManyT>(source, onesQuery =>
+        {
+            var include = new QueryableInclude();
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            subQuery = CreateManyOneToMany((IWAQSQueryValue<IEnumerable<OneBaseT>>)source, exp, ref queryTransform);
+            if (queryTransform == null || queryTransform.Body is ParameterExpression)
+            {
+                string path = ((MemberExpression)exp.Body).Member.Name;
+                include.Path = path;
+            }
+            load = (oneValues, manyValues) => IncludeManyOneToMany(oneValues, manyValues, fkTest, getTrackableCollection);
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    private static IWAQSQueryValue<IEnumerable<ManyT>> CreateManyOneToMany<OneBaseT, OneT, ManyT>(IWAQSQueryValue<IEnumerable<OneBaseT>> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, ref Expression<Func<IEnumerable<ManyT>, IEnumerable<ManyT>>> queryTransform)
+        where OneT : OneBaseT
+    {
+        return CreateQuery(qt =>
+        {
+            var methodCallExpression = (MethodCallExpression)source.Expression;
+            MethodInfo method;
+            var baseQuery = CreateToOne<IEnumerable<OneT>>(source, methodCallExpression, out method).Select(os => os.OfType<OneT>());
+            var selectParameter = Expression.Parameter(typeof(IEnumerable<OneT>), "e" + Guid.NewGuid().ToString("N"));
+            if (qt != null)
+                exp = Expression.Lambda<Func<OneT, IEnumerable<ManyT>>>(qt.Body.ReplaceParameter(qt.Parameters[0], exp.Body), exp.Parameters[0]);
+            var manyQuery = baseQuery.Select(Expression.Lambda<Func<IEnumerable<OneT>, IEnumerable<ManyT>>>(Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "SelectMany" && m.GetParameters().Length == 2 && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2).MakeGenericMethod(typeof(OneT), typeof(ManyT)), selectParameter, exp), selectParameter));
+            return CreateWAQSQueryValue<IEnumerable<ManyT>>(source.WAQSQueryProvider, source.DataContext, Expression.Call(methodCallExpression.Object, method.GetGenericMethodDefinition().MakeGenericMethod(typeof(IEnumerable<ManyT>)), manyQuery.Expression));
+        }, ref queryTransform);
+    }
+                                            
+    private static object IncludeManyOneToMany<OneT, ManyT>(object oneValues, object[] manyValues, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return ((IEnumerable<object>)manyValues[0]).Cast<ManyT>();
+    }
+        
+    public static IWAQSQueryValue<IEnumerable<OneT>> IncludeManyOneToOneMany<OneT, ManyT>(IWAQSQueryValue<IEnumerable<OneT>> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return IncludeManyOneToOneMany<OneT, OneT, ManyT>(source, exp, queryTransform, fkTest, getTrackableCollection, manyToMany);
+    }
+        
+    public static IWAQSQueryValue<IEnumerable<OneBaseT>> IncludeManyOneToOneMany<OneBaseT, OneT, ManyT>(IWAQSQueryValue<IEnumerable<OneBaseT>> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection, bool manyToMany = false)
+        where OneT : OneBaseT
+        where OneBaseT : IEntity
+        where ManyT : IEntity
+    {
+        return Include<IEnumerable<OneBaseT>, ManyT>(source, onesQuery =>
+        {
+            var include = new QueryableInclude();
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            subQuery = CreateManyOneToOneMany((IWAQSQueryValue<IEnumerable<OneBaseT>>)source, exp, ref queryTransform);
+            if (queryTransform == null || queryTransform.Body is ParameterExpression)
+            {
+                string path = ((MemberExpression)exp.Body).Member.Name;
+                include.Path = path;
+            }
+            load = (oneValues, manyValues) => IncludeManyOneToOneMany(oneValues, manyValues, fkTest, getTrackableCollection);
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    private static IWAQSQueryValue<IEnumerable<ManyT>> CreateManyOneToOneMany<OneBaseT, OneT, ManyT>(IWAQSQueryValue<IEnumerable<OneBaseT>> source, Expression<Func<OneT, IEnumerable<ManyT>>> exp, ref Expression<Func<IEnumerable<ManyT>, ManyT>> queryTransform)
+        where OneT : OneBaseT
+    {
+        return CreateQuery(qt =>
+        {
+            var methodCallExpression = (MethodCallExpression)source.Expression;
+            MethodInfo method;
+            var baseQuery = CreateToOne<IEnumerable<OneT>>(source, methodCallExpression, out method).Select(os => os.OfType<OneT>());
+            var selectParameter = Expression.Parameter(typeof(IEnumerable<OneT>), "e" + Guid.NewGuid().ToString("N"));
+            var expOne = Expression.Lambda<Func<OneT, ManyT>>(qt.Body.ReplaceParameter(qt.Parameters[0], exp.Body), exp.Parameters[0]);
+            var manyQuery = baseQuery.Select(Expression.Lambda<Func<IEnumerable<OneT>, IEnumerable<ManyT>>>(Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Select" && m.GetParameters().Length == 2 && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2).MakeGenericMethod(typeof(OneT), typeof(ManyT)), selectParameter, expOne), selectParameter));
+            return CreateWAQSQueryValue<IEnumerable<ManyT>>(source.WAQSQueryProvider, source.DataContext, Expression.Call(methodCallExpression.Object, method.GetGenericMethodDefinition().MakeGenericMethod(typeof(IEnumerable<ManyT>)), manyQuery.Expression));
+        }, ref queryTransform);
+    }
+        
+    private static object IncludeManyOneToOneMany<ManyT, OneT>(object oneValues, object[] manyValues, Func<OneT, ManyT, bool> fkTest, Func<OneT, TrackableCollection<ManyT>> getTrackableCollection)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return ((IEnumerable<object>)manyValues).Cast<ManyT>();
+    }
+        
+    public static IWAQSQuery<ManyT> IncludeManyToOne<ManyT, OneT>(IWAQSQuery<ManyT> source, IWAQSQuery<OneT> onesEntitySet, Expression<Func<ManyT, OneT>> exp, Expression<Func<ManyT, OneT, bool>> anyExp, Expression<Func<OneT, OneT>> queryTransform, Func<ManyT, OneT, bool> fkTest, Action<ManyT, OneT> setOne)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return IncludeManyToOne<ManyT, ManyT, OneT>(source, onesEntitySet, exp, anyExp, queryTransform, fkTest, setOne);
+    }
+        
+    public static IWAQSQuery<ManyBaseT> IncludeManyToOne<ManyBaseT, ManyT, OneT>(IWAQSQuery<ManyBaseT> source, IWAQSQuery<OneT> onesEntitySet, Expression<Func<ManyT, OneT>> exp, Expression<Func<ManyT, OneT, bool>> anyExp, Expression<Func<OneT, OneT>> queryTransform, Func<ManyT, OneT, bool> fkTest, Action<ManyT, OneT> setOne)
+        where ManyT : ManyBaseT
+        where ManyBaseT : IEntity
+        where OneT : IEntity
+    {
+        return Include<ManyBaseT, OneT>(source, manyQuery =>
+        {
+            var include = new QueryableInclude();
+            var manyQueryAsAsyncQueryable = manyQuery as IWAQSQuery<ManyBaseT>;
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            if (manyQueryAsAsyncQueryable == null)
+            {
+                subQuery = CreateQuery(qt => CreateOneToOne((IWAQSQueryValue<ManyBaseT>)manyQuery, exp, q => q), queryTransform);
+                load = (manyValues, oneValues) => IncludeOneManyToOne(manyValues, oneValues, setOne);
+            }
+            else
+            {
+                subQuery = CreateManyToOneQuery(manyQueryAsAsyncQueryable.OfType<ManyT>(), onesEntitySet, anyExp, ref queryTransform);
+                if (queryTransform == null || queryTransform.Body is ParameterExpression)
+                {
+                    string path = ((MemberExpression)exp.Body).Member.Name;
+                    include.Path = path;
+                }
+                load = (manyValues, oneValues) => IncludeManyToOne(manyValues, oneValues, fkTest, setOne);
+            }
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    private static IWAQSQuery<OneT> CreateManyToOneQuery<ManyT, OneT>(IWAQSQuery<ManyT> source, IWAQSQuery<OneT> onesEntitySet, Expression<Func<ManyT, OneT, bool>> exp, ref Expression<Func<OneT, OneT>> queryTransform)
+    {
+        var oParameter = Expression.Parameter(typeof(OneT), "o" + Guid.NewGuid().ToString("N"));
+        var mParameter = Expression.Parameter(typeof(ManyT), "m" + Guid.NewGuid().ToString("N"));
+        var query = Where(onesEntitySet, Expression.Lambda<Func<OneT, bool>>(Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == "Any" && m.GetParameters().Length == 2).MakeGenericMethod(typeof(ManyT)), source.Expression, Expression.Lambda(exp.Body.ReplaceParameter(spe =>
+        {
+            switch (exp.Parameters.IndexOf(spe))
+            {
+                case 0:
+                    return mParameter;
+                case 1:
+                    return oParameter;
+                default:
+                    throw new InvalidOperationException();
+            }
+        }), mParameter)), oParameter));
+        return CreateQuery(_ => query, ref queryTransform);
+    }
+                                            
+    private static object IncludeManyToOne<ManyT, OneT>(object manyValues, object[] oneValues, Func<ManyT, OneT, bool> fkTest, Action<ManyT, OneT> setOne)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return ((IEnumerable<object>)oneValues[0]).Cast<OneT>();
+    }
+                                            
+    private static object IncludeOneManyToOne<ManyT, OneT>(object manyValues, object[] oneValues, Action<ManyT, OneT> setOne)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return (OneT)oneValues[0];
+    }
+        
+    public static IWAQSQueryValue<ManyT> IncludeOneManyToOne<ManyT, OneT>(IWAQSQueryValue<ManyT> source, Expression<Func<ManyT, OneT>> exp, Expression<Func<OneT, OneT>> queryTransform, Action<ManyT, OneT> setOne)
+        where OneT : IEntity
+        where ManyT : IEntity
+    {
+        return IncludeOneManyToOne<ManyT, ManyT, OneT>(source, exp, queryTransform, setOne);
+    }
+        
+    public static IWAQSQueryValue<ManyBaseT> IncludeOneManyToOne<ManyBaseT, ManyT, OneT>(IWAQSQueryValue<ManyBaseT> source, Expression<Func<ManyT, OneT>> exp, Expression<Func<OneT, OneT>> queryTransform, Action<ManyT, OneT> setOne)
+        where ManyT : ManyBaseT
+        where ManyBaseT : IEntity
+        where OneT : IEntity
+    {
+        return Include<ManyBaseT, OneT>(source, manyQuery =>
+        {
+            var include = new QueryableInclude();
+            IWAQSQueryBase subQuery;
+            Func<object, object[], object> load;
+            subQuery = CreateQuery(qt => CreateOneToOne((IWAQSQueryValue<ManyBaseT>)manyQuery, exp, q => q), ref queryTransform);
+            if (queryTransform == null || queryTransform.Body is ParameterExpression)
+            {
+                string path = ((MemberExpression)exp.Body).Member.Name;
+                include.Path = path;
+            }
+            load = (manyValues, oneValues) => IncludeOneManyToOne(manyValues, oneValues, setOne);
+            include.Queries = new IWAQSQueryBase[] { subQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    public static IWAQSQuery<FromT> IncludeManyToMany<FromT, ToT, KeysT>(IWAQSQuery<FromT> source, IWAQSQuery<ToT> toEntitySet, Expression<Func<FromT, IEnumerable<ToT>>> exp, Expression<Func<FromT, TrackableCollection<ToT>>> getCollectionExp, Expression<Func<TrackableCollection<ToT>, ToT, bool>> anyExp, Expression<Func<IEnumerable<ToT>, IEnumerable<ToT>>> queryTransform, Func<IWAQSQuery<FromT>, IWAQSQuery<KeysT>> getKeysQuery, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where FromT : class, IEntity
+        where ToT : class, IEntity
+    {
+        return IncludeManyToMany<FromT, FromT, ToT, KeysT>(source, toEntitySet, exp, getCollectionExp, anyExp, queryTransform, getKeysQuery, fromFkTest, toFkTest, getTrackableCollection);
+    }
+                                            
+        public static IWAQSQuery<BaseFromT> IncludeManyToMany<BaseFromT, FromT, ToT, KeysT>(IWAQSQuery<BaseFromT> source, IWAQSQuery<ToT> toEntitySet, Expression<Func<FromT, IEnumerable<ToT>>> exp, Expression<Func<FromT, TrackableCollection<ToT>>> getCollectionExp, Expression<Func<TrackableCollection<ToT>, ToT, bool>> anyExp, Expression<Func<IEnumerable<ToT>, IEnumerable<ToT>>> queryTransform, Func<IWAQSQuery<FromT>, IWAQSQuery<KeysT>> getKeysQuery, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+            where FromT : class, BaseFromT
+            where BaseFromT : class, IEntity
+            where ToT : class, IEntity
+        {
+            return Include<BaseFromT, ToT>(source, fromQuery =>
+            {
+                var include = new QueryableInclude();
+                var fromBaseQueryAsAsyncQueryable = fromQuery as IWAQSQuery<BaseFromT>;
+                IWAQSQueryBase toQuery;
+                Func<object, object[], object> load;
+                if (fromBaseQueryAsAsyncQueryable == null)
+                {
+                    toQuery = CreateQuery(qt => CreateOneToOne(((IWAQSQueryValue<BaseFromT>)fromQuery), exp, q => qt == null ? q.Select(e => e.Select(e2 => e2)) : q.Select(qt).Select(e => e.Select(e2 => e2))), queryTransform);
+                    load = (fromValues, toValues) => IncludeOneOneToMany(fromQuery.DataContext, fromValues, toValues, getTrackableCollection, true);
+                    return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery }, Load = load };
+                }
+                var fromQueryAsAsyncQueryable = fromBaseQueryAsAsyncQueryable.OfType<FromT>();
+                toQuery = CreateManyToManyQuery(fromQueryAsAsyncQueryable, toEntitySet, exp, getCollectionExp, anyExp, ref queryTransform);
+                if (queryTransform == null || queryTransform.Body is ParameterExpression)
+                {
+                    string path = ((MemberExpression)exp.Body).Member.Name;
+                    include.Path = path;
+                }
+                var keysQuery = getKeysQuery(fromQueryAsAsyncQueryable);
+                if (queryTransform != null)
+                {
+                    var selectManyCollectionSelectorExpression = (LambdaExpression)((MethodCallExpression)keysQuery.Expression).Arguments[1];
+                    selectManyCollectionSelectorExpression = Expression.Lambda(queryTransform.Body.ReplaceParameter(queryTransform.Parameters[0], selectManyCollectionSelectorExpression.Body), selectManyCollectionSelectorExpression.Parameters);
+                }
+                load = (fromValues, toValues) => IncludeManyToMany(fromQuery.DataContext, fromValues, toValues, fromFkTest, toFkTest, getTrackableCollection);
+                include.Queries = new IWAQSQueryBase[] { toQuery, keysQuery };
+                include.Load = load;
+                return include;
+            });
+        }
+                                            
+    private static IWAQSQuery<ToT> CreateManyToManyQuery<FromT, ToT>(IWAQSQuery<FromT> source, IWAQSQuery<ToT> toEntitySet, Expression<Func<FromT, IEnumerable<ToT>>> exp, Expression<Func<FromT, TrackableCollection<ToT>>> getCollectionExp, Expression<Func<TrackableCollection<ToT>, ToT, bool>> anyExp, ref Expression<Func<IEnumerable<ToT>, IEnumerable<ToT>>> queryTransform)
+        where FromT : IEntity
+        where ToT : IEntity
+    {
+        return CreateQuery(qt =>
+        {
+            var toParameter = Expression.Parameter(typeof(ToT), "t" + Guid.NewGuid().ToString("N"));
+            IWAQSQuery<ToT> toQuery;
+            if (qt == null)
+            {
+                var fromParameter = Expression.Parameter(typeof(FromT), "f" + Guid.NewGuid().ToString("N"));
+                toQuery = Where(toEntitySet, Expression.Lambda<Func<ToT, bool>>(Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == "Any" && m.GetParameters().Length == 2).MakeGenericMethod(typeof(FromT)), source.Expression, Expression.Lambda(anyExp.Body.ReplaceParameter(spe =>
+                {
+                    switch (anyExp.Parameters.IndexOf(spe))
+                    {
+                        case 0:
+                            return getCollectionExp.Body.ReplaceParameter(getCollectionExp.Parameters[0], fromParameter);
+                        case 1:
+                            return toParameter;
+                        default:
+                            throw new InvalidOperationException();
+                    }
+                }), fromParameter)), toParameter));
+            }
+            else
+                toQuery = Where(toEntitySet, Expression.Lambda<Func<ToT, bool>>(Expression.Call(typeof(Queryable).GetMethod("Contains"), source.Select(exp).Select(qt).SelectMany(e => e).Expression, toParameter), toParameter)); 
+            return CreateWAQSQuery<ToT>(source.DataContext, toQuery, source.AsyncQueryProviderFactory, source.ExpressionTransformation);
+        }, ref queryTransform);
+    }
+        
+    public static IWAQSQuery<FromT> IncludeManyToOneMany<FromT, ToT, KeysT>(IWAQSQuery<FromT> source, Expression<Func<FromT, IEnumerable<ToT>>> exp, Expression<Func<IEnumerable<ToT>, ToT>> queryTransform, Func<IWAQSQuery<FromT>, ToT, IWAQSQuery<KeysT>> getKeysQuery, Func<KeysT, ToT> getTo, Func<KeysT, FromT, bool> getFromKey, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where FromT : class, IEntity
+        where ToT : class, IEntity
+    {
+        return IncludeManyToOneMany<FromT, FromT, ToT, KeysT>(source, exp, queryTransform, getKeysQuery, getTo, getFromKey, getTrackableCollection);
+    }
+        
+    public static IWAQSQuery<FromBaseT> IncludeManyToOneMany<FromBaseT, FromT, ToT, KeysT>(IWAQSQuery<FromBaseT> source, Expression<Func<FromT, IEnumerable<ToT>>> exp, Expression<Func<IEnumerable<ToT>, ToT>> queryTransform, Func<IWAQSQuery<FromT>, ToT, IWAQSQuery<KeysT>> getKeysQuery, Func<KeysT, ToT> getTo, Func<KeysT, FromT, bool> getFromKey, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where FromT : class, FromBaseT
+        where FromBaseT : class, IEntity
+        where ToT : class, IEntity
+    {
+        return Include<FromBaseT, ToT>(source, fromQuery =>
+        {
+            var include = new QueryableInclude();
+            var fromBaseQueryAsAsyncQueryable = fromQuery as IWAQSQuery<FromBaseT>;
+            IWAQSQueryBase toQuery;
+            Func<object, object[], object> load;
+            if (fromBaseQueryAsAsyncQueryable == null)
+            {
+                toQuery = CreateQuery(qt => CreateOneToOne(((IWAQSQueryValue<FromBaseT>)fromQuery), exp, q => q.Select(qt)), queryTransform);
+                load = (fromValues, toValues) => IncludeOneOneToMany(fromQuery.DataContext, fromValues, toValues, getTrackableCollection, true);
+                return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery }, Load = load };
+            }
+            var fromQueryAsAsyncQueryable = fromBaseQueryAsAsyncQueryable.OfType<FromT>();
+            toQuery = CreateQuery(qt => CreateWAQSQuery(source.DataContext, fromQueryAsAsyncQueryable.Select(exp).Select(qt), source.AsyncQueryProviderFactory, source.ExpressionTransformation), ref queryTransform);
+            if (queryTransform == null || queryTransform.Body is ParameterExpression)
+            {
+                string path = ((MemberExpression)exp.Body).Member.Name;
+                include.Path = path;
+            }
+            ToT toT = null;
+            var keysQuery = getKeysQuery(fromQueryAsAsyncQueryable, toT);
+            var select = (MethodCallExpression)keysQuery.Expression;
+            var selectLambda = (LambdaExpression)select.Arguments[1];
+            var keysCtor = (NewExpression)((LambdaExpression)select.Arguments[1]).Body;
+            var keysCtorToArg = keysCtor.Arguments.Last();
+            keysCtorToArg = queryTransform.Body.ReplaceParameter(queryTransform.Parameters[0], exp.Body.ReplaceParameter(exp.Parameters[0], selectLambda.Parameters[0]));
+            var keysCtorArguments = keysCtor.Arguments.ToList();
+            keysCtorArguments[keysCtor.Arguments.Count - 1] = keysCtorToArg;
+            keysCtor = Expression.New(keysCtor.Constructor, keysCtorArguments);
+                                
+            keysQuery = CreateWAQSQuery<KeysT>(keysQuery.DataContext, keysQuery, keysQuery.AsyncQueryProviderFactory, keysQuery.ExpressionTransformation, toQuery.QueryableIncludes);
+                                            
+            load = (fromValues, toValues) => IncludeManyToOneMany<FromT, ToT, KeysT>(fromQuery.DataContext, fromValues, toValues, getTo, getFromKey, getTrackableCollection);
+            include.Queries = new IWAQSQueryBase[] { keysQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    private static object IncludeManyToOneMany<FromT, ToT, KeysT>(IDataContext context, object fromValues, object[] toValues, Func<KeysT, ToT> getTo, Func<KeysT, FromT, bool> getFromKey, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where ToT : class, IEntity
+    {
+        var keys = ((IEnumerable<object>)toValues[0]).Cast<KeysT>().ToList();
+        var froms = ((IEnumerable<object>)fromValues).Cast<FromT>().ToList();
+        var tos = new List<ToT>();
+        foreach (var key in keys)
+        {
+            var to = getTo(key);
+            if (to != null)
+            {
+                getTrackableCollection(froms.FirstOrDefault(f => getFromKey(key, f))).Attach(getTo(key), context);
+                tos.Add(to);
+            }
+        }
+        return tos;
+    }
+                                            
+        public static IWAQSQuery<FromT> IncludeManyToMany<FromT, ToT, KeysT>(IWAQSQuery<FromT> source, IWAQSQuery<ToT> toQuery, Func<IWAQSQuery<FromT>, IWAQSQuery<ToT>, IWAQSQuery<KeysT>> getKeysQuery, Func<FromT, IWAQSQuery<ToT>, IWAQSQuery<KeysT>> getKeysQueryForOne, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+            where FromT : class, IEntity
+            where ToT : class, IEntity
+        {
+            return IncludeManyToMany<FromT, FromT, ToT, KeysT>(source, toQuery, getKeysQuery, getKeysQueryForOne, fromFkTest, toFkTest, getTrackableCollection);
+        }
+        
+        public static IWAQSQuery<FromBaseT> IncludeManyToMany<FromBaseT, FromT, ToT, KeysT>(IWAQSQuery<FromT> source, IWAQSQuery<ToT> toQuery, Func<IWAQSQuery<FromT>, IWAQSQuery<ToT>, IWAQSQuery<KeysT>> getKeysQuery, Func<FromT, IWAQSQuery<ToT>, IWAQSQuery<KeysT>> getKeysQueryForOne, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+            where FromT : class, FromBaseT
+            where FromBaseT : class, IEntity
+            where ToT : class, IEntity
+        {
+            if (source.DataContext != toQuery.DataContext)
+                throw new InvalidOperationException();
+            return Include<FromT, ToT>(source, fromQuery =>
+            {
+                var fromBaseQueryAsAsyncQueryable = fromQuery as IWAQSQuery<FromBaseT>;
+                Func<object, object[], object> load;
+                IWAQSQuery<KeysT> keysQuery;
+                if (fromBaseQueryAsAsyncQueryable == null)
+                {
+                    keysQuery = CreateOneManyToManyKeysQuery(((IWAQSQueryValue<FromT>)fromQuery), toQuery, getKeysQueryForOne);
+                    load = (fromValues, toValues) => IncludeOneManyToMany<FromT, ToT, KeysT>(fromQuery.DataContext, fromValues, toValues, fromFkTest, toFkTest, getTrackableCollection);
+                    return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery, keysQuery }, Load = load };
+                }
+                keysQuery = getKeysQuery(fromBaseQueryAsAsyncQueryable.OfType<FromT>(), toQuery);
+                load = (fromValues, toValues) => IncludeManyToMany<FromT, ToT, KeysT>(fromQuery.DataContext, fromValues, toValues, fromFkTest, toFkTest, getTrackableCollection);
+                return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery, keysQuery }, Load = load };
+            });
+        }                                    
+    public static IWAQSQuery<FromT> IncludeManyToOneMany<FromT, ToT, KeysT>(IWAQSQuery<FromT> source, IWAQSQueryValue<ToT> toQuery, Func<IWAQSQuery<FromT>, ToT, IWAQSQuery<KeysT>> getKeysQuery, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where FromT : class, IEntity
+        where ToT : class, IEntity
+    {
+        if (source.DataContext != toQuery.DataContext)
+            throw new InvalidOperationException();
+        return Include<FromT, ToT>(source, fromQuery =>
+        {
+            Func<object, object[], object> load;
+            IWAQSQueryBase keysQuery;
+            var fromQueryAsAsyncQueryable = fromQuery as IWAQSQuery<FromT>;
+            if (fromQueryAsAsyncQueryable == null)
+            {
+                keysQuery = CreateOneManyToOneManyKeysQuery(((IWAQSQueryValue<FromT>)fromQuery), toQuery, getKeysQuery);
+                load = (fromValues, toValues) => IncludeOneManyToOneMany(fromQuery.DataContext, fromValues, toValues, getTrackableCollection);
+                return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery }, Load = load };
+            }
+            keysQuery = CreateManyToOneManyKeysQuery(fromQueryAsAsyncQueryable, toQuery, getKeysQuery);
+            load = (fromValues, toValues) => IncludeOneManyToMany(fromQuery.DataContext, fromValues, toValues, fromFkTest, toFkTest, getTrackableCollection);
+            return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery, keysQuery }, Load = load };
+        });
+    }
+                                            
+    public static IWAQSQueryValue<FromT> IncludeOneManyToMany<FromT, ToT, KeysT>(IWAQSQueryValue<FromT> source, IWAQSQuery<ToT> toQuery, Func<FromT, IWAQSQuery<ToT>, IWAQSQuery<KeysT>> getKeysQuery, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where FromT : class, IEntity
+        where ToT : class, IEntity
+    {
+        if (source.DataContext != toQuery.DataContext)
+            throw new InvalidOperationException();
+        return Include<FromT, ToT>(source, fromQuery =>
+        {
+            var keysQuery = CreateOneManyToManyKeysQuery(source, toQuery, getKeysQuery);
+            Func<object, object[], object> load = (fromValues, toValues) => IncludeOneManyToMany(fromQuery.DataContext, fromValues, toValues, fromFkTest, toFkTest, getTrackableCollection);
+            return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery, keysQuery }, Load = load };
+        });
+    }
+                                            
+    public static IWAQSQueryValue<FromT> IncludeOneManyToOneMany<FromT, ToT, KeysT>(IWAQSQueryValue<FromT> source, IWAQSQueryValue<ToT> toQuery, Func<IWAQSQuery<FromT>, ToT, IWAQSQuery<KeysT>> getKeysQuery, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where FromT : class, IEntity
+        where ToT : class, IEntity
+    {
+        if (source.DataContext != toQuery.DataContext)
+            throw new InvalidOperationException();
+        return Include<FromT, ToT>(source, fromQuery =>
+        {
+            var keysQuery = CreateOneManyToOneManyKeysQuery(source, toQuery, getKeysQuery);
+            Func<object, object[], object> load = (fromValues, toValues) => IncludeOneManyToOneMany(fromQuery.DataContext, fromValues, toValues, getTrackableCollection);
+            return new QueryableInclude { Queries = new IWAQSQueryBase[] { toQuery, keysQuery }, Load = load };
+        });
+    }
+                                            
+    private static IWAQSQuery<KeysT> CreateOneManyToManyKeysQuery<FromT, ToT, KeysT>(IWAQSQueryValue<FromT> fromQuery, IWAQSQuery<ToT> toQuery, Func<FromT, IWAQSQuery<ToT>, IWAQSQuery<KeysT>> getKeysQuery)
+        where FromT : class, IEntity
+        where ToT : IEntity
+    {
+        FromT fromT = null;
+        var keysQuery = getKeysQuery(fromT, toQuery);
+        var keysQueryExpression = keysQuery.Expression.ReplaceConstant(constant =>
+            {
+                if (constant.Value == fromT)
+                    return fromQuery.Expression;
+                return constant;
+            });
+        return CreateWAQSQuery<KeysT>(keysQuery.DataContext, keysQuery.Provider.CreateQuery<KeysT>(keysQueryExpression), keysQuery.AsyncQueryProviderFactory, keysQuery.ExpressionTransformation);
+    }
+                                            
+    private static IWAQSQuery<KeysT> CreateManyToOneManyKeysQuery<FromT, ToT, KeysT>(IWAQSQuery<FromT> fromQuery, IWAQSQueryValue<ToT> toQuery, Func<IWAQSQuery<FromT>, ToT, IWAQSQuery<KeysT>> getKeysQuery)
+        where FromT : IEntity
+        where ToT : class, IEntity
+    {
+        ToT toT = null;
+        var keysQuery = getKeysQuery(fromQuery, toT);
+        var keysQueryExpression = keysQuery.Expression.ReplaceConstant(constant =>
+        {
+            if (constant.Value == toT)
+                return toQuery.Expression;
+            return constant;
+        });
+        keysQuery = CreateWAQSQuery<KeysT>(keysQuery.DataContext, keysQuery.Provider.CreateQuery<KeysT>(keysQueryExpression), keysQuery.AsyncQueryProviderFactory, keysQuery.ExpressionTransformation);
+        return keysQuery;
+    }
+                                            
+    private static IWAQSQueryValue<KeysT> CreateOneManyToOneManyKeysQuery<FromT, ToT, KeysT>(IWAQSQueryValue<FromT> fromQuery, IWAQSQueryValue<ToT> toQuery, Func<IWAQSQuery<FromT>, ToT, IWAQSQuery<KeysT>> getKeysQuery)
+        where FromT : class, IEntity
+        where ToT : class, IEntity
+    {
+        MethodInfo method;
+        var fromQueryAsAsyncQueryable = CreateToOne<FromT>(fromQuery, (MethodCallExpression)fromQuery.Expression, out method);
+        ToT toT = null;
+        var keysQuery = getKeysQuery(CreateWAQSQuery<FromT>(fromQuery.DataContext, fromQueryAsAsyncQueryable, fromQueryAsAsyncQueryable.AsyncQueryProviderFactory, fromQueryAsAsyncQueryable.ExpressionTransformation), toT);
+        var keysQueryExpression = keysQuery.Expression.ReplaceConstant(constant =>
+        {
+            if (constant.Value == toT)
+                return toQuery.Expression;
+            return constant;
+        });
+        return CreateWAQSQueryValue<KeysT>(fromQuery.WAQSQueryProvider, fromQuery.DataContext, Expression.Call(method.MakeGenericMethod(typeof(KeysT)), keysQueryExpression));
+    }
+                                            
+    private static object IncludeManyToMany<FromT, ToT, KeysT>(IDataContext context, object fromValues, object[] toValues, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where ToT : class, IEntity
+    {
+        var froms = ((IEnumerable<object>)fromValues).Cast<FromT>().ToList();
+        var tos = ((IEnumerable<object>)toValues[0]).Cast<ToT>().ToList();
+        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>();
+        foreach (var key in keys)
+        {
+            FromT fromValue = froms.FirstOrDefault(f => fromFkTest(key, f));
+            ToT toValue;
+            if (fromValue != null && (toValue = tos.FirstOrDefault(t => toFkTest(key, t))) != null)
+                getTrackableCollection(fromValue).Attach(toValue, context);
+        }
+        return tos;
+    }
+                                            
+    private static object IncludeManyToOneManyTask<FromT, ToT, KeysT>(IDataContext context, object fromValues, object[] toValues, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where ToT : class, IEntity
+    {
+        var froms = ((IEnumerable<object>)fromValues).Cast<FromT>().ToList();
+        var to = (ToT)toValues[0];
+        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>();
+        foreach (var key in keys)
+        {
+            var @from = froms.FirstOrDefault(f => fromFkTest(key, f));
+            if (@from != null && toFkTest(key, to))
+                getTrackableCollection(@from).Attach(to, context);
+        }
+        return to;
+    }
+                                            
+    private static object IncludeOneManyToMany<FromT, ToT, KeysT>(IDataContext context, object fromValues, object[] toValues, Func<KeysT, FromT, bool> fromFkTest, Func<KeysT, ToT, bool> toFkTest, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where ToT : class, IEntity
+    {
+        var @from = (FromT)fromValues;
+        var tos = ((IEnumerable<object>)toValues[0]).Cast<ToT>().ToList();
+        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>();
+        foreach (var key in keys)
+        {
+            var toValue = tos.FirstOrDefault(t => toFkTest(key, t));
+            if (toValue != null && fromFkTest(key, @from))
+                getTrackableCollection(@from).Attach(toValue, context);
+        }
+        return tos;
+    }
+                                            
+    private static object IncludeOneManyToOneMany<FromT, ToT>(IDataContext context, object fromValues, object[] toValues, Func<FromT, TrackableCollection<ToT>> getTrackableCollection)
+        where ToT : class, IEntity
+    {
+        var fromValue = (FromT)fromValues;
+        var toValue = (ToT)toValues[0];
+        getTrackableCollection(fromValue).Attach(toValue, context);
+        return toValue;
+    }
+        
+    public static IWAQSQueryValue<IEnumerable<FromT>> IncludeManyOneToOne<FromT, ToT>(IWAQSQueryValue<IEnumerable<FromT>> source, Expression<Func<FromT, ToT>> exp, Expression<Func<ToT, ToT>> queryTransform, Func<FromT, ToT, bool> fkTest, Action<FromT, ToT> setTo)
+        where FromT : IEntity
+        where ToT : IEntity
+    {
+        return IncludeManyOneToOne<FromT, FromT, ToT>(source, exp, queryTransform, fkTest, setTo);
+    }
+        
+    public static IWAQSQueryValue<IEnumerable<FromBaseT>> IncludeManyOneToOne<FromBaseT, FromT, ToT>(IWAQSQueryValue<IEnumerable<FromBaseT>> source, Expression<Func<FromT, ToT>> exp, Expression<Func<ToT, ToT>> queryTransform, Func<FromT, ToT, bool> fkTest, Action<FromT, ToT> setTo)
+        where FromT : FromBaseT
+        where FromBaseT : IEntity
+        where ToT : IEntity
+    {
+        return Include<IEnumerable<FromBaseT>, ToT>(source, fromQuery =>
+        {
+            var include = new QueryableInclude();
+            var toQuery = CreateManyOneToOne(((IWAQSQueryValue<IEnumerable<FromBaseT>>)source), exp, ref queryTransform);
+            if (queryTransform == null || queryTransform.Body is ParameterExpression)
+            {
+                string path = ((MemberExpression)exp.Body).Member.Name;
+                include.Path = path;
+            }
+            Func<object, object[], object> load = (fromValues, toValues) => IncludeManyOneToOne(fromValues, toValues, fkTest, setTo);
+            include.Queries = new IWAQSQueryBase[] { toQuery };
+            include.Load = load;
+            return include;
+        });
+    }
+                                            
+    private static IWAQSQueryValue<IEnumerable<ToT>> CreateManyOneToOne<FromBaseT, FromT, ToT>(IWAQSQueryValue<IEnumerable<FromBaseT>> source, Expression<Func<FromT, ToT>> exp, ref Expression<Func<ToT, ToT>> queryTransform)
+        where FromT : FromBaseT
+    {
+        return CreateQuery(qt =>
+        {
+            if (qt == null)
+                qt = e => e;
+            var serializableMethodCallExpression = (MethodCallExpression)source.Expression;
+            MethodInfo method;
+            var baseQuery = CreateToOne<IEnumerable<FromT>>(source, serializableMethodCallExpression, out method).Select(fs => fs.OfType<FromT>());
+            var selectParameter = Expression.Parameter(typeof(IEnumerable<FromT>), "e" + Guid.NewGuid().ToString("N"));
+            var expTo = Expression.Lambda<Func<FromT, ToT>>(qt.Body.ReplaceParameter(qt.Parameters[0], exp.Body), exp.Parameters[0]);
+            var manyQuery = baseQuery.Select(Expression.Lambda<Func<IEnumerable<FromT>, IEnumerable<ToT>>>(Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Distinct" && m.GetParameters().Length == 1).MakeGenericMethod(typeof(ToT)), Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Select" && m.GetParameters().Length == 2 && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2).MakeGenericMethod(typeof(FromT), typeof(ToT)), selectParameter, expTo)), selectParameter));
+            return CreateWAQSQueryValue<IEnumerable<ToT>>(source.WAQSQueryProvider, source.DataContext, Expression.Call(serializableMethodCallExpression.Object, method.GetGenericMethodDefinition().MakeGenericMethod(typeof(IEnumerable<ToT>)), manyQuery.Expression));
+        }, ref queryTransform);
+    }
+                                            
+    private static object IncludeManyOneToOne<FromT, ToT>(object fromValues, object[] toValues, Func<FromT, ToT, bool> fkTest, Action<FromT, ToT> setTo)
+        where FromT : IEntity
+        where ToT : IEntity
+    {
+        return ((IEnumerable<object>)toValues).Cast<ToT>();
+    }
+                                            
+    public static IWAQSQuery<QueryT> ReplaceType<QueryT, OldT, NewT>(this IWAQSQuery<QueryT> query)
+    {
+        return ReplaceType<QueryT, QueryT, OldT, NewT>(query);
+    }
+                                            
+    public static IWAQSQuery<NewT> ReplaceType<OldT, NewT>(this IWAQSQuery<OldT> query)
+    {
+        return ReplaceType<OldT, NewT, OldT, NewT>(query);
+    }
+                                            
+    public static IWAQSQuery<NewT> ReplaceType<OldT, NewT>(this IWAQSQuery<NewT> query)
+    {
+        return ReplaceType<NewT, NewT, OldT, NewT>(query);
+    }
+                                            
+    private static IWAQSQuery<NewQueryT> ReplaceType<OldQueryT, NewQueryT, OldT, NewT>(IWAQSQuery<OldQueryT> query)
+    {
+        return CreateWAQSQuery<NewQueryT>(query.DataContext, query.Provider.CreateQuery<NewQueryT>(new ReplaceTypeRewriter<OldT, NewT>().Visit(query.Expression)), query.AsyncQueryProviderFactory, query.ExpressionTransformation, query.QueryableIncludes, query.WithSpecifications);
+    }
+                                            
+    private static IWAQSQuery<T> ApplyIncludesAndWiths<T>(IWAQSQuery originalQuery, IQueryable<T> query)
+    {
+        var value = (IWAQSQuery<T>)query;
+        value.QueryableIncludes = originalQuery.QueryableIncludes;
+        value.WithSpecifications = originalQuery.WithSpecifications;
+        return value;
+    }
+                        
+    public static IWAQSQuery<T> CreateWAQSQuery<T>(IDataContext dataContext, IQueryable<T> queryable, IAsyncQueryProviderFactory asyncQueryProviderFactory, Func<Expression, Expression> expressionTransformation, IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> queryableIncludes = null, IEnumerable<string> withSpecifications = null)
+    {
+        var value = new WAQSQuery<T>(dataContext, queryable, asyncQueryProviderFactory, expressionTransformation);
+        if (queryableIncludes != null)
+            value.QueryableIncludes = queryableIncludes;
+        if (withSpecifications != null)
+            value.WithSpecifications = withSpecifications;
+        return value;
+    }
+                                
+    public static IWAQSQuery<T> CreateWAQSQuery<T>(IWAQSQuery<T> originalQuery, IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> queryableIncludes = null, IEnumerable<string> withSpecifications = null)
+    {
+        var value = new WAQSQuery<T>(originalQuery);
+        if (queryableIncludes != null)
+            value.QueryableIncludes = queryableIncludes;
+        if (withSpecifications != null)
+            value.WithSpecifications = withSpecifications;
+        return value;
+    }
+                        
+    public static IWAQSQueryValue<T> CreateWAQSQueryValue<T>(IWAQSQueryValue<T> originalQueryValue, IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> queryableIncludes = null, IEnumerable<string> withSpecifications = null)
+    {
+        var value = new WAQSQueryValue<T>(originalQueryValue) { QueryableIncludes = queryableIncludes, WithSpecifications = withSpecifications };
+        if (queryableIncludes != null)
+            value.QueryableIncludes = queryableIncludes;
+        if (withSpecifications != null)
+            value.WithSpecifications = withSpecifications;
+        return value;
+    }
+                        
+    public static IWAQSQueryValue<T> CreateWAQSQueryValue<T>(WAQSQueryProvider waqsQueryProvider, IDataContext dataContext, Expression expression, IEnumerable<Func<IWAQSQueryBase, QueryableInclude>> queryableIncludes = null, IEnumerable<string> withSpecifications = null)
+    {
+        var value = new WAQSQueryValue<T>(waqsQueryProvider, dataContext, expression);
+        if (queryableIncludes != null)
+            value.QueryableIncludes = queryableIncludes;
+        if (withSpecifications != null)
+            value.WithSpecifications = withSpecifications;
+        return value;
+    }
+    
+    public static void Load<T>(IWAQSQuery<T> source)
+    {
+        using (var enumerator = source.GetEnumerator())
+        {
+            while (enumerator.MoveNext()) ;
+        }
+    }
+<#+
+    CompleteQueryableExtensions();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IncludeExpressionVisitor.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", serverFxEntitiesNamespace);
+#>
+public class IncludeExpressionVisitor<QueryType> : ExpressionVisitor
+{
+    private List<Func<IWAQSQueryBase, QueryType>> _includeActions = new List<Func<IWAQSQueryBase, QueryType>>();
+
+    public IEnumerable<Func<IWAQSQueryBase, QueryType>> IncludeActions
+    {
+        get { return _includeActions; }
+    }
+            
+    protected override Expression VisitMethodCall(MethodCallExpression node)
+    {
+        if (node.Method.GetCustomAttributes(false).OfType<IncludeMethodAttribute>().Any())
+        {
+            MethodInfo method = node.Method;
+            List<Expression> parameters = null;
+            var queryParameter = Expression.Parameter(typeof(IWAQSQueryBase), "p" + Guid.NewGuid().ToString());
+    
+            var includeMethod = method.DeclaringType.GetMethods(BindingFlags.Public | BindingFlags.Static).FirstOrDefault(m =>
+                {
+                    var parametersLoop = new List<Expression>();
+                    if (m.Name != method.Name)
+                        return false;
+                    var methodParametersEnumerator = method.GetParameters().Cast<ParameterInfo>().GetEnumerator();
+                    var mParametersEnumerator = m.GetParameters().Cast<ParameterInfo>().GetEnumerator();
+                    var nodeArgumentsEnumerator = node.Arguments.GetEnumerator();
+                    int parameterIndex = 0;
+                    while (methodParametersEnumerator.MoveNext())
+                    {
+                        nodeArgumentsEnumerator.MoveNext();
+                        if (!mParametersEnumerator.MoveNext())
+                            return false;
+                        var methodParameterType = methodParametersEnumerator.Current.ParameterType;
+                        var mParameterType = mParametersEnumerator.Current.ParameterType;
+                        if (parameterIndex == 0)
+                        {
+                            parameterIndex++;
+                            if (methodParameterType.IsGenericType && methodParameterType.GetGenericTypeDefinition() == typeof(IEnumerable<>) || !methodParameterType.IsGenericType && typeof(IEntity).IsAssignableFrom(methodParameterType))
+                            {
+                                if (mParameterType == typeof(QueryType))
+                                    parametersLoop.Add(Expression.Convert(queryParameter, typeof(QueryType)));
+                                else
+                                    return false;
+                            }
+                            else
+                                return false;
+                        }
+                        else if (methodParameterType == mParameterType)
+                            parametersLoop.Add(nodeArgumentsEnumerator.Current);
+                        else
+                            return false;
+                    }
+                    if (mParametersEnumerator.MoveNext())
+                        return false;
+                    parameters = parametersLoop;
+                    return true;
+                });
+    
+            if (includeMethod == null)
+            {
+                if (typeof(IWAQSQueryValue).IsAssignableFrom(typeof(QueryType)))
+                    throw new NotImplementedException("Not implemented yet. Use Take(1) instead of First or Single");
+                throw new NotImplementedException();
+            }
+
+            _includeActions.Add(Expression.Lambda<Func<IWAQSQueryBase, QueryType>>(
+                Expression.Call(includeMethod, parameters), queryParameter).Compile());
+            return Visit(node.Arguments[0]);
+        }
+        return base.VisitMethodCall(node);
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ReplaceTypeRewriter.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", serverFxEntitiesNamespace);
+#>
+public class ReplaceTypeRewriter<OldT, NewT> : ExpressionVisitor
+{
+    protected override Expression VisitConstant(ConstantExpression expression)
+    {
+        Type newType = ReplaceType(expression.Type);
+        if (newType != expression.Type)
+            return Expression.Constant(expression.Value, newType);
+        return base.VisitConstant(expression);
+    }
+
+    protected override Expression VisitLambda<T>(Expression<T> expression)
+    {
+        Type newType = ReplaceType(expression.ReturnType);
+        if (newType != expression.ReturnType)
+            return Expression.Lambda(Visit(expression.Body), expression.Parameters.Select(p => (ParameterExpression)Visit(p)));
+        return base.VisitLambda(expression);
+    }
+
+    protected override Expression VisitMember(MemberExpression expression)
+    {
+        Type newType = ReplaceType(expression.Member.DeclaringType);
+        if (newType != expression.Member.DeclaringType)
+            return Expression.MakeMemberAccess(Visit(expression.Expression), newType.GetProperty(expression.Member.Name));
+        return base.VisitMember(expression);
+    }
+        
+    protected override Expression VisitMethodCall(MethodCallExpression expression)
+    {
+        Type newType = ReplaceType(expression.Method.DeclaringType);
+        MethodInfo method;
+        if (newType == expression.Method.DeclaringType)
+        {
+            method = expression.Method;
+            if (!method.IsGenericMethod)
+                return base.VisitMethodCall(expression);
+            method = method.GetGenericMethodDefinition();
+        }
+        else
+            method = newType.GetMethod(expression.Method.Name, expression.Method.GetParameters().Select(p => ReplaceType(p.ParameterType)).ToArray());
+        if (method.IsGenericMethod)
+            method = method.MakeGenericMethod(expression.Method.GetGenericArguments().Select(ga => ReplaceType(ga)).ToArray());
+        return Expression.Call(Visit(expression.Object), method, expression.Arguments.Select(p => Visit(p)));
+    }
+        
+    protected override Expression VisitParameter(ParameterExpression expression)
+    {
+        Type newType = ReplaceType(expression.Type);
+        if (newType != expression.Type)
+            return Expression.Parameter(newType, expression.Name);
+        return base.VisitParameter(expression);
+    }
+        
+    private static Type ReplaceType(Type type)
+    {
+        if (type == typeof(OldT))
+            return typeof(NewT);
+        if (type.IsGenericType)
+            return type.GetGenericTypeDefinition().MakeGenericType(type.GetGenericArguments().Select(t => ReplaceType(t)).ToArray());
+        return type;
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("TrackableCollectionDALExtensions.cs");
+    WriteHeader(namespaceName, code, serverFxEntitiesNamespace);
+#>
+public static class TrackableCollectionDALExtensions
+{
+    public static void Attach<T>(this TrackableCollection<T> collection, T item, IDataContext context)
+        where T : class, IEntity
+    {
+        collection.IsAttachingOrDetaching = true;
+        bool changeTrackerEnabled; 
+        if (item.ChangeTracker == null)
+            changeTrackerEnabled = false;
+        else
+        {
+            changeTrackerEnabled = item.ChangeTracker.ChangeTrackingEnabled;
+            item.ChangeTracker.ChangeTrackingEnabled = false;
+        }
+        collection.Add(item);
+        context.AttachRelationship(collection.Owner, item, collection.Name);
+        if (item.ChangeTracker != null)
+            item.ChangeTracker.ChangeTrackingEnabled = changeTrackerEnabled;
+        collection.IsAttachingOrDetaching = false;
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IAsyncEnumerableFactory.cs");
+    WriteHeader(namespaceName, code, "System.Linq");
+#>
+public interface IAsyncEnumerableFactory
+{
+<#+
+    CompleteIAsyncEnumerableFactory();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IAsyncQueryProviderFactory.cs");
+    WriteHeader(namespaceName, code, "System.Linq", "System.Linq.Expressions", "System.Threading", "System.Threading.Tasks");
+#>
+public interface IAsyncQueryProviderFactory
+{
+<#+
+    CompleteIAsyncQueryProviderFactory();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IAsyncEnumerable.cs");
+    WriteHeader(namespaceName, code);
+#>
+public interface IAsyncEnumerable
+{
+    IAsyncEnumerator GetAsyncEnumerator();
+}
+
+public interface IAsyncEnumerable<out T> : IAsyncEnumerable
+{
+    new IAsyncEnumerator<T> GetAsyncEnumerator();
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("AsyncEnumerable.cs");
+    WriteHeader(namespaceName, code);
+#>
+public class AsyncEnumerable : IAsyncEnumerable
+{
+    private IAsyncEnumerator _asyncEnumerator;
+
+    public AsyncEnumerable(IAsyncEnumerator asyncEnumerator)
+    {
+        _asyncEnumerator = asyncEnumerator;
+    }
+
+    public IAsyncEnumerator GetAsyncEnumerator()
+    {
+        return _asyncEnumerator;
+    }
+}
+
+public class AsyncEnumerable<T> : AsyncEnumerable, IAsyncEnumerable<T>
+{
+    private IAsyncEnumerator<T> _asyncEnumerator;
+
+    public AsyncEnumerable(IAsyncEnumerator<T> asyncEnumerator)
+        : base(asyncEnumerator)
+    {
+        _asyncEnumerator = asyncEnumerator;
+    }
+
+    public new IAsyncEnumerator<T> GetAsyncEnumerator()
+    {
+        return _asyncEnumerator;
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("IAsyncEnumerator.cs");
+    WriteHeader(namespaceName, code, "System", "System.Threading", "System.Threading.Tasks");
+#>
+public interface IAsyncEnumerator : IDisposable
+{
+    Task<bool> MoveNextAsync(CancellationToken cancellationToken);
+
+    object Current { get; }
+}
+
+public interface IAsyncEnumerator<out T> : IAsyncEnumerator
+{
+    new T Current { get; }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.Process();
+}
+#>

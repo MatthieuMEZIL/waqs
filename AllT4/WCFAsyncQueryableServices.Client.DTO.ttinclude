@@ -1,0 +1,11 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.DTO.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClientDTOs(SpecificationPath[] dtoPathes, string wcfNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName = null)
+{
+	WriteDTOs(dtoPathes, wcfNamespace, namespaceName, namespacesReplacement);
+}
+#>

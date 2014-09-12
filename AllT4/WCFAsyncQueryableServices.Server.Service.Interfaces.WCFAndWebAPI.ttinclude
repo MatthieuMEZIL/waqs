@@ -1,0 +1,14 @@
+<#@ include file="WCFAsyncQueryableServices.QueryResult.WCFAndWebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _jsonNamespace;
+string[] _additionalUsings;
+
+void WriteServerServiceInterfaces(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath entitiesPath, string serverFxSpecificationsNamespace, string serverFxServiceInterfacesNamespace, string serverFxSerializableExpressionsNamespace, string serverFxDALInterfacesNamespace, string serverEntitiesNamespace, string namespaceName, string relativePath, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteServerServiceInterfaces(edmxPath, specificationPathes, dtoPathes, dtoNamespace, entitiesPath, serverFxSpecificationsNamespace, serverFxServiceInterfacesNamespace, serverFxSerializableExpressionsNamespace, serverFxDALInterfacesNamespace, serverEntitiesNamespace, namespaceName, relativePath);
+}
+#>

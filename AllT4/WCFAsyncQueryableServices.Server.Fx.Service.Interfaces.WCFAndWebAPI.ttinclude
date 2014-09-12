@@ -1,0 +1,25 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.QuerySerialization.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.QueryResult.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.Error.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.LoadPageParameter.WCFAndWebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _jsonNamespace;
+string[] _additionalUsings;
+
+void WriteServerFxServiceInterfaces(string serverFxSerializableExpressions, string namespaceName, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    _withSpecificationsPropertiesKind = "Array";
+    _querySerializationsKind = "Array";
+    _withSpecificationsPropertiesCount = "Length";
+    _querySerializationsCount = "Length";
+    WriteServerFxServiceInterfaces(serverFxSerializableExpressions, namespaceName);
+}
+
+void ErrorDeserializing()
+{
+}
+#>

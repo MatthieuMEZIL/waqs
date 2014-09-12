@@ -1,0 +1,17 @@
+<#+
+private void CompleteEntitySetMock()
+    {
+#>
+
+    Task IWAQSQuery<T>.ForeachAsync(Action<T> action, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    Task IWAQSQuery.ForeachAsync(Action<object> action, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+<#+
+    }
+#>

@@ -1,0 +1,17 @@
+<#@ include file="WCFAsyncQueryableServices.SerializableContext.WCFAndWebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _jsonNamespace;
+string _entitiesNamespace;
+string[] _additionalUsings;
+string _serializableContextBaseType = ", ICustomJsonSerializable";
+
+void WriteClientClientContextInterfaces(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxQueryResultNamespace, string clientEntitiesNamespace, string serverEntitiesNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName, bool useAsyncPrefix, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _entitiesNamespace = clientEntitiesNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteClientClientContextInterfaces(edmxPath, specificationPathes, dtoPathes, dtoNamespace, serverEntitiesPath, clientFxComponentModelNamespace, clientFxEntitiesNamespace, clientFxEntitiesTrackingNamespace, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxQueryResultNamespace, clientEntitiesNamespace, serverEntitiesNamespace, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespacesReplacement, namespaceName, useAsyncPrefix);
+}
+#>

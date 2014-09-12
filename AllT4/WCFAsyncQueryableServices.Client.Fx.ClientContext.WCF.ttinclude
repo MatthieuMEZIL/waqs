@@ -1,0 +1,7 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.QueryResult.WCF.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.Error.Proxy.WCF.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string[] _additionalUsings = new string[0];
+#>

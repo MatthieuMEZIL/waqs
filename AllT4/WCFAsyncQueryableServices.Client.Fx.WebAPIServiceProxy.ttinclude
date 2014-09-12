@@ -1,0 +1,20 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.LoadPageBodyParameter.WebAPI.ttinclude"#>
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClientFxWebAPIProxy(string fxJsonNamespace, string fxClientContextInterfacesNamespace, string namespaceName = null)
+{
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+    fileManager.StartNewFile("LoadPageBodyParameters.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", fxClientContextInterfacesNamespace + ".ExpressionSerialization", fxClientContextInterfacesNamespace + ".Querying", fxJsonNamespace);
+    WriteLoadPageBodyParametersClass();
+    WriteFooter(namespaceName);
+
+    fileManager.Process();
+}
+#>

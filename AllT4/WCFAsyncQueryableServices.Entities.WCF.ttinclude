@@ -1,0 +1,9 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+static string _entityBaseType = "";
+
+static void CompleteEntityType(CodeGenerationTools code, EntityType entityType)
+{
+}
+#>

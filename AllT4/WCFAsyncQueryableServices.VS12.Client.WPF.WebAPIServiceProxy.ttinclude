@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.Client.WebAPIServiceProxy.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.WPF.WebAPIServiceProxy.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

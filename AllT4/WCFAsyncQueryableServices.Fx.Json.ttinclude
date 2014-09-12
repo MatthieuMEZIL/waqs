@@ -1,0 +1,537 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteJsonExtension(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string namespaceName)
+{
+    fileManager.StartNewFile("JsonExtension.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.IO", "System.Text", "System.Text.RegularExpressions", "Newtonsoft.Json");
+#>
+public static class JsonExtension
+{
+    public static string CreateJsonFrom(object o)
+    {
+        int index = 0;
+        return CreateJsonFrom(o, new Dictionary<object, int>(), ref index);
+    }
+    public static string CreateJsonFrom(object o, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        int value;
+        if (alreadySerialized.TryGetValue(o, out value))
+            return "$Id" + value.ToString();
+        var customJsonSerializable = o as ICustomJsonSerializable;
+        if (customJsonSerializable == null)
+            return GetJson(o);
+        var result = new StringBuilder();
+        customJsonSerializable.Serialize(result, alreadySerialized, ref index);
+        return result.ToString();
+    }
+
+    public static string GetJson(object o)
+    {
+        using (var sw = new StringWriter())
+        {
+            new JsonSerializer().Serialize(sw, o);
+            return sw.ToString();
+        }
+    }
+
+    public static void AppendJsonFromObjectValueType(StringBuilder result, object o, string propertyName = "Value", bool startWithComma = false)
+    {
+        if (o == null)
+            return;
+        if (startWithComma)
+            result.Append(",");
+        result.Append("\"$");
+        result.Append(propertyName);
+        result.Append("Type\":\"");
+        result.Append(o.GetType().ToString());
+        result.Append("\",\"");
+        result.Append(propertyName);
+        result.Append("\":");
+        result.Append(JsonExtension.GetJson(o));
+    }
+
+    public static void AppendJsonFromEnumerable<T>(StringBuilder result, IEnumerable<T> values, Action<T> serializeItem)
+    {
+        AppendJsonFromEnumerable<T>(result, values, i =>
+            {
+                serializeItem(i);
+                return null;
+            });
+    }
+
+    public static void AppendJsonFromEnumerable<T>(StringBuilder result, IEnumerable<T> values, Func<T, string> serializeItem)
+    {
+        result.Append("[");
+        var enumerator = values.GetEnumerator();
+        enumerator.MoveNext();
+        for (; ; )
+        {
+            result.Append(serializeItem(enumerator.Current));
+            if (enumerator.MoveNext())
+                result.Append(",");
+            else
+                break;
+        }
+        result.Append("]");
+    }
+
+    public static void AppendJsonFromDictionary<TKey, TValue>(StringBuilder result, IDictionary<TKey, TValue> values, Action<TKey> serializeKey, Action<TValue> serializeValue)
+    {
+        result.Append("{");
+        var enumerator = values.GetEnumerator();
+        enumerator.MoveNext();
+        for (; ; )
+        {
+            serializeKey(enumerator.Current.Key);
+            result.Append(":");
+            serializeValue(enumerator.Current.Value);
+            if (enumerator.MoveNext())
+                result.Append(",");
+            else
+                break;
+        }
+        result.Append("}");
+    }
+
+    public static T CreateFromJson<T>(string s, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+        where T : ICustomJsonSerializable
+    {
+        return CreateFromJson<T>(s, new Dictionary<int, object>(), getTypes);
+    }
+    public static T CreateFromJson<T>(string s, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+        where T : ICustomJsonSerializable
+    {
+        using (var sr = new StringReader(s))
+        {
+            using (var jr = new JsonTextReader(sr))
+            {
+                jr.Read();
+                return CreateFromJson<T>(jr, alreadyDeserialized, getTypes);
+            }
+        }
+    }
+    public static T CreateFromJson<T>(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+        where T : ICustomJsonSerializable
+    {
+        if (jr.TokenType == JsonToken.String)
+        {
+            var m = Regex.Match((string)jr.Value, @"^\$Id(\d+)$");
+            if (m.Success)
+            {
+                var value = (T)alreadyDeserialized[int.Parse(m.Groups[1].Value)];
+                jr.Read();
+                return value;
+            }
+            throw new NotImplementedException();
+        }
+        if (jr.TokenType == JsonToken.StartObject)
+        {
+            jr.Read();
+            if (MoveToProperty(jr, "$Id"))
+            {
+                if (jr.TokenType == JsonToken.Integer)
+                {
+                    int id = (int)(long)jr.Value;
+                    jr.Read();
+                    if (JsonExtension.MoveToProperty(jr, "$Type"))
+                    {
+                        if (jr.TokenType == JsonToken.String)
+                        {
+                            ICustomJsonSerializable value;
+                            Func<ICustomJsonSerializable> getValue;
+                            if (getTypes.TryGetValue((string)jr.Value, out getValue))
+                                value = getValue();
+                            else
+                                throw new NotImplementedException();
+                            alreadyDeserialized.Add(id, value);
+                            jr.Read();
+                            if (jr.TokenType != JsonToken.EndObject)
+                            {
+                                value.Deserialize(jr, alreadyDeserialized, getTypes);
+                                int start = 1;
+                                while (start != 0)
+                                {
+                                    switch (jr.TokenType)
+                                    {
+                                    case JsonToken.StartObject:
+                                        start++;
+                                        break;
+                                    case JsonToken.EndObject:
+                                        start--;
+                                        break;
+                                    }
+                                    jr.Read();
+                                }
+                            }
+                            return (T)value;
+                        }
+                    }
+                }
+            }
+        }
+        throw new NotImplementedException();
+    }
+
+    public static T CreateFromJsonValueType<T>(string s, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        using (var sr = new StringReader(s))
+        {
+            using (var jr = new JsonTextReader(sr))
+            {
+                T value = default(T);
+                var valueType = typeof(T).ToString();
+                DoWithJsonReaderOption(jr, valueType, () =>
+                {
+                    jr.Read();
+                    value = (T)ObjectValueTypeFromJson(jr, valueType, null);
+                });
+                return value;
+            }
+        }
+    }
+
+    public static T FromJson<T>(string s)
+    {
+        using (var sr = new StringReader(s))
+        {
+            using (var jr = new JsonTextReader(sr))
+            {
+                return new JsonSerializer().Deserialize<T>(jr);
+            }
+        }
+    }
+    
+    public static object ObjectValueTypeFromJson(JsonReader jr, string propertyName = "Value")
+    {
+        object value;
+        if (TryObjectValueTypeFromJson(jr, out value, propertyName))
+            return value;
+        throw new NotImplementedException();
+    }
+
+    
+    public static bool TryObjectValueTypeFromJson(JsonReader jr, out object value, string propertyName = "Value")
+    {
+        if (JsonExtension.MoveToProperty(jr, string.Concat("$", propertyName, "Type")))
+        {
+            var valueType = (string)jr.Value;
+            object valueTmp = null;
+            DoWithJsonReaderOption(jr, valueType, () =>
+                {
+                    jr.Read();
+                    valueTmp = ObjectValueTypeFromJson(jr, valueType, propertyName);
+                });
+            value = valueTmp;
+            return true;
+        }
+        value = null;
+        return false;
+    }
+
+    public static void DoWithJsonReaderOption(JsonReader jr, string valueType, Action action)
+    {
+        var floatParseHandling = jr.FloatParseHandling;
+        var dateParseHandling = jr.DateParseHandling;
+        switch (valueType)
+        {
+            case "System.Decimal":
+            case "System.Nullable`1[System.Decimal]":
+            case "System.Decimal[]":
+            case "System.Nullable`1[System.Decimal][]":
+                jr.FloatParseHandling = FloatParseHandling.Decimal;
+                break;
+            case "System.DateTimeOffset":
+            case "System.Nullable`1[System.DateTimeOffset]":
+            case "System.DateTimeOffset[]":
+            case "System.Nullable`1[System.DateTimeOffset][]":
+                jr.DateParseHandling = DateParseHandling.DateTime;
+                break;
+        }
+        action();
+        jr.FloatParseHandling = floatParseHandling;
+        jr.DateParseHandling = dateParseHandling;
+    }
+
+    public static object ObjectValueTypeFromJson(JsonReader jr, string valueType, string propertyName)
+    {
+        if (! (propertyName == null || JsonExtension.MoveToProperty(jr, propertyName)))
+            throw new NotImplementedException();
+        var value = jr.Value;
+        object result = null;
+        switch (valueType)
+        {
+            case "System.Int32":
+                result = (int)(long)value;
+                break;
+            case "System.Nullable`1[System.Int32]":
+                result = (int?)(long)value;
+                break;
+            case "System.UInt32":
+                result = (uint)(long)value;
+                break;
+            case "System.Nullable`1[System.UInt32]":
+                result = (uint?)(long)value;
+                break;
+            case "System.Int16":
+                result = (short)(long)value;
+                break;
+            case "System.Nullable`1[System.Int16]":
+                result = (short?)(long)value;
+                break;
+            case "System.UInt16":
+                result = (ushort)(long)value;
+                break;
+            case "System.Nullable`1[System.UInt16]":
+                result = (ushort)(long)value;
+                break;
+            case "System.Byte":
+                result = (byte)(long)value;
+                break;
+            case "System.Nullable`1[System.Byte]":
+                result = (byte)(long)value;
+                break;
+            case "System.Int64":
+                result = (long)value;
+                break;
+            case "System.Nullable`1[System.Int64]":
+                result = (long?)value;
+                break;
+            case "System.UInt64":
+                result = (ulong)ulong.Parse(value.ToString());
+                break;
+            case "System.Nullable`1[System.UInt64]":
+                result = (ulong?)ulong.Parse(value.ToString());
+                break;
+            case "System.Decimal":
+                result = (decimal)value;
+                break;
+            case "System.Nullable`1[System.Decimal]":
+                result = (decimal?)value;
+                break;
+            case "System.Double":
+                result = (double)value;
+                break;
+            case "System.Nullable`1[System.Double]":
+                result = (double)value;
+                break;
+            case "System.Char":
+                result = (char)(double)value;
+                break;
+            case "System.Nullable`1[System.Char]":
+                result = (char)(double)value;
+                break;
+            case "System.DateTime":
+                result = (DateTime)value;
+                break;
+            case "System.Nullable`1[System.DateTime]":
+                result = (DateTime?)value;
+                break;
+            case "System.DateTimeOffset":
+                result = (DateTimeOffset)value;
+                break;
+            case "System.Nullable`1[System.DateTimeOffset]":
+                result = (DateTimeOffset?)value;
+                break;
+            case "System.TimeSpan":
+                result = TimeSpan.Parse((string)value);
+                break;
+            case "System.Nullable`1[System.TimeSpan]":
+                result = (TimeSpan?)TimeSpan.Parse((string)value);
+                break;
+            case "System.Guid":
+                result = (Guid)value;
+                break;
+            case "System.Nullable`1[System.Guid]":
+                result = (Guid?)value;
+                break;
+            case "System.String":
+                result = (string)value;
+                break;
+            case "System.Int32[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (int)(long)value, true);
+                break;
+            case "System.UInt32[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (uint)(long)value, true);
+                break;
+            case "System.Int16[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (short)(long)value, true);
+                break;
+            case "System.UInt16[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (ushort)(long)value, true);
+                break;
+            case "System.Byte[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (byte)(long)value, true);
+                break;
+            case "System.Int64[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (long)value, true);
+                break;
+            case "System.UInt64[]":
+                result = JsonExtension.ArrayFromJson(jr, () => ulong.Parse(jr.ToString()), true);
+                break;
+            case "System.Decimal[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (decimal)value, true);
+                break;
+            case "System.Double[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (double)value, true);
+                break;
+            case "System.Char[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (char)(double)value, true);
+                break;
+            case "System.DateTime[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (DateTime)value, true);
+                break;
+            case "System.DateTimeOffset[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (DateTimeOffset)value, true);
+                break;
+            case "System.TimeSpan[]":
+                result = JsonExtension.ArrayFromJson(jr, () => TimeSpan.Parse(value.ToString()), true);
+                break;
+            case "System.Guid[]":
+                result = JsonExtension.ArrayFromJson(jr, () => (Guid)value, true);
+                break;
+            case "System.Nullable`1[System.Int32][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (int?)null : (int)(long)value, true);
+                break;
+            case "System.Nullable`1[System.UInt32][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (uint?)null : (uint)(long)value, true);
+                break;
+            case "System.Nullable`1[System.Int16][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (short?)null : (short)(long)value, true);
+                break;
+            case "System.Nullable`1[System.UInt16][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (ushort?)null : (ushort)(long)value, true);
+                break;
+            case "System.Nullable`1[System.Byte][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (byte?)null : (byte)(long)value, true);
+                break;
+            case "System.Nullable`1[System.Int64][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (long?)null : (long)value, true);
+                break;
+            case "System.Nullable`1[System.UInt64][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (ulong?)null : ulong.Parse(value.ToString()), true);
+                break;
+            case "System.Nullable`1[System.Decimal][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (decimal?)null : (decimal)value, true);
+                break;
+            case "System.Nullable`1[System.Double][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (double?)null : (double)value, true);
+                break;
+            case "System.Nullable`1[System.Char][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (char?)null : (char)(long)value, true);
+                break;
+            case "System.Nullable`1[System.DateTime][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (DateTime?)null : (DateTime)value, true);
+                break;
+            case "System.Nullable`1[System.DateTimeOffset][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (DateTime?)null : (DateTime)value, true);
+                break;
+            case "System.Nullable`1[System.TimeSpan][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (TimeSpan?)null : TimeSpan.Parse(value.ToString()), true);
+                break;
+            case "System.Nullable`1[System.Guid][]":
+                result = JsonExtension.ArrayFromJson(jr, () => value == null ? (Guid?)null : value, true);
+                break;
+            case "System.Nullable`1[System.String][]":
+                result = JsonExtension.ArrayFromJson(jr, () => (string)value, true);
+                break;
+            default:
+                throw new NotImplementedException();
+        }
+        if (!valueType.EndsWith("[]"))
+            jr.Read();
+        return result;
+    }
+
+
+    public static T[] ArrayFromJson<T>(string s, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+        where T : ICustomJsonSerializable
+    {
+        using (var sr = new StringReader(s))
+        {
+            using (var jr = new JsonTextReader(sr))
+            {
+                jr.Read();
+                var alreadyDeserialized = new Dictionary<int,object>();
+                return ArrayFromJson<T>(jr, () => CreateFromJson<T>(jr, alreadyDeserialized, getTypes));
+            }
+        }
+    }
+    public static T[] ArrayFromJson<T>(JsonReader jr, Func<T> getValue, bool withRead = false)
+    {
+        return ListFromJson<T>(jr, getValue, withRead).ToArray();
+    }
+
+    public static List<T> ListFromJson<T>(JsonReader jr, Func<T> getValue, bool withRead = false)
+    {
+        return ListFromJson<List<T>, T>(jr, getValue, withRead);
+    }
+    public static TList ListFromJson<TList, T>(JsonReader jr, Func<T> getValue, bool withRead = false)
+        where TList : ICollection<T>, new()
+    {
+        if (jr.TokenType != JsonToken.StartArray)
+            throw new NotImplementedException();
+        var value = new TList();
+        jr.Read();
+        while (jr.TokenType != JsonToken.EndArray)
+        {
+            value.Add(getValue());
+            if (withRead)
+                jr.Read();
+        }
+        jr.Read();
+        return value;
+    }
+
+    public static Dictionary<TKey, TValue> DictionaryFromJson<TKey, TValue>(JsonReader jr, Func<TKey> getKey, Func<TValue> getValue, bool withKeyRead = false, bool withValueRead = false)
+    {
+        return DictionaryFromJson<Dictionary<TKey, TValue>, TKey, TValue>(jr, getKey, getValue, withKeyRead, withValueRead);
+    }
+    public static TDico DictionaryFromJson<TDico, TKey, TValue>(JsonReader jr, Func<TKey> getKey, Func<TValue> getValue, bool withKeyRead = false, bool withValueRead = false)
+        where TDico : IDictionary<TKey, TValue>, new()
+    {
+        if (jr.TokenType != JsonToken.StartArray)
+            throw new NotImplementedException();
+        var result = new TDico();
+        jr.Read();
+        while (jr.TokenType != JsonToken.EndArray)
+        {
+            var key = getKey();
+            if (withKeyRead)
+                jr.Read();
+            var value = getValue();
+            if (withValueRead)
+                jr.Read();
+            result.Add(key, value);
+        }
+        jr.Read();
+        return result;
+    }
+
+    public static bool MoveToProperty(JsonReader jr, string propertyName, Action initializerAction = null)
+    {
+        if (jr.TokenType == JsonToken.PropertyName && (string)jr.Value == propertyName)
+        {
+            if (initializerAction != null)
+                initializerAction();
+            jr.Read();
+            return true;
+        }
+        return false;
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ICustomJsonSerializable.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json");
+#>
+public interface ICustomJsonSerializable
+{
+    StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index);
+    void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes);
+}
+<#+
+    WriteFooter(namespaceName);
+}
+#>

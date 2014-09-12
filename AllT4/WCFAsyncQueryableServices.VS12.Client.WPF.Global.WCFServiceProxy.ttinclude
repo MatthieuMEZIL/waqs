@@ -1,0 +1,4 @@
+<#@ include file="WCFAsyncQueryableServices.Client.WPF.Global.WCFServiceProxy.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

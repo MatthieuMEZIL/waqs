@@ -1,0 +1,29 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.SerializableExpressions.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.QuerySerialization.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.Error.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.LoadPageParameter.WCFAndWebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _jsonNamespace;
+string[] _additionalUsings;
+
+void WriteClientFxClientContextInterfaces(string clientFxComponentModelNamespace, string clientFxEntitiesTrackingNamespace, string expressionVisitorNamespace, string namespaceName, bool useAsyncPrefix, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    _withSpecificationsPropertiesKind = "List";
+    _querySerializationsKind = "List";
+    _withSpecificationsPropertiesCount = "Count";
+    _querySerializationsCount = "Count";
+    WriteClientFxClientContextInterfaces(clientFxComponentModelNamespace, clientFxEntitiesTrackingNamespace, expressionVisitorNamespace, namespaceName, useAsyncPrefix);
+}
+
+void ErrorDeserializing()
+{
+#>
+		OnDeserializingMethod(default(StreamingContext));
+
+<#+
+}
+#>

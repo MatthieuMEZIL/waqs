@@ -1,0 +1,99 @@
+<#@ include file="WCFAsyncQueryableServices.Client.WCFServiceProxy.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string GetProxyTransformationValue(Dictionary<string, string> namespaces, CompilationUnitSyntax codeExpression)
+{
+	return new WCFProxyNetRewriter().Visit(new NamespaceFilter(namespaces.Keys).Visit(codeExpression)).NormalizeWhitespace().ToString();
+}
+
+public class WCFProxyNetRewriter : SyntaxRewriter
+{
+	public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
+	{
+		var baseType = node.BaseList.Types.FirstOrDefault();
+		if (baseType != null)
+		{
+			var genericBaseType = baseType as GenericNameSyntax;
+			string baseClassName;
+			if (genericBaseType == null)
+				baseClassName = baseType.GetText().ToString();
+			else
+				baseClassName = genericBaseType.Identifier.ValueText;
+			switch (baseClassName)
+			{
+				case "ClientBase":
+					return ClassDeclaration.DefineMembers(node, node.Members.Select(m => Visit(m)).OfType<MemberDeclarationSyntax>().Where(m => m != null));
+				case "ChannelBase":
+					return null;
+			}
+		}
+		return base.VisitClassDeclaration(node);
+	}
+
+	public override SyntaxNode VisitPropertyDeclaration(PropertyDeclarationSyntax node)
+	{
+		if (node.Identifier.ValueText == "CookieContainer")
+			return null;
+		return base.VisitPropertyDeclaration(node);
+	}
+
+	public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
+	{
+		switch (node.Identifier.ValueText)
+		{
+			case "OnBeginOpen":
+			case "OnEndOpen":
+			case "OnOpenCompleted":
+			case "OpenAsync":
+			case "OnBeginClose":
+			case "OnEndClose":
+			case "OnCloseCompleted":
+			case "CloseAsync":
+			case "CreateChannel":
+				return null;
+		}
+		return node;
+	}
+
+	public override SyntaxNode VisitEventFieldDeclaration(EventFieldDeclarationSyntax node)
+	{
+		var variables = node.Declaration.Variables;
+		if (variables.Count == 1)
+			switch (variables[0].Identifier.ValueText)
+			{
+				case "OpenCompleted":
+				case "CloseCompleted":
+					return null;
+			}
+		return node;
+	}
+
+	public override SyntaxNode VisitFieldDeclaration(FieldDeclarationSyntax node)
+	{
+		if (Visit(node.ChildNodes().Single()) == null)
+			return null;
+		return node;
+	}
+
+	public override SyntaxNode VisitVariableDeclaration(VariableDeclarationSyntax node)
+	{
+		if (node.Variables.Count == 1)
+			switch (node.Variables[0].Identifier.ValueText)
+			{
+				case "onBeginOpenDelegate":
+				case "onEndOpenDelegate":
+				case "onOpenCompletedDelegate":
+				case "onBeginCloseDelegate":
+				case "onEndCloseDelegate":
+				case "onCloseCompletedDelegate":
+					return null;
+			}
+		return base.VisitVariableDeclaration(node);
+	}
+}
+
+void WriteSpecificClasses(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string servicePath, string namespaceName)
+{
+}
+#>

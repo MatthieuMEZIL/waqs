@@ -1,0 +1,15 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.QueryResult.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.Error.Proxy.WCFAndWebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _jsonNamespace;
+string[] _additionalUsings;
+
+void WriteClientFxClientContext(string clientFxComponentModelNamespace, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string expressionVisitorNamespace, string namespaceName, bool useAsyncPrefix, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteClientFxClientContext(clientFxComponentModelNamespace, clientFxEntitiesTrackingNamespace, clientFxClientContextInterfacesNamespace, expressionVisitorNamespace, namespaceName, useAsyncPrefix);
+}
+#>

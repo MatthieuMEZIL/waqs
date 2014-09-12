@@ -1,0 +1,62 @@
+<#@ include file="WCFAsyncQueryableServices.QueryResult.WCF.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string[] _additionalUsings; = new string[0];
+bool _serviceType = "Service";
+string _proxyHelperType = "WCF";
+string _proxyAsync = "";
+
+void LoadPageExp()
+{
+#>Task.Factory.FromAsync(service.BeginLoadPage(pageSize, query.Expression, query.WithSpecificationsProperties.ToArray(), identifiers, null, null), ar => service.EndLoadPage(ar))<#+
+}
+
+void ExecuteQueriesExp()
+{
+#>Task.Factory.FromAsync(service.BeginExecuteMany(MakeQueriesSerialization(queries, out includes), null, null), ar => service.EndExecuteMany(ar))<#+
+}
+
+void ExecuteQueriesInternalExecuteQueriesExp()
+{
+#>Task.Factory.FromAsync(service.BeginExecuteMany(MakeQueriesSerialization(query, out includes), null, null), ar => service.EndExecuteMany(ar))<#+
+}
+
+void ExecuteQueriesInternalExecuteQueryExp()
+{
+#>Task.Factory.FromAsync(service.BeginExecute(MakeQuerySerialization(query), null, null), ar => service.EndExecute(ar))<#+
+}
+
+void DbDateTimeExp()
+{
+#>Task.Factory.FromAsync(service.BeginGetDbDateTime(null, null), r => service.EndGetDbDateTime(r))<#+
+}
+
+void SaveChangesExp()
+{
+#>Task.Factory.FromAsync(service.BeginSaveChanges(sentContext, null, null), ar => service.EndSaveChanges(ar))<#+
+}
+
+void ValidateOnServerExp(string typeName)
+{
+#>Task.Factory.FromAsync(service.BeginValidate<#=typeName#>(entity, null, null), ar => service.EndValidate<#=typeName#>(ar))<#+
+}
+
+void GetServiceBeginExp(StringBuilder valueSB)
+{
+    valueSB.Append("Task.Factory.FromAsync(service.Begin");
+}
+
+void GetServiceEndExp(StringBuilder valueSB, string methodName)
+{
+    valueSB.Append("null, null), ar => service.End");
+    valueSB.Append(methodName);
+    valueSB.Append("(ar))");	
+}
+
+void EnumerableSerialization(StringBuilder valueSB, IParameterSymbol pSymbol)
+{
+    if (pSymbol.Type.ToString() != "string" && pSymbol.Type.ToString() != "System.String" && pSymbol.Type.AllInterfaces.Any(i => i.ToString() == "System.Collections.IEnumerable"))
+        valueSB.Append(".ToArray()");
+}
+#>

@@ -1,0 +1,11 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _loadPageParameterBaseType = "";
+
+void CompleteLoadPageParameter()
+{
+#>
+<#+
+}
+#>

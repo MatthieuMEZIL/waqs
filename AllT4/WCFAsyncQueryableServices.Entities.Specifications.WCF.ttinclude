@@ -1,0 +1,11 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+partial class EntitiesGeneration
+{
+
+	void CompleteEntityType(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, List<PropertyFromGetMethod> notOverridenProperties)
+	{
+	}
+}
+#>

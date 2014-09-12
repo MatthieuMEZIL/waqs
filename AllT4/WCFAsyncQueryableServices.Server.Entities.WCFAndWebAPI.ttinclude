@@ -1,0 +1,15 @@
+<#@ include file="WCFAsyncQueryableServices.Entities.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Json.T4Helper.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _jsonNamespace;
+string[] _additionalUsings;
+
+void WriteServerEntities(string edmxPath, string serverFxEntitiesNamespace, string namespaceName, string entityTypesBaseType, string complexTypesBaseType, string propertyAttributes, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteServerEntities(edmxPath, serverFxEntitiesNamespace, namespaceName, entityTypesBaseType, complexTypesBaseType, propertyAttributes);
+}
+#>

@@ -1,0 +1,9 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.SerializableExpressions.WCF.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.QuerySerialization.WCF.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.Error.WCF.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.LoadPageParameter.WCF.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string[] _additionalUsings = new string[0];
+#>

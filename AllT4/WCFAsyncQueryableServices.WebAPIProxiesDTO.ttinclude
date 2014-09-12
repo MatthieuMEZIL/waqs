@@ -1,0 +1,216 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void GenerateWebAPIProxyDTO(MethodDeclarationSyntax specificationServiceMethod, IEnumerable<ParameterSyntax> parameters, ISemanticModel semanticModel, SpecificationsElements specificationsElements, EdmxElements edmxElements, out Dictionary<ParameterSyntax, string> parametersTransformation, out List<ParameterSyntax> parametersList, out List<ParameterSyntax> parametersFromBody, out MethodSymbol methodSymbol/*, out HashSet<string> parametersDependentTypes, out HashSet<string> resultDependentTypes*/)
+{
+    var lambdaMethodSymbol = methodSymbol = specificationsElements.GetAndAddMethodSymbol(specificationServiceMethod, semanticModel);
+    var originalParameters = specificationServiceMethod.ParameterList.Parameters;
+    var originalParameterIndex = 0;
+    var customJsonSerializableParameters = new List<ParameterSyntax>();
+    var customJsonSerializableCollectionParameters = new List<ParameterSyntax>();
+    var customJsonSerializableArrayParameters = new List<ParameterSyntax>();
+    var customJsonSerializableInterface = _serverFxJsonNamespace + ".ICustomJsonSerializable";
+    var customJsonSerializableElementTypes = new Dictionary<ParameterSyntax, TypeSyntax>();
+    bool hasNotSupportedTypes = false;
+    //parametersDependentTypes = new List<string>();
+    //resultDependentTypes = new List<string>();
+    parametersFromBody = parameters.Where(p => 
+        {
+            var parameterType = lambdaMethodSymbol.Parameters.First(p2 => p2.Name == p.Identifier.ValueText).Type;
+            ParameterSyntax op;
+            while ((op = originalParameters[originalParameterIndex++]).Identifier.ValueText != p.Identifier.ValueText);
+            var value = ! (parameterType.TypeKind == TypeKind.Struct || new [] { "System.String", "string" }.Contains(parameterType.ToString())) || op.AttributeLists != null && op.AttributeLists.Any(opas => opas.Attributes.Any(opa => semanticModel.GetTypeInfo(opa).Type.ToString() == "System.Web.Http.FromBodyAttribute"));
+            if (value)
+            {
+                IArrayTypeSymbol arrayTypeSymbol;
+                NamedTypeSymbol namedTypeSymbol;
+                if (parameterType.AllInterfaces.Any(i => i.ToString() == customJsonSerializableInterface))
+                    customJsonSerializableParameters.Add(p);
+                else if ((arrayTypeSymbol = parameterType as IArrayTypeSymbol) != null && arrayTypeSymbol.ElementType.AllInterfaces.Any(i2 => i2.ToString() == customJsonSerializableInterface))
+                {
+                    customJsonSerializableArrayParameters.Add(p);
+                    customJsonSerializableElementTypes.Add(p, ((ArrayTypeSyntax)p.Type).ElementType);
+                }
+                else if ((namedTypeSymbol = parameterType as NamedTypeSymbol) != null && namedTypeSymbol.IsGenericType && namedTypeSymbol.TypeArguments.Length == 1 && namedTypeSymbol.AllInterfaces.Any(i => 
+                    {
+                        var isCustomJsonSerializableList = i.IsGenericType && i.ConstructedFrom.ToString() == "System.Collections.Generic.ICollection<T>" && i.TypeArguments[0] == namedTypeSymbol.TypeArguments[0] && i.TypeArguments[0].AllInterfaces.Any(i2 => i2.ToString() == customJsonSerializableInterface);
+                        if (isCustomJsonSerializableList)
+                            customJsonSerializableElementTypes.Add(p, ((GenericNameSyntax)p.Type).TypeArgumentList.Arguments[0]);
+                        return isCustomJsonSerializableList;
+                    }))
+                    customJsonSerializableCollectionParameters.Add(p);
+                else if (! IsSupported(parameterType.ToString()))
+                    hasNotSupportedTypes = true;
+            }
+            return value;
+        }).ToList();
+    parametersList = parameters.ToList();
+    parametersTransformation = new Dictionary<ParameterSyntax, string>();
+    if (parametersFromBody.Count > 1)
+    {
+        var code = edmxElements.Code;
+        string parametersClassName = specificationServiceMethod.Identifier.ValueText + "Parameters";
+        string newParameterName = code.CamelCase(parametersClassName);
+        bool customJson = ! (customJsonSerializableParameters.Count == 0 && customJsonSerializableCollectionParameters.Count == 0 && customJsonSerializableArrayParameters.Count == 0);
+#>
+    public partial class <#=parametersClassName#><#=customJson ? " : ICustomJsonSerializable" : ""#>
+    {
+<#+
+    foreach (var p in parametersFromBody)
+    {
+        string propertyName = code.PascalCase(p.Identifier.ValueText);
+#>
+        public <#=p.Type#> <#=propertyName#> { get; set; }
+<#+
+        parametersTransformation.Add(p, string.Concat(newParameterName, ".", propertyName));
+        parametersList.Remove(p);
+    }
+    if (customJson)
+    {
+#>
+
+        StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+        {
+            alreadySerialized.Add(this, index);
+            result.Append("{");
+            Serialize(result, alreadySerialized, ref index);
+            result.Append("}");
+            return result;
+        }
+        protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+        {
+            result.Append("\"$Id\":");
+            result.Append(JsonExtension.GetJson(index++));
+            result.Append(",\"$Type\":\"");
+            result.Append(GetType().Name);
+            result.Append("\"");
+            bool done = false;
+            CustomSerialize(result, alreadySerialized, ref index, ref done);
+            if (done)
+                return result;
+<#+
+    if (hasNotSupportedTypes)
+    {
+#>
+            throw new NotImplementedException("This class could not be serializable by WAQS. Please serialize it yourself using partial method");
+<#+
+    }
+    else
+    {
+        foreach (var p in parametersFromBody)
+        {
+            string propertyName = code.PascalCase(p.Identifier.ValueText);
+#>
+            if (<#=propertyName#> != default(<#=p.Type.ToString()#>))
+            {
+                result.Append(",\"<#=propertyName#>\":\"");
+<#+
+            if (customJsonSerializableParameters.Contains(p))
+            {
+#>
+                ((ICustomJsonSerializable)<#=propertyName#>).Serialize(result, alreadySerialized, ref index);
+<#+
+            }
+            else if (customJsonSerializableCollectionParameters.Contains(p) || customJsonSerializableArrayParameters.Contains(p))
+            {
+#>
+                int indexTmp = index;
+                JsonExtension.AppendJsonFromEnumerable(result, <#=propertyName#>, item => ((ICustomJsonSerializable)item).Serialize(result, alreadySerialized, ref indexTmp));
+                index = indexTmp;
+<#+
+            }
+            else
+            {
+#>
+                result.Append(string.Concat("\"", JsonExtension.GetJson(<#=propertyName#>), "\""));
+<#+
+            }
+#>
+            }
+<#+
+        }
+    }
+#>
+            return result;
+        }
+        partial void CustomSerialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index, ref bool done);
+
+        void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+        {
+            Deserialize(jr, alreadyDeserialized, getTypes);
+        }
+        protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+        {
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+            bool done = false;
+            CustomDeserialize(jr, alreadyDeserialized, getTypes, ref done);
+            if (done)
+                return;
+<#+
+    if (hasNotSupportedTypes)
+    {
+#>
+            throw new NotImplementedException("This class could not be deserializable by WAQS. Please serialize it yourself using partial method");
+<#+
+    }
+    else
+    {
+        foreach (var p in  parametersFromBody)
+        {
+            string propertyName = code.PascalCase(p.Identifier.ValueText);
+            string typeName = p.Type.ToString();
+#>
+            if (JsonExtension.MoveToProperty(jr, "<#=propertyName#>"))
+            {
+<#+
+            if (customJsonSerializableParameters.Contains(p))
+            {
+#>
+                JsonExtension.CreateFromJson<<#=typeName#>>(jr, alreadyDeserialized, getTypes);
+<#+
+            }
+            else if (customJsonSerializableCollectionParameters.Contains(p))
+            {
+                var elementTypeName = customJsonSerializableElementTypes[p].ToString();
+#>
+                <#=propertyName#> = JsonExtension.ListFromJson<<#=typeName#>, <#=elementTypeName#>>(jr, () => JsonExtension.CreateFromJson<<#=elementTypeName#>>(jr, alreadyDeserialized, getTypes));
+<#+
+            }
+            else if (customJsonSerializableArrayParameters.Contains(p))
+            {
+#>
+                <#=propertyName#> = JsonExtension.ArrayFromJson(jr, () => JsonExtension.CreateFromJson<<#=customJsonSerializableElementTypes[p].ToString()#>>(jr, alreadyDeserialized, getTypes));
+<#+
+            }
+            else
+            {
+#>
+                <#=propertyName#> = JsonExtension.FromJson<<#=typeName#>>((string)jr.Value);
+                jr.Read();
+<#+
+            }
+#>
+                if (jr.TokenType == JsonToken.EndObject)
+                    return;
+                if (jr.TokenType != JsonToken.PropertyName)
+                    throw new NotImplementedException();
+            }
+<#+
+        }
+    }
+#>
+        }
+<#+
+    }
+#>
+        partial void CustomDeserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes, ref bool done);
+    }
+
+<#+
+        parametersList.Add(SyntaxFactory.Parameter(SyntaxFactory.Identifier(newParameterName)).WithType(SyntaxFactory.ParseTypeName(parametersClassName)));
+    }
+}
+#>

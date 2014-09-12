@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.NET45.Client.WPF.Fx.Entities.Tracking.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.Fx.Entities.Tracking.WCF.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

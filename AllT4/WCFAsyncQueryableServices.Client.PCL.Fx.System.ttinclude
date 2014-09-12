@@ -1,0 +1,376 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#@ assembly name="EnvDTE" #>
+<#@ assembly name="EnvDTE80" #>
+<#@ assembly name="VSLangProj" #>
+<#@ import namespace="System.Reflection" #>
+<#@ import namespace="VSLangProj" #>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteClientPCLFxSystem(string systemNamespace)
+{
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    MetadataLoader loader = new MetadataLoader(this);
+    CodeRegion region = new CodeRegion(this, 1);
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    EnvDTE.DTE dte = (EnvDTE.DTE) ((IServiceProvider)Host).GetService(typeof(EnvDTE.DTE));
+    var project = (VSProject)(dte.Solution.FindProjectItem("WCFAsyncQueryableServices.Client.PCL.Fx.System.tt").ContainingProject.Object);
+    var runtimeReference = project.References.Find("System.Runtime");
+    bool generateCoreClasses;
+    if (runtimeReference == null)
+        generateCoreClasses = true;
+    else
+        generateCoreClasses = runtimeReference.Path.Contains("wp7");
+
+    if (generateCoreClasses || systemNamespace != null)
+    {
+        if (systemNamespace == null)
+            systemNamespace = "System";
+
+        fileManager.StartNewFile("ExpressionVisitor.cs");
+        WriteHeader(systemNamespace + ".Linq.Expressions", code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection");
+#>
+public abstract class ExpressionVisitor
+{
+    public virtual Expression Visit(Expression node)
+    {
+        if (node == null)
+            return null;
+        var typeBinaryExpression = node as TypeBinaryExpression;
+        if (typeBinaryExpression != null)
+            return VisitTypeBinary(typeBinaryExpression);
+        var binaryExpression = node as BinaryExpression;
+        if (binaryExpression != null)
+            return VisitBinary(binaryExpression);
+        var unaryExpression = node as UnaryExpression;
+        if (unaryExpression != null)
+            return VisitUnary(unaryExpression);
+        var methodCallExpression = node as MethodCallExpression;
+        if (methodCallExpression != null)
+            return VisitMethodCall(methodCallExpression);
+        var memberExpression = node as MemberExpression;
+        if (memberExpression != null)
+            return VisitMember(memberExpression);
+        var constantExpression = node as ConstantExpression;
+        if (constantExpression != null)
+            return VisitConstant(constantExpression);
+        var lambdaExpression = node as LambdaExpression;
+        if (lambdaExpression != null)
+        {
+            var lambdaType = node.GetType().GetGenericArguments()[0];
+            return (Expression)typeof(ExpressionVisitor).GetMethod("VisitLambda", BindingFlags.Instance | BindingFlags.NonPublic).MakeGenericMethod(lambdaType).Invoke(this, new object[] { node });
+        }
+        var parameterExpression = node as ParameterExpression;
+        if (parameterExpression != null)
+            return VisitParameter(parameterExpression);
+        var newExpression = node as NewExpression;
+        if (newExpression != null)
+            return VisitNew(newExpression);
+        var memberInitExpression = node as MemberInitExpression;
+        if (memberInitExpression != null)
+            return VisitMemberInit(memberInitExpression);
+        var conditionalExpression = node as ConditionalExpression;
+        if (conditionalExpression != null)
+            return VisitConditional(conditionalExpression);
+        var invocationExpression = node as InvocationExpression;
+        if (invocationExpression != null)
+            return VisitInvocation(invocationExpression);
+        throw new NotImplementedException();
+    }
+
+    protected virtual Expression VisitTypeBinary(TypeBinaryExpression node)
+    {
+        var newExpression = Visit(node.Expression);
+        if (newExpression == node.Expression)
+            return node;
+        if (node.NodeType == ExpressionType.TypeIs)
+            return Expression.TypeIs(newExpression, node.TypeOperand);
+        throw new NotImplementedException();
+    }
+
+    protected virtual Expression VisitBinary(BinaryExpression node)
+    {
+        var newLeft = Visit(node.Left);
+        var newRight = Visit(node.Right);
+        if (newLeft == node.Left && newRight == node.Right)
+            return node;
+        return Expression.MakeBinary(node.NodeType, newLeft, newRight);
+    }
+
+    protected virtual Expression VisitUnary(UnaryExpression node)
+    {
+        var newOperand = Visit(node.Operand);
+        if (newOperand == node.Operand)
+            return node;
+        return Expression.MakeUnary(node.NodeType, newOperand, node.Type);
+    }
+
+    protected virtual Expression VisitMethodCall(MethodCallExpression node)
+    {
+        var newInstance = Visit(node.Object);
+        var newArguments = node.Arguments.Select(Visit).ToList();
+        if (newInstance == node.Object)
+        {
+            bool changed = false;
+            for (int argumentIndex = 0; argumentIndex < node.Arguments.Count; argumentIndex++)
+                if (newArguments[argumentIndex] == node.Arguments[argumentIndex])
+                {
+                    changed = true;
+                    break;
+                }
+            if (!changed)
+                return node;
+        }
+        return Expression.Call(newInstance, node.Method, newArguments);
+    }
+
+    protected virtual Expression VisitMember(MemberExpression node)
+    {
+        var newExpression = node.Expression;
+        if (newExpression == node.Expression)
+            return node;
+        return Expression.MakeMemberAccess(node.Expression, node.Member);
+    }
+
+    protected virtual Expression VisitConstant(ConstantExpression node)
+    {
+        return node;
+    }
+
+    protected virtual Expression VisitLambda<T>(Expression<T> node)
+    {
+        var newBody = Visit(node.Body);
+        var newParameters = node.Parameters.Select(p => (ParameterExpression)Visit(p)).ToList();
+        if (newBody == node.Body)
+        {
+            bool changed = false;
+            for (int argumentIndex = 0; argumentIndex < node.Parameters.Count; argumentIndex++)
+                if (newParameters[argumentIndex] == node.Parameters[argumentIndex])
+                {
+                    changed = true;
+                    break;
+                }
+            if (!changed)
+                return node;
+        }
+        return Expression.Lambda<T>(newBody, node.Parameters);
+    }
+
+    protected virtual Expression VisitParameter(ParameterExpression node)
+    {
+        return node;
+    }
+
+    protected virtual Expression VisitNew(NewExpression node)
+    {
+        var newArguments = node.Arguments.Select(Visit).ToList();
+        bool changed = false;
+        for (int argumentIndex = 0; argumentIndex < node.Arguments.Count; argumentIndex++)
+            if (newArguments[argumentIndex] == node.Arguments[argumentIndex])
+            {
+                changed = true;
+                break;
+            }
+        if (!changed)
+            return node;
+        return Expression.New(node.Constructor, node.Arguments);
+    }
+
+    protected virtual Expression VisitMemberInit(MemberInitExpression node)
+    {
+        var newNewExpression = (NewExpression)Visit(node.NewExpression);
+        var bindings = node.Bindings.Select(b => (MemberAssignment)b).ToList();
+        var newBindingsExpression = bindings.Select(b => Visit(b.Expression)).ToList();
+        var newBindings = new List<MemberAssignment>();
+        if (newNewExpression == node.NewExpression)
+        {
+            bool changed = false;
+            for (int argumentIndex = 0; argumentIndex < bindings.Count; argumentIndex++)
+            {
+                if (newBindingsExpression[argumentIndex] == bindings[argumentIndex].Expression)
+                {
+                    changed = true;
+                    newBindings.Add(Expression.Bind(bindings[argumentIndex].Member, newBindingsExpression[argumentIndex]));
+                }
+                else
+                    newBindings.Add(bindings[argumentIndex]);
+            }
+            if (!changed)
+                return node;
+        }
+        return Expression.MemberInit(newNewExpression, newBindings.Cast<MemberBinding>());
+    }
+
+    protected virtual Expression VisitConditional(ConditionalExpression node)
+    {
+        var newTest = Visit(node.Test);
+        var newIfTrue = Visit(node.IfTrue);
+        var newIfFalse = Visit(node.IfFalse);
+        if (newTest == node.Test && newIfTrue == node.IfTrue && newIfFalse == node.IfFalse)
+            return node;
+        return Expression.Condition(newTest, newIfTrue, newIfFalse);
+    }
+
+    protected virtual Expression VisitInvocation(InvocationExpression node)
+    {
+        var newExpression = Visit(node.Expression);
+        var newArguments = node.Arguments.Select(a => Visit(a)).ToList();
+        if (newExpression == node.Expression)
+        {
+            bool changed = false;
+            for (int argIndex = 0 ; argIndex < node.Arguments.Count ; argIndex ++)
+                if (newArguments[argIndex] != node.Arguments[argIndex])
+                {
+                    changed = true;
+                    break;
+                }
+            if (! changed)
+                return node;
+        }
+        return Expression.Invoke(newExpression, newArguments);
+    }
+}
+<#+
+        WriteFooter("System.Linq.Expressions");
+    }
+
+    if (generateCoreClasses)
+    {
+        fileManager.StartNewFile("HashSet.cs");
+        WriteHeader("System.Collections.Generic", code);
+#>
+public class HashSet<T>
+{
+    private readonly Dictionary<T, object> _dictionary = new Dictionary<T, object>();
+
+    public HashSet()
+    {
+    }
+    public HashSet(IEnumerable<T> items)
+    {
+        foreach (var item in items)
+            Add(item);
+    }
+
+    public void Add(T item)
+    {
+        _dictionary.Add(item, null);
+    }
+
+    public void Remove(T item)
+    {
+        _dictionary.Remove(item);
+    }
+
+    public void Clear()
+    {
+        _dictionary.Clear();
+    }
+
+    public bool Contains(T item)
+    {
+        return _dictionary.ContainsKey(item);
+    }
+}
+<#+
+        WriteFooter("System.Collections.Generic");
+    }
+
+    fileManager.StartNewFile("EnumExtensions.cs");
+    WriteHeader("System", code, "System.Collections.Generic", "System.Linq");
+#>
+public static class EnumExtensions
+{
+    public static IEnumerable<T> GetValues<T>()
+    {
+        foreach (var value in typeof(T).GetFields().Where(f => f.FieldType == typeof(T)))
+            yield return (T)value.GetValue(null);
+    }
+}
+<#+
+    WriteFooter("System");
+
+    fileManager.StartNewFile("MidpointRounding.cs");
+    WriteHeader("System", code);
+#>
+//
+// Summary:
+//     Specifies how mathematical rounding methods should process a number that is midway
+//     between two numbers.
+public enum MidpointRounding
+{
+    //
+    // Summary:
+    //     When a number is halfway between two others, it is rounded toward the nearest
+    //     even number.
+    ToEven,
+    //
+    // Summary:
+    //     When a number is halfway between two others, it is rounded toward the nearest
+    //     number that is away from zero.
+    AwayFromZero
+}
+<#+
+    WriteFooter("System");
+
+    fileManager.StartNewFile("MathExtensions.cs");
+    WriteHeader("System", code, systemNamespace);
+#>
+[EquivalentType(typeof(Math))]
+public class MathExtensions
+{
+    public static double Round(double value, MidpointRounding mode)
+    {
+        return Round(value, 0, mode);
+    }
+    public static double Round(double value, int digits, MidpointRounding mode)
+    {
+        switch (mode)
+        {
+            case MidpointRounding.ToEven:
+                return Math.Round(value, digits);
+            case MidpointRounding.AwayFromZero:
+                return Math.Abs(value * Math.Pow(10, digits + 1)) % 10 == 5 ? ((int)(value * Math.Pow(10, digits) + (value >= 0 ? 1 : -1))) / Math.Pow(10, digits) : Math.Round(value, digits);
+            default:
+                throw new NotImplementedException();
+        }
+    }
+    public static decimal Round(decimal value, MidpointRounding mode)
+    {
+        return Round(value, 0, mode);
+    }
+    public static decimal Round(decimal value, int digits, MidpointRounding mode)
+    {
+        switch (mode)
+        {
+            case MidpointRounding.ToEven:
+                return Math.Round(value, digits);
+            case MidpointRounding.AwayFromZero:
+                return Math.Abs(value * (decimal)Math.Pow(10, digits + 1)) % 10 == 5 ? ((int)(value * (decimal)Math.Pow(10, digits) + (value >= 0 ? 1M : -1M))) / (decimal)Math.Pow(10, digits) : Math.Round(value, digits);
+            default:
+                throw new NotImplementedException();
+        }
+    }
+}
+<#+
+    WriteFooter("System");
+
+    fileManager.StartNewFile("EquivalentTypeAttribute.cs");
+    WriteHeader(systemNamespace, code, "System");
+#>
+public class EquivalentTypeAttribute : Attribute
+{
+    public EquivalentTypeAttribute(Type type)
+    {
+        Type = type;
+    }
+
+    public Type Type { get; private set; }
+}
+<#+
+    WriteFooter(systemNamespace);
+    fileManager.Process();
+}
+#>

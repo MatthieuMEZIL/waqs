@@ -1,0 +1,183 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _queriesResultBaseType = " : ICustomJsonSerializable";
+string _queryResultPageBaseType = " : ICustomJsonSerializable";
+
+void CompleteQueryResult()
+{
+#>
+
+    protected override StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result = base.Serialize(result, alreadySerialized, ref index);
+        if (Values != null)
+        {
+            var eltType = Values[0].GetType();
+            if (eltType.IsValueType || eltType == typeof(string))
+            {
+                result.Append(",\"$ValuesType\":\"");
+                result.Append(eltType.ToString());
+                result.Append("\"");
+            }
+            result.Append(",\"Values\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromEnumerable(result, Values, v => result.Append(JsonExtension.CreateJsonFrom(v, alreadySerialized, ref indexTmp)));
+            index = indexTmp;
+        }
+        if (Value != null)
+        {
+            var valueAsCustomJsonSerializable = Value as ICustomJsonSerializable;
+            if (valueAsCustomJsonSerializable == null)
+            {
+                var valueType = Value.GetType();
+                if (valueType.IsValueType || valueType == typeof(string))
+                    JsonExtension.AppendJsonFromObjectValueType(result, Value, startWithComma: true);
+                else
+                    throw new NotImplementedException();
+            }
+            else
+            {
+                result.Append(",\"Value\":");
+                ((ICustomJsonSerializable)Value).Serialize(result, alreadySerialized, ref index);
+            }
+        }
+        return result;
+    }
+
+    protected override void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        base.Deserialize(jr, alreadyDeserialized, getTypes);
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "$ValuesType"))
+        {
+            var valuesType = (string)jr.Value;
+            jr.Read();
+            if (JsonExtension.MoveToProperty(jr, "Values"))
+                JsonExtension.DoWithJsonReaderOption(jr, valuesType, () => Values = JsonExtension.ArrayFromJson(jr, () => JsonExtension.ObjectValueTypeFromJson(jr, valuesType, null)));
+            else 
+                throw new NotImplementedException();
+        }
+        else if (JsonExtension.MoveToProperty(jr, "Values"))
+        {
+            Values = JsonExtension.ArrayFromJson(jr, () => JsonExtension.CreateFromJson<ICustomJsonSerializable>(jr, alreadyDeserialized, getTypes));
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        object value;
+        if (JsonExtension.TryObjectValueTypeFromJson(jr, out value))
+            Value = value;
+        else if (JsonExtension.MoveToProperty(jr, "Value"))
+            Value = JsonExtension.CreateFromJson<ICustomJsonSerializable>(jr, alreadyDeserialized, getTypes);
+    }
+<#+
+}
+
+void CompleteQueriesResult()
+{
+#>
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        result.Append("\"");
+        if (QueryResults != null && QueryResults.Length != 0)
+        {
+            result.Append(",\"QueryResults\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromEnumerable(result, QueryResults, qr => ((ICustomJsonSerializable)qr).Serialize(result, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+        return result;
+    }
+
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "QueryResults"))
+            QueryResults = JsonExtension.ArrayFromJson(jr, () => JsonExtension.CreateFromJson<NorthwindQueryResult>(jr, alreadyDeserialized, getTypes));
+    }
+<#+
+}
+
+void CompleteQueryResultPage()
+{
+#>
+
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        result.Append("\"");
+        if (PageIndex != 0)
+        {
+            result.Append(",\"PageIndex\":");
+            result.Append(JsonExtension.GetJson(PageIndex));
+        }
+        if (Result != null)
+        {
+            result.Append(",\"Result\":");
+            ((ICustomJsonSerializable)Result).Serialize(result, alreadySerialized, ref index);
+        }
+        return result;
+    }
+
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "PageIndex"))
+        {
+            PageIndex = (int)(long)jr.Value;
+            jr.Read();
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "Result"))
+            Result = JsonExtension.CreateFromJson<NorthwindQueryResult>(jr, alreadyDeserialized, getTypes);
+    }
+<#+
+}
+#>

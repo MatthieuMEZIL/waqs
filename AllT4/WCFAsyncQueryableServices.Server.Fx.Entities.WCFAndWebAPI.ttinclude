@@ -1,0 +1,14 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.Entities.WCFAndWebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _jsonNamespace;
+string[] _additionalUsings;
+
+void WriteServerFxEntities(string namespaceName, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteServerFxEntities(namespaceName);
+}
+#>

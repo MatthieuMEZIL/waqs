@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.Client.WCFServiceProxyBase.ttinclude"#>
+<#@ assembly name="%ProgramFiles(x86)%\Microsoft SDKs\Silverlight\v4.0\Tools\ServiceReference\Microsoft.Silverlight.ServiceReference.dll"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

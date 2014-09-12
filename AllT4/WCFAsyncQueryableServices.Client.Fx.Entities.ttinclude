@@ -1,0 +1,250 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteClientFxEntities(string clientFxComponentModelNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxEntitiesTrackingNamespace, string namespaceName = null)
+{
+CodeGenerationTools code = new CodeGenerationTools(this);
+MetadataLoader loader = new MetadataLoader(this);
+CodeRegion region = new CodeRegion(this, 1);
+if (namespaceName == null)
+	namespaceName = code.VsNamespaceSuggestion();
+
+EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+fileManager.StartNewFile("TrackableCollection.cs");
+WriteHeader(namespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.Collections.Specialized", "System.Collections.ObjectModel", "System.Linq", "System.Linq.Expressions", clientFxClientContextNamespace, clientFxClientContextInterfacesNamespace, clientFxEntitiesTrackingNamespace);
+#>
+[IsKnownByServer]
+public class TrackableCollection<T> : TrackableCollectionBase<T>, ITrackableCollection<T>
+	where T : IObjectWithChangeTracker
+{
+	private ObservableCollection<T> _collection;
+	private HashSet<T> _hashSet;
+		
+	public TrackableCollection()
+	{
+		_collection = new ObservableCollection<T>();
+		_hashSet = new HashSet<T>();
+	}
+	public TrackableCollection(IEnumerable<T> values)
+	{
+		_collection = new ObservableCollection<T>(values);
+		_hashSet = new HashSet<T>(values);
+	}
+		
+	public bool IsAttachingOrDetaching { get; set; }
+		
+	public void Attach(T item, bool attaching = false)
+	{
+		Attach(item, true, attaching);
+	}
+	void ITrackableCollection<T>.AttachWithoutCheckingIfAlreadyExist(T item)
+	{
+		Attach(item, false, false);
+	}
+	private void Attach(T item, bool checkIfAlreadyExist, bool attaching = false)
+	{
+		IsAttachingOrDetaching = attaching;
+		item.ChangeTracker.IsAttaching = true;
+		Add(item, checkIfAlreadyExist);
+		item.ChangeTracker.IsAttaching = false;
+		IsAttachingOrDetaching = false;
+	}
+		
+	public void Detach(T item)
+	{
+		IsAttachingOrDetaching = true;
+		_collection.Remove(item);
+		_hashSet.Remove(item);
+		IsAttachingOrDetaching = false;
+	}
+		
+	Func<IClientContext> ITrackableCollection<T>.GetClientContext { get; set; }
+	Expression<Func<T, bool>> ITrackableCollection<T>.GetWhereExpression { get; set; }
+	public IAsyncQueryable<T> AsAsyncQueryable(ParameterMode? parameterMode = null)
+	{
+		var thisAsITrackableCollection = (ITrackableCollection<T>)this;
+		if (thisAsITrackableCollection.GetClientContext == null || thisAsITrackableCollection.GetWhereExpression == null)
+			throw new InvalidOperationException();
+		return thisAsITrackableCollection.GetClientContext().GetClientEntitySetAsyncQueryable<T>(parameterMode).Where(thisAsITrackableCollection.GetWhereExpression);
+	}
+		
+	public void Add(T item)
+	{
+		Add(item, true);
+	}
+	private void Add(T item, bool checkIfAlreadyExist)
+	{
+		if (item == null)
+			return;
+		if (checkIfAlreadyExist && !Contains(item))
+		{
+			_hashSet.Add(item);
+			_collection.Add(item);
+		}
+	}
+		
+	public void Clear()
+	{
+		foreach (T item in this)
+			_collection.Remove(item);
+		_hashSet.Clear();
+	}
+		
+	public override bool Contains(T item)
+	{
+		return _hashSet.Contains(item);
+	}
+		
+	void ICollection<T>.CopyTo(T[] array, int arrayIndex)
+	{
+		((ICollection<T>)_collection).CopyTo(array, arrayIndex);
+	}
+		
+	public int Count
+	{
+		get { return _collection.Count; }
+	}
+		
+	bool ICollection<T>.IsReadOnly
+	{
+		get { return false; }
+	}
+		
+	public bool Remove(T item)
+	{
+		var value = _collection.Remove(item);
+		_hashSet.Remove(item);
+		return value;
+	}
+		
+	protected IEnumerable<T> GetEnumerable()
+	{
+		List<T> values = _collection.ToList();
+		foreach (var value in values)
+			yield return value;
+	}
+		
+	public override IEnumerator<T> GetEnumerator()
+	{
+		return GetEnumerable().GetEnumerator();
+	}
+
+	private event NotifyCollectionChangedEventHandler CollectionChangedInternal;
+	public event NotifyCollectionChangedEventHandler CollectionChanged
+	{
+		add 
+		{ 
+			_collection.CollectionChanged += value;
+			CollectionChangedInternal += value;
+		}
+		remove 
+		{ 
+			_collection.CollectionChanged -= value;
+			CollectionChangedInternal -= value;
+		}
+	}
+
+	public void NotifyReset()
+	{
+		if (CollectionChangedInternal != null)
+			CollectionChangedInternal(this, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+	}
+		
+	int IList.Add(object value)
+	{
+		_hashSet.Add((T)value);
+		return ((IList)_collection).Add(value);
+	}
+		
+	bool IList.Contains(object value)
+	{
+		return Contains((T)value);
+	}
+		
+	public int IndexOf(T value)
+	{
+		return _collection.IndexOf(value);
+	}
+	int IList.IndexOf(object value)
+	{
+		return ((IList)_collection).IndexOf(value);
+	}
+		
+	public void Insert(int index, object value)
+	{
+		_hashSet.Add((T)value);
+		((IList)_collection).Insert(index, value);
+	}
+		
+	public bool IsFixedSize
+	{
+		get { return ((IList)_collection).IsFixedSize; }
+	}
+		
+	bool IList.IsReadOnly
+	{
+		get { return ((IList)_collection).IsReadOnly; }
+	}
+		
+	void IList.Remove(object value)
+	{
+		((IList)_collection).Remove(value);
+		_hashSet.Remove((T)value);
+	}
+		
+	void IList.RemoveAt(int index)
+	{
+		var value = _collection[index];
+		((IList)_collection).RemoveAt(index);
+		_hashSet.Remove(value);
+	}
+		
+	public T this[int index]
+	{
+		get { return _collection[index]; }
+		set 
+		{
+			_hashSet.Remove(_collection[index]);
+			_hashSet.Add(value);
+			_collection[index] = value; 
+		}
+	}
+	object IList.this[int index]
+	{
+		get { return ((IList)_collection)[index]; }
+		set { this[index] = (T)value; }
+	}
+		
+	void ICollection.CopyTo(Array array, int index)
+	{
+		((ICollection)_collection).CopyTo(array, index);		
+	}
+		
+	public bool IsSynchronized
+	{
+		get { return ((IList)_collection).IsSynchronized; }
+	}
+		
+	public object SyncRoot
+	{
+		get { return ((IList)_collection).SyncRoot; }
+	}
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.StartNewFile("ITrackableCollection.cs");
+WriteHeader(namespaceName, code, "System", "System.Linq.Expressions", clientFxClientContextInterfacesNamespace, clientFxEntitiesTrackingNamespace);
+#>
+public interface ITrackableCollection<T> : IEntityCollection<T>
+{
+	Func<IClientContext> GetClientContext { get; set; }
+	Expression<Func<T, bool>> GetWhereExpression { get; set; }
+	void AttachWithoutCheckingIfAlreadyExist(T entity);
+}
+<#+
+WriteFooter(namespaceName);
+fileManager.Process();
+}
+#>

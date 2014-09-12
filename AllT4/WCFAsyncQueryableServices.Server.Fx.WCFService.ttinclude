@@ -1,0 +1,93 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxWCFService(string serverFxServiceInterfacesNamespace, string serverFxServiceNamespace, string serverFxWCFServiceContractNamespace, string serverFxCommonNamespace, string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+	MetadataLoader loader = new MetadataLoader(this);
+	CodeRegion region = new CodeRegion(this, 1);
+	MetadataTools ef = new MetadataTools(this);
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	fileManager.StartNewFile("WCFService.cs");
+	WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.ServiceModel", serverFxCommonNamespace, serverFxServiceNamespace, serverFxServiceInterfacesNamespace, serverFxWCFServiceContractNamespace);
+#>
+public static partial class WCFService
+{	
+	public static void TryRethrowFault(Action action, Dictionary<Type, IExceptionDetailFactory> exceptionDetailFactories, Func<IExceptionDetail, FaultDetail> faultDetailfactory, Action<FaultDetail> defineFaultDetail = null)
+	{
+		try
+		{
+			action();
+		}
+		catch (Exception e)
+		{
+			RethrowFault(e, exceptionDetailFactories, faultDetailfactory, defineFaultDetail);
+		}
+	}
+
+	public static T TryRethrowFault<T>(Func<T> action, Dictionary<Type, IExceptionDetailFactory> exceptionDetailFactories, Func<IExceptionDetail, FaultDetail> faultDetailfactory, Action<FaultDetail> defineFaultDetail = null)
+	{
+		try
+		{
+			return action();
+		}
+		catch (Exception e)
+		{
+			RethrowFault(e, exceptionDetailFactories, faultDetailfactory, defineFaultDetail);
+		}
+		throw new InvalidOperationException(); // useless code for compiler
+	}
+	
+	private static void RethrowFault(Exception e, Dictionary<Type, IExceptionDetailFactory> exceptionDetailFactories, Func<IExceptionDetail, FaultDetail> faultDetailfactory, Action<FaultDetail> defineFaultDetail = null)
+	{
+		if (e is FaultException)
+			throw e;
+		throw GetFaultException(e, exceptionDetailFactories, faultDetailfactory, defineFaultDetail);
+	}
+
+	public static FaultException GetFaultException(Exception e, Dictionary<Type, IExceptionDetailFactory> exceptionDetailFactories, Func<IExceptionDetail, FaultDetail> faultDetailfactory, Action<FaultDetail> defineFaultDetail)
+	{
+		FaultException value = null;
+		GetCustomFaultException(e, ref value);
+		if (value != null)
+			return value;
+		var validationException = e as ValidationException;
+		if (validationException != null)
+			return new FaultException<ErrorCollection>(new ErrorCollection { Errors = validationException.Errors.ToArray() });
+		Type type = e.GetType();
+		IExceptionDetailFactory exceptionDetailFactory = null;
+		while (type != typeof(Exception))
+		{
+			if (exceptionDetailFactories.TryGetValue(type, out exceptionDetailFactory))
+				break;
+			type = type.BaseType;
+		}
+		FaultDetail faultDetail;
+		if (exceptionDetailFactory == null)
+			faultDetail = new FaultDetail();
+		else
+			faultDetail = faultDetailfactory(exceptionDetailFactory.Create(e));
+		faultDetail.ErrorType = e.GetType().FullName;
+		if (defineFaultDetail != null)
+			defineFaultDetail(faultDetail);
+		DefineFaultDetail(faultDetail, e);
+		Type faultDetailType = faultDetail.GetType();
+		return (FaultException)typeof(FaultException<>).MakeGenericType(faultDetailType).GetConstructor(new Type[] { faultDetailType, typeof(string) }).Invoke(new object[] { faultDetail, faultDetail.ErrorType });
+	}
+
+	static partial void GetCustomFaultException(Exception e, ref FaultException value);
+	static partial void DefineFaultDetail(FaultDetail faultDetail, Exception e);
+}
+
+<#+
+	WriteFooter(namespaceName);
+
+	fileManager.Process();
+}
+#>

@@ -1,0 +1,381 @@
+<#@ include file="WCFAsyncQueryableServices.Server.Specification.Expression.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteServerSpecificationsMock(string serverFxSpecificationsNamespace, string serverEntitiesNamespace, string specificationSlnFilePath = null, string specificationProjectPath = null, string specificationFolderPath = null, string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	MetadataLoader loader = new MetadataLoader(this);
+	CodeRegion region = new CodeRegion(this, 1);
+	MetadataTools ef = new MetadataTools(this);
+
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion() + ".Mock";
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	ISolution specificationSolution;
+	IProject specificationProject;
+	CommonCompilation specificationsCompilation;
+	if (specificationSlnFilePath != null && (specificationSolution = Solution.Load(Path.GetFullPath(Host.ResolvePath(specificationSlnFilePath)))) != null && specificationProjectPath != null && (specificationProject = specificationSolution.Projects.FirstOrDefault(p => p.FilePath == Path.GetFullPath(Host.ResolvePath(specificationProjectPath)))) != null && specificationFolderPath != null)
+	{
+		specificationFolderPath = Path.GetFullPath(Host.ResolvePath(specificationFolderPath));
+		specificationsCompilation = specificationProject.GetCompilation();
+		var semanticModels = new Dictionary<MethodDeclarationSyntax, ISemanticModel>();
+		var methods = new Dictionary<MethodSymbol, MethodDeclarationSyntax>();
+		var classes = new Dictionary<string, Roslyn.Compilers.CSharp.TypeSymbol>();
+		foreach(var document in specificationProject.Documents.Where(d => d.FilePath.StartsWith(specificationFolderPath)))
+		{
+			var documentTree = document.GetSyntaxTree();
+			var semanticModel = specificationProject.GetCompilation().GetSemanticModel(documentTree);
+			var getSpecificationsInfoVisitor = new GetSpecificationsInfoVisitor(semanticModel);
+			getSpecificationsInfoVisitor.Visit((SyntaxNode)documentTree.GetRoot());
+			foreach (var m in getSpecificationsInfoVisitor.Methods)
+			{
+				semanticModels.Add(m.Value, semanticModel);
+				methods.Add(m.Key, m.Value);
+			}
+			foreach (var c in getSpecificationsInfoVisitor.Types)
+				classes.Add(c.Key, c.Value);
+		};
+		foreach (var document in specificationProject.Documents.Where(d => d.FilePath.StartsWith(specificationFolderPath) && ! d.FilePath.EndsWith(".Designer.cs")))
+		{
+			var documentTree = document.GetSyntaxTree();
+			var semanticModel = specificationProject.GetCompilation().GetSemanticModel(documentTree);
+			var result = new StubMethodSyntaxRewriter(semanticModel, specificationFolderPath, serverFxSpecificationsNamespace, serverEntitiesNamespace, namespaceName, methods, classes, semanticModels).Visit((SyntaxNode)documentTree.GetRoot());
+			fileManager.StartNewFile(Path.GetFileNameWithoutExtension(document.Name) + ".Mock.cs"); 
+#>
+<#=result.NormalizeWhitespace().ToString()#>
+<#+
+		}
+	}
+
+	fileManager.Process();
+}
+
+public class GetSpecificationsInfoVisitor : SyntaxVisitor
+{
+	private ISemanticModel _semanticModel;
+
+	public GetSpecificationsInfoVisitor(ISemanticModel semanticModel)
+	{
+		_semanticModel = semanticModel;
+	}
+
+	private List<KeyValuePair<MethodSymbol, MethodDeclarationSyntax>> _methods;
+	public List<KeyValuePair<MethodSymbol, MethodDeclarationSyntax>> Methods
+	{
+		get { return _methods ?? (_methods = new List<KeyValuePair<MethodSymbol, MethodDeclarationSyntax>>()); }
+	}
+
+	private List<KeyValuePair<string, Roslyn.Compilers.CSharp.TypeSymbol>> _types;
+	public List<KeyValuePair<string, Roslyn.Compilers.CSharp.TypeSymbol>> Types
+	{
+		get { return _types ?? (_types = new List<KeyValuePair<string, Roslyn.Compilers.CSharp.TypeSymbol>>()); }
+	}
+
+	public override void VisitCompilationUnit(CompilationUnitSyntax node)
+	{
+		foreach (var m in node.Members)
+			Visit(m);
+	}
+
+	public override void VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
+	{
+		foreach (var m in node.Members)
+			Visit(m);
+	}
+
+	public override void VisitClassDeclaration(ClassDeclarationSyntax node)
+	{
+		foreach (var m in node.Members)
+			Visit(m);
+		var type = (Roslyn.Compilers.CSharp.TypeSymbol)_semanticModel.GetDeclaredSymbol(node);
+		Types.Add(new KeyValuePair<string, Roslyn.Compilers.CSharp.TypeSymbol>(type.ToString(), type));
+	}
+
+	public override void VisitStructDeclaration(StructDeclarationSyntax node)
+	{
+		foreach (var m in node.Members)
+			Visit(m);
+		var type = (Roslyn.Compilers.CSharp.TypeSymbol)_semanticModel.GetDeclaredSymbol(node);
+		Types.Add(new KeyValuePair<string, Roslyn.Compilers.CSharp.TypeSymbol>(type.ToString(), type));
+	}
+
+	public override void VisitMethodDeclaration(MethodDeclarationSyntax node)
+	{
+		Methods.Add(new KeyValuePair<MethodSymbol, MethodDeclarationSyntax>((MethodSymbol)_semanticModel.GetDeclaredSymbol(node), node));
+	}
+}
+
+public class StubMethodSyntaxRewriter : SyntaxRewriter
+{
+	private ISemanticModel _semanticModel;
+	private string _specificationFolderPath;
+	private string _serverFxSpecificationsNamespace;
+	private string _serverEntitiesNamespace;
+	private string _serverSpecificationsMockNamespace;
+	private Dictionary<MethodSymbol, MethodDeclarationSyntax> _methods;
+	private Dictionary<string, Roslyn.Compilers.CSharp.TypeSymbol> _classes;
+	private Dictionary<MethodDeclarationSyntax, ISemanticModel> _semanticModels;
+	private List<string> _usings = new List<string>();
+	private bool _includeOverride = false;
+	private string _prefix;
+	private Dictionary<MethodSymbol, ParameterSyntax> _invocations = new Dictionary<MethodSymbol, ParameterSyntax>();
+
+	public StubMethodSyntaxRewriter(ISemanticModel semanticModel, string specificationFolderPath, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, string serverSpecificationsMockNamespace, Dictionary<MethodSymbol, MethodDeclarationSyntax> methods, Dictionary<string, Roslyn.Compilers.CSharp.TypeSymbol> classes, Dictionary<MethodDeclarationSyntax, ISemanticModel> semanticModels)
+	{
+		_semanticModel = semanticModel;
+		_specificationFolderPath = specificationFolderPath;
+		_serverFxSpecificationsNamespace = serverFxSpecificationsNamespace;
+		_serverEntitiesNamespace = serverEntitiesNamespace;
+		_serverSpecificationsMockNamespace = serverSpecificationsMockNamespace;
+		_methods = methods;
+		_classes = classes;
+		_semanticModels = semanticModels;
+	}
+
+	private StubMethodSyntaxRewriter(ISemanticModel semanticModel, string specificationFolderPath, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, string serverSpecificationsMockNamespace, Dictionary<MethodSymbol, MethodDeclarationSyntax> methods, Dictionary<string, Roslyn.Compilers.CSharp.TypeSymbol> classes, Dictionary<MethodDeclarationSyntax, ISemanticModel> semanticModels, string prefix)
+		: this(semanticModel, specificationFolderPath, serverFxSpecificationsNamespace, serverEntitiesNamespace, serverSpecificationsMockNamespace, methods, classes, semanticModels)
+	{
+		_prefix = prefix ?? "";
+		_includeOverride = true;
+	}
+
+	public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)
+	{
+		foreach(var u in node.Usings)
+			_usings.Add(u.Name.GetFullText().Trim());
+		node = (CompilationUnitSyntax)base.VisitCompilationUnit(node);
+		if (! _usings.Contains("System"))
+			_usings.Add("System");
+		if (! _usings.Contains(_serverEntitiesNamespace))
+			_usings.Add(_serverEntitiesNamespace);
+		return Syntax.CompilationUnit(node.Externs, Syntax.List<UsingDirectiveSyntax>(_usings.Select(u => Syntax.UsingDirective(Syntax.ParseName(u)))), node.Attributes, node.Members);
+	}
+
+	public override SyntaxNode VisitUsingDirective(UsingDirectiveSyntax node)
+	{
+		var usingName = node.Name.GetFullText().Trim();
+		if (_methods.Any(m => m.Key.ContainingNamespace.ToString() == usingName))
+			return null;
+		return base.VisitUsingDirective(node);
+	}
+
+	public override SyntaxNode VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
+	{
+		node = (NamespaceDeclarationSyntax)base.VisitNamespaceDeclaration(node);
+		foreach (var u in node.Usings)
+		{
+			var usingName = u.Name.GetFullText().Trim();
+			if (! _usings.Contains(usingName))
+				_usings.Add(usingName);
+		}
+		return Syntax.NamespaceDeclaration(Syntax.ParseName(_serverSpecificationsMockNamespace), node.Externs, Syntax.List<UsingDirectiveSyntax>(), node.Members);
+	}
+
+	public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
+	{
+		node = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
+		node = node.WithModifiers(Syntax.TokenList(new [] { Syntax.Token(SyntaxKind.PublicKeyword) }.Union(node.Modifiers.Where(m => !(m.Kind == SyntaxKind.PublicKeyword || m.Kind == SyntaxKind.InternalKeyword || m.Kind == SyntaxKind.ProtectedKeyword || m.Kind == SyntaxKind.PrivateKeyword)))));
+		return node;
+	}
+
+	public override SyntaxNode VisitStructDeclaration(StructDeclarationSyntax node)
+	{
+		node = (StructDeclarationSyntax)base.VisitStructDeclaration(node);
+		node = node.WithModifiers(Syntax.TokenList(new [] { Syntax.Token(SyntaxKind.PublicKeyword) }.Union(node.Modifiers.Where(m => !(m.Kind == SyntaxKind.PublicKeyword || m.Kind == SyntaxKind.InternalKeyword || m.Kind == SyntaxKind.ProtectedKeyword || m.Kind == SyntaxKind.PrivateKeyword)))));
+		return node;
+	}
+
+	public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
+	{
+		var method = (MethodSymbol)_semanticModel.GetDeclaredSymbol(node);
+		if (! _includeOverride && method.GetAttributes().Any(a => a.AttributeClass.ContainingNamespace.ToString() == _serverFxSpecificationsNamespace && a.AttributeClass.Name == "OverrideAttribute"))
+			return null;
+		var methodAttributes = method.GetAttributes().ToList();
+		_invocations.Clear();
+		var value = base.VisitMethodDeclaration(node);
+		bool isAbstract = false;
+		bool isVirtual = false;
+		var attributes = Syntax.List<AttributeDeclarationSyntax>(node.Attributes.Select((a, i) => new { Attibute = a, Index = i }).Where(a =>
+			{
+				var attributeClass = methodAttributes[a.Index].AttributeClass;
+				var isSpecificationAttribute = attributeClass.ContainingNamespace.ToString() != _serverFxSpecificationsNamespace;
+				isAbstract = attributeClass.Name == "AbstractAttribute";
+				isVirtual = attributeClass.Name == "VirtualAttribute";
+				return isSpecificationAttribute;
+			}).Select(a => a.Attibute));
+		List<ParameterSyntax> parameters;
+		if (_invocations.Any())
+		{
+			node = (MethodDeclarationSyntax)value;
+			parameters = node.ParameterList.Parameters.Union(_invocations.Values).ToList();
+		}
+		else
+			parameters = node.ParameterList.Parameters.ToList();
+		BlockSyntax body;
+		if (isAbstract)
+		{
+			body = MakeAbstractVirtualBody(Syntax.Block(Syntax.ParseStatement("throw new InvalidOperationException();")), method, parameters);
+		}
+		else if (isVirtual)
+		{
+			body = MakeAbstractVirtualBody(node.Body, method, parameters);
+		}
+		else
+			body = node.Body;
+		return Syntax.MethodDeclaration(attributes, Syntax.TokenList(new [] { Syntax.Token(SyntaxKind.PublicKeyword) }.Union(node.Modifiers.Where(m => !(m.Kind == SyntaxKind.PublicKeyword || m.Kind == SyntaxKind.InternalKeyword || m.Kind == SyntaxKind.ProtectedKeyword || m.Kind == SyntaxKind.PrivateKeyword)))), node.ReturnType, node.ExplicitInterfaceSpecifier, node.Identifier, node.TypeParameterList, Syntax.ParameterList(Syntax.SeparatedList<ParameterSyntax>(parameters, parameters.Skip(1).Select(p => Syntax.Token(SyntaxKind.CommaToken)))), node.ConstraintClauses, body);
+	}
+
+	private BlockSyntax MakeAbstractVirtualBody(BlockSyntax body, MethodSymbol method, List<ParameterSyntax> parameters)
+	{
+		var candidateMethodsDepth = new List<Tuple<MethodSymbol, int>>();
+		foreach (var _ in _methods.Keys.Where(m =>
+			{
+				if (m.Name == method.Name && m.GetAttributes().Any(a => a.AttributeClass.ContainingNamespace.ToString() == _serverFxSpecificationsNamespace && a.AttributeClass.Name == "OverrideAttribute") && m.Parameters.Count == method.Parameters.Count)
+				{
+					for (int i = 1; i < method.Parameters.Count; i++)
+						if (m.Parameters[i].Type.ToString() != method.Parameters[i].Type.ToString())
+							return false;
+					int depth = 1;
+					ITypeSymbol baseType = m.Parameters[0].Type;
+					while ((baseType = baseType.BaseType) != null)
+					{
+						if (baseType.ToString() == method.Parameters[0].Type.ToString())
+						{
+							candidateMethodsDepth.Add(new Tuple<MethodSymbol, int>(m, depth));
+							return true;
+						}
+						depth++;
+					}
+					return false;
+				}
+				return false;
+			})) ;
+		body = Syntax.Block(Syntax.List<StatementSyntax>(candidateMethodsDepth.OrderByDescending(cm => cm.Item2).Select(cm => cm.Item1).SelectMany(m =>
+			{
+				var statements = new List<StatementSyntax>();
+				var parameterTypeName = GetTypeName(m.Parameters[0].Type);
+				var parameterType = Syntax.ParseTypeName(parameterTypeName);
+				var parameterName = string.Concat(m.Parameters[0].Name, "As", m.Parameters[0].Type.Name);
+				var variableDeclarator = Syntax.VariableDeclarator(parameterName).WithInitializer(Syntax.EqualsValueClause(Syntax.BinaryExpression(SyntaxKind.AsExpression, Syntax.IdentifierName(method.Parameters[0].Name), parameterType)));
+				var variableDeclaration = Syntax.VariableDeclaration(parameterType, Syntax.SeparatedList<VariableDeclaratorSyntax>(variableDeclarator));
+				statements.Add(Syntax.LocalDeclarationStatement(variableDeclaration));
+				var subMethod = _methods[m];
+				var parent = subMethod.Parent;
+				while ((parent = parent.Parent) != null)
+				{
+					var namespaceDeclaration = parent as NamespaceDeclarationSyntax;
+					if (namespaceDeclaration != null)
+						foreach (var u in namespaceDeclaration.Usings)
+						{
+							var usingName = u.Name.GetFullText().Trim();
+							if (! _usings.Contains(usingName))
+								_usings.Add(usingName);
+						}
+					var compilationUnit = parent as CompilationUnitSyntax;
+					if (compilationUnit != null)
+						foreach (var u in compilationUnit.Usings)
+						{
+							var usingName = u.Name.GetFullText().Trim();
+							if (! _usings.Contains(usingName))
+								_usings.Add(usingName);
+						}
+				}
+				var newSubMethod = (MethodDeclarationSyntax)new StubMethodSyntaxRewriter(_semanticModels[subMethod], _specificationFolderPath, _serverFxSpecificationsNamespace, _serverEntitiesNamespace, _serverSpecificationsMockNamespace, _methods, _classes, _semanticModels, _prefix + m.Parameters[0].Type.Name).Visit(subMethod);
+				foreach (var p in newSubMethod.ParameterList.Parameters.Where(p => ! subMethod.ParameterList.Parameters.Any(p2 => p.Identifier.GetFullText().Trim() == p2.Identifier.GetFullText().Trim())))
+					parameters.Add(p);
+				statements.Add(Syntax.IfStatement(Syntax.BinaryExpression(SyntaxKind.NotEqualsExpression, Syntax.IdentifierName(parameterName), Syntax.LiteralExpression(SyntaxKind.NullLiteralExpression)), (StatementSyntax)new SpecificationMethodBodyRewriter(m.Parameters[0].Name, transformParameter: _ => Syntax.IdentifierName(parameterName)).Visit(newSubMethod.Body)));
+				return statements;
+			}).Union(body.Statements)));
+		return body;
+	}
+
+	private MethodSymbol GetInvocationSpecification(ExpressionSyntax n)
+	{
+		var symbol = _semanticModel.GetSymbolInfo(n).Symbol;
+		if (symbol == null)
+			return null;
+		var sourceTree = symbol.Locations.First().SourceTree;
+		if (sourceTree != null && sourceTree.FilePath.StartsWith(_specificationFolderPath))
+			return symbol as MethodSymbol;
+		return null;
+	}
+
+	private string GetTypeName(Roslyn.Compilers.CSharp.TypeSymbol type)
+	{
+		if (_classes.ContainsKey(type.ToString()))
+			return string.Concat(_serverSpecificationsMockNamespace, ".", type.ToString().Substring(type.ContainingNamespace.ToString().Length + 1));
+		return GetTypeName(new TypeSymbol(type));
+	}
+	private string GetTypeName(TypeSymbol type)
+	{
+		var value = type.FullName;
+		foreach (var ta in type.TypeArguments)
+			value = Regex.Replace(value, string.Concat(@"(<|\,)", ta.FullName, @"(>|\,)"), m => string.Concat(m.Groups[1].Value, (_classes.ContainsKey(ta.FullName) ? string.Concat(_serverSpecificationsMockNamespace, ".", ta.FullName.Substring(ta.ContainingNamespace.Length + 1)) : GetTypeName(ta)), m.Groups[2].Value));
+		return value;
+	}
+
+	public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+	{
+		var method = GetInvocationSpecification(node.Expression);
+
+		var value = base.VisitInvocationExpression(node);
+
+		if (method == null)
+			return value;
+
+		ParameterSyntax parameter;
+		if (!_invocations.TryGetValue(method, out parameter))
+		{
+			var parameterTypesConcat = new StringBuilder();
+			var parametersTypes = method.Parameters.OfType<ParameterSymbol>().Select(p => GetTypeName(p.Type));
+			if (!method.ReturnsVoid)
+				parametersTypes = parametersTypes.Union(new[] { GetTypeName(method.ReturnType) });
+			var parametersTypesEnumerator = parametersTypes.GetEnumerator();
+			bool hasNext = parametersTypesEnumerator.MoveNext();
+			while (hasNext)
+			{
+				parameterTypesConcat.Append(parametersTypesEnumerator.Current);
+				if (hasNext = parametersTypesEnumerator.MoveNext())
+					parameterTypesConcat.Append(", ");
+			}
+			var actionFunc = method.ReturnsVoid ? "Action" : "Func";
+			parameter = Syntax.Parameter(Syntax.Identifier(string.Concat(_prefix, method.Name, actionFunc))).WithType(Syntax.ParseTypeName(string.Format("{0}<{1}>", actionFunc, parameterTypesConcat))).WithDefault(Syntax.EqualsValueClause(Syntax.LiteralExpression(SyntaxKind.NullLiteralExpression)));
+			_invocations.Add(method, parameter);
+		}
+
+		var parameterIdentifier = Syntax.IdentifierName(parameter.Identifier.GetFullText());
+		var invocationExpressionSyntax = (InvocationExpressionSyntax)node;
+		if (method.IsStatic)
+		{
+			var containingType = method.ContainingType;
+			if (method.GetAttributes().Any(a => a.AttributeClass.ContainingNamespace.ToString() == _serverFxSpecificationsNamespace && a.AttributeClass.Name == "OverrideAttribute"))
+			{
+				var virtualContainingType = _methods.Keys.FirstOrDefault(m =>
+				{
+					if (m.Name == method.Name && m.GetAttributes().Any(a => a.AttributeClass.ContainingNamespace.ToString() == _serverFxSpecificationsNamespace && (a.AttributeClass.Name == "VirtualAttribute" || a.AttributeClass.Name == "AbstractAttribute")) && m.Parameters.Count == method.Parameters.Count)
+					{
+						for (int i = 1; i < method.Parameters.Count; i++)
+							if (m.Parameters[i].Type.ToString() != method.Parameters[i].Type.ToString())
+								return false;
+						ITypeSymbol baseType = method.Parameters[0].Type;
+						while ((baseType = baseType.BaseType) != null)
+							if (baseType.ToString() == m.Parameters[0].Type.ToString())
+								return true;
+						return false;
+					}
+					return false;
+				}).ContainingType;
+				if (virtualContainingType != null)
+					containingType = virtualContainingType;
+			}
+			SimpleNameSyntax identifierName = invocationExpressionSyntax.Expression as IdentifierNameSyntax;
+			if (identifierName == null)
+				identifierName = ((MemberAccessExpressionSyntax)invocationExpressionSyntax.Expression).Name;
+			invocationExpressionSyntax = invocationExpressionSyntax.WithExpression(Syntax.MemberAccessExpression(SyntaxKind.MemberAccessExpression, Syntax.ParseExpression(GetTypeName(containingType)), identifierName));
+		}
+		return Syntax.ParenthesizedExpression(Syntax.ConditionalExpression(Syntax.BinaryExpression(SyntaxKind.EqualsExpression, parameterIdentifier, Syntax.LiteralExpression(SyntaxKind.NullLiteralExpression)), invocationExpressionSyntax, Syntax.InvocationExpression(parameterIdentifier, invocationExpressionSyntax.ArgumentList)));
+	}
+}
+#>

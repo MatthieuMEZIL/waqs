@@ -1,0 +1,70 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void CompleteSerializableContext(CodeGenerationTools code, List<EntitySet> entitySets)
+{
+#>
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        result.Append("\"");
+<#+
+    foreach (EntitySet entitySet in entitySets)
+    {
+        string entitySetName = code.Escape(entitySet);
+#>
+        if (<#=entitySetName#> != null && <#=entitySetName#>.Count != 0)
+        {
+            result.Append(",\"<#=entitySetName#>\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromEnumerable(result, <#=entitySetName#>, qr => ((ICustomJsonSerializable)qr).Serialize(result, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+<#+
+    }
+#>
+        return result;
+    }
+
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+<#+
+    foreach (EntitySet entitySet in entitySets)
+    {
+        string entitySetName = code.Escape(entitySet);
+#>
+        if (JsonExtension.MoveToProperty(jr, "<#=entitySetName#>"))
+        {
+            <#=entitySetName#> = JsonExtension.ListFromJson(jr, () => JsonExtension.CreateFromJson<<#=_entitiesNamespace#>.<#=code.Escape(entitySet.ElementType)#>>(jr, alreadyDeserialized, getTypes));
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+<#+
+    }
+#>
+    }
+<#+
+}
+#>

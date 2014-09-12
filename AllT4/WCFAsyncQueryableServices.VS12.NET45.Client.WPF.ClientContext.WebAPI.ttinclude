@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS12.NET45.Client.WPF.ClientContext.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.ClientContext.WebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

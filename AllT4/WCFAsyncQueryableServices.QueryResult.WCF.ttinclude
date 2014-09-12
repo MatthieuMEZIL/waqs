@@ -1,0 +1,18 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _queriesResultBaseType = "";
+string _queryResultPageBaseType = "";
+
+void CompleteQueryResult()
+{
+}
+
+void CompleteQueriesResult()
+{
+}
+
+void CompleteQueryResultPage()
+{
+}
+#>

@@ -1,0 +1,18 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _errorCollectionBaseType = "";
+string _faultDetailBaseType = "";
+
+void CompleteErrorCollection()
+{
+}
+
+void CompleteFaultDetail()
+{
+}
+
+void CompleteEntitiesFaultDetail()
+{
+}
+#>

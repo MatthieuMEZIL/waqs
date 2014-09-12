@@ -1,0 +1,215 @@
+<#@ include file="WCFAsyncQueryableServices.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerSpecifications(string edmxPath, string specificationSlnFilePath, string specificationProjectPath, string specificationFolderPath, string serverFxSpecificationsNamespace, string serverFxDALInterfaceNamespace, string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	MetadataLoader loader = new MetadataLoader(this);
+	EdmItemCollection itemCollection = loader.CreateEdmItemCollection(edmxPath);
+	string edmxName = Path.GetFileNameWithoutExtension(edmxPath);
+	var edmTypes = itemCollection.GetItems<EntityType>().Cast<StructuralType>().Union(itemCollection.GetItems<ComplexType>()).OrderBy(e => e.Name).ToList();
+
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	ISolution specificationSolution;
+	IProject specificationProject;
+	CommonCompilation compilation;
+	var specificationGetMethods = new Dictionary<string, List<MethodDeclarationSyntax>>();
+	var semanticModelPerMethods = new Dictionary<MethodDeclarationSyntax, ISemanticModel>();
+	var compilationUnitPerClass = new Dictionary<string, List<CompilationUnitSyntax>>();
+	if (specificationSlnFilePath != null && (specificationSolution = Solution.Load(Path.GetFullPath(Host.ResolvePath(specificationSlnFilePath)))) != null && specificationProjectPath != null && (specificationProject = specificationSolution.Projects.FirstOrDefault(p => p.FilePath == Path.GetFullPath(Host.ResolvePath(specificationProjectPath)))) != null && specificationFolderPath != null)
+	{
+		specificationFolderPath = Path.GetFullPath(Host.ResolvePath(specificationFolderPath));
+		compilation = specificationProject.GetCompilation();
+		foreach (var document in specificationProject.Documents.Where(d => d.FilePath.StartsWith(specificationFolderPath)))
+		{
+			var documentTree = document.GetSyntaxTree();
+			var compilationUnit = (CompilationUnitSyntax)documentTree.GetRoot();
+			var semanticModel = compilation.GetSemanticModel(documentTree);
+			var specificationVisitor = new SpecificationVisitor(specificationFolderPath, semanticModel, code, edmTypes, namespaceName);
+			specificationVisitor.Visit(compilationUnit);
+			foreach (var specificationGetMethodsPerClass in specificationVisitor.GetMethods)
+			{
+				foreach (var method in specificationGetMethodsPerClass.Value)
+					semanticModelPerMethods.Add(method, semanticModel);
+				List<CompilationUnitSyntax> compilationUnits;
+				if (! compilationUnitPerClass.TryGetValue(specificationGetMethodsPerClass.Key, out compilationUnits))
+					compilationUnitPerClass.Add(specificationGetMethodsPerClass.Key, compilationUnits = new List<CompilationUnitSyntax>());
+				compilationUnits.Add(compilationUnit);
+
+				List<MethodDeclarationSyntax> methods;
+				if (specificationGetMethods.TryGetValue(specificationGetMethodsPerClass.Key, out methods))
+					methods.AddRange(specificationGetMethodsPerClass.Value);
+				else
+					specificationGetMethods.Add(specificationGetMethodsPerClass.Key, specificationGetMethodsPerClass.Value);
+			}
+		}
+	}
+	foreach (var specificationGetMethodsPerClass in specificationGetMethods)
+	{
+		fileManager.StartNewFile(specificationGetMethodsPerClass.Key + ".specifications.cs");
+		List<MemberDeclarationSyntax> members = new List<MemberDeclarationSyntax>();
+		List<MemberDeclarationSyntax> specificationsMembers = new List<MemberDeclarationSyntax>();
+		string specificationsClassName = specificationGetMethodsPerClass.Key + "Specifications";			
+		var baseType = edmTypes.First(et => code.Escape(et) == specificationGetMethodsPerClass.Key).BaseType;
+		string classInheritance;
+		bool specAlreadyDefined = false;
+		var baseTypeLoop = baseType;
+		while (baseTypeLoop != null)
+		{
+			if (specificationGetMethods.ContainsKey(code.Escape(baseTypeLoop)))
+			{
+				specAlreadyDefined = true;
+				break;
+			}
+			baseTypeLoop = baseTypeLoop.BaseType;
+		}
+		if (baseType == null || ! specAlreadyDefined)
+			classInheritance = null;
+		else
+			classInheritance = string.Format(" : {0}.{0}Specifications", code.Escape(baseType));
+
+		foreach (var method in specificationGetMethodsPerClass.Value)
+		{
+			var semanticModel = semanticModelPerMethods[method];
+			string methodName = method.Identifier.GetFullText().Trim();
+			string propertyName = GetPropertyNameFromMethodName(methodName);
+			if (methodName.StartsWith("Get"))
+			{
+				bool isOverride = false;
+				var syntaxTokens = new List<SyntaxToken>() { Syntax.Token(SyntaxKind.PublicKeyword) };
+				if (method.Attributes.SelectMany(a => a.Attributes).Any(a => semanticModel.GetSymbolInfo(a).Symbol.ContainingType.Name == "VirtualAttribute"))
+					syntaxTokens.Add(Syntax.Token(SyntaxKind.VirtualKeyword));
+				else if (isOverride = method.Attributes.SelectMany(a => a.Attributes).Any(a => semanticModel.GetSymbolInfo(a).Symbol.ContainingType.Name == "OverrideAttribute"))
+					syntaxTokens.Add(Syntax.Token(SyntaxKind.OverrideKeyword));
+				members.Add(Syntax.PropertyDeclaration(method.ReturnType, propertyName)
+					.WithModifiers(Syntax.TokenList(syntaxTokens))
+					.WithAttributes(Syntax.List<AttributeDeclarationSyntax>(
+						Syntax.AttributeDeclaration(
+							Syntax.SeparatedList(
+								Syntax.Attribute(
+									Syntax.ParseName("Specifications"))))))
+					.WithAccessorList(
+						Syntax.AccessorList(
+							Syntax.List(
+								Syntax.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration, 
+									Syntax.Block(Syntax.ParseStatement(string.Concat("return GetSpecifications().", propertyName, ";")))), 
+								Syntax.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration,
+									Syntax.Block(Syntax.ParseStatement(string.Concat("GetSpecifications().", propertyName, " = value;"))))))));
+				bool isAbstract;
+				var modifiers = method.Modifiers.Where(m => m.Kind != SyntaxKind.StaticKeyword).ToList();
+				if (isAbstract = method.Attributes.SelectMany(a => a.Attributes).Any(a => semanticModel.GetSymbolInfo(a).Symbol.ContainingType.Name == "AbstractAttribute"))
+					modifiers.Add(Syntax.Token(SyntaxKind.AbstractKeyword));
+				else if (isOverride = method.Attributes.SelectMany(a => a.Attributes).Any(a => semanticModel.GetSymbolInfo(a).Symbol.ContainingType.Name == "OverrideAttribute"))
+						modifiers.Add(Syntax.Token(SyntaxKind.OverrideKeyword));
+				else if (method.Attributes.SelectMany(a => a.Attributes).Any(a => semanticModel.GetSymbolInfo(a).Symbol.ContainingType.Name == "VirtualAttribute"))
+					modifiers.Add(Syntax.Token(SyntaxKind.VirtualKeyword));
+				bool hasContextParameter = false;
+				var parameters = method.ParameterList.Parameters.Where(p => 
+					{
+						if (semanticModel.GetTypeInfo(p.Type).Type.AllInterfaces.Any(i => i.ToString().Trim() == serverFxDALInterfaceNamespace + ".IDataContext"))
+						{
+							hasContextParameter = true;
+							return false;
+						}
+						return true;
+					}).Skip(1).ToList();
+
+				if (hasContextParameter)
+				{
+					if (! isAbstract)
+						members.Add((MemberDeclarationSyntax)Syntax.ParseCompilationUnit(string.Concat("[ThreadStatic]public static Func<", specificationGetMethodsPerClass.Key, ", ", parameters.Select(p => p.Type).Union(new TypeSyntax[] { method.ReturnType }).Select(pt => pt.ToString()).Aggregate((p1, p2) => string.Concat(p1, ", ", p2)), "> ", method.Identifier.GetFullText().Trim(), "Func;")).Members[0]);
+
+					members.Add(Syntax.MethodDeclaration(method.ReturnType, method.Identifier.GetFullText())
+						.WithParameterList(Syntax.ParameterList(Syntax.SeparatedList<ParameterSyntax>(parameters, parameters.Skip(1).Select(v => Syntax.Token(SyntaxKind.CommaToken)))))
+						.WithModifiers(Syntax.TokenList(modifiers))
+						.WithBody(
+							Syntax.Block(
+								Syntax.ParseStatement(string.Concat("return ", method.Identifier.GetFullText().Trim(), "Func(this);")))));
+				}
+				else
+				{
+					SpecificationMethodBodyRewriter bodyRewriter = null;
+					bodyRewriter = new SpecificationMethodBodyRewriter(method.ParameterList.Parameters[0].Identifier.GetFullText().Trim(), null, 
+						invocationExpression => 
+						{
+							MethodSymbol invocationExpressionMethodSymbol;
+							List<MethodDeclarationSyntax> subMethods;
+							if (invocationExpression != null && (invocationExpressionMethodSymbol = semanticModelPerMethods[method].GetSymbolInfo(invocationExpression).Symbol as MethodSymbol) != null && invocationExpressionMethodSymbol.Parameters.Count != 0 && specificationGetMethods.TryGetValue(invocationExpressionMethodSymbol.Parameters[0].Type.Name, out subMethods) && subMethods.Any(m => semanticModelPerMethods[m].GetDeclaredSymbol(m) == invocationExpressionMethodSymbol))
+								return Syntax.InvocationExpression(Syntax.MemberAccessExpression(SyntaxKind.MemberAccessExpression, (ExpressionSyntax)bodyRewriter.Visit(invocationExpression.ArgumentList.Arguments[0].Expression), Syntax.IdentifierName(invocationExpressionMethodSymbol.Name)), Syntax.ArgumentList(Syntax.SeparatedList<ArgumentSyntax>(invocationExpression.ArgumentList.Arguments.Skip(1), invocationExpression.ArgumentList.Arguments.Skip(2).Select(_ => Syntax.Token(SyntaxKind.CommaToken))))); 
+							return invocationExpression;
+						}, 
+						_ => Syntax.IdentifierName("this"));
+					members.Add(Syntax.MethodDeclaration(method.ReturnType, method.Identifier.GetFullText())
+						.WithParameterList(Syntax.ParameterList(Syntax.SeparatedList<ParameterSyntax>(parameters, parameters.Skip(1).Select(v => Syntax.Token(SyntaxKind.CommaToken)))))
+						.WithModifiers(Syntax.TokenList(modifiers))
+						.WithBody((BlockSyntax)bodyRewriter.Visit(method.Body)));
+				}
+
+				if (! isOverride)
+				{
+					specificationsMembers.Add(Syntax.PropertyDeclaration(method.ReturnType, propertyName)
+						.WithModifiers(Syntax.TokenList(Syntax.Token(SyntaxKind.PublicKeyword)))
+						.WithAttributes(Syntax.List<AttributeDeclarationSyntax>(
+							Syntax.AttributeDeclaration(
+								Syntax.SeparatedList<AttributeSyntax>(
+									Syntax.Attribute(
+										Syntax.ParseName("DataMember"))))))
+						.WithAccessorList(
+							Syntax.AccessorList(
+								Syntax.List<AccessorDeclarationSyntax>(
+									Syntax.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration, default(SyntaxList<AttributeDeclarationSyntax>), default(SyntaxTokenList), Syntax.Token(SyntaxKind.GetKeyword), null, Syntax.Token(SyntaxKind.SemicolonToken)),
+									Syntax.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration, default(SyntaxList<AttributeDeclarationSyntax>), default(SyntaxTokenList), Syntax.Token(SyntaxKind.SetKeyword), null, Syntax.Token(SyntaxKind.SemicolonToken))))));
+				}
+			}
+		}
+
+		if (specificationsMembers.Any() || members.Any())
+		{
+			if (specificationsMembers.Any())
+			{
+				members.Add(((ClassDeclarationSyntax)Syntax.ParseCompilationUnit(string.Concat("[DataContract(Namespace = \"http://", edmxName, "/Entities\")] public partial class ", specificationsClassName, classInheritance, "{}")).Members[0])
+					.WithMembers(Syntax.List<MemberDeclarationSyntax>(specificationsMembers)));
+				members.Add((PropertyDeclarationSyntax)Syntax.ParseCompilationUnit(string.Concat("[DataMember]public ", classInheritance == null ? "" : "new ", specificationsClassName, " Specifications { get; set; }")).Members[0]);
+				members.Add((MethodDeclarationSyntax)Syntax.ParseCompilationUnit(string.Concat("protected ", classInheritance == null ? "" : "new ", specificationsClassName, " GetSpecifications() { return Specifications ?? (Specifications = new ", specificationsClassName, "()); }")).Members[0]);
+			}
+
+			var compilationUnits = compilationUnitPerClass[specificationGetMethodsPerClass.Key];
+
+			List<UsingDirectiveSyntax> usings = new List<UsingDirectiveSyntax>();
+			usings.AddRange(compilationUnits.SelectMany(cu => cu.Usings));
+			if (! usings.Any(u => u.Name.ToString().Trim() == "System"))
+				usings.Add(Syntax.UsingDirective(Syntax.ParseName("System")));
+			if (! usings.Any(u => u.Name.ToString().Trim() == "System.Linq.Expressions"))
+				usings.Add(Syntax.UsingDirective(Syntax.ParseName("System.Linq.Expressions")));
+			if (! usings.Any(u => u.Name.ToString().Trim() == "System.Runtime.Serialization"))
+				usings.Add(Syntax.UsingDirective(Syntax.ParseName("System.Runtime.Serialization")));
+			if (! usings.Any(u => u.Name.ToString().Trim() == serverFxSpecificationsNamespace))
+				usings.Add(Syntax.UsingDirective(Syntax.ParseName(serverFxSpecificationsNamespace)));
+
+			string codeValue = Syntax.CompilationUnit()
+				.WithExterns(Syntax.List<ExternAliasDirectiveSyntax>(compilationUnits.SelectMany(cu => cu.Externs)))
+				.WithUsings(Syntax.List<UsingDirectiveSyntax>(usings.OrderBy(u => u.Name.ToString())))
+				.WithMembers(Syntax.List<MemberDeclarationSyntax>(
+					Syntax.NamespaceDeclaration(Syntax.ParseName(namespaceName))
+						.WithUsings(Syntax.List<UsingDirectiveSyntax>(compilationUnits.SelectMany(cu => cu.Members.OfType<NamespaceDeclarationSyntax>().First().Usings)))
+						.WithMembers(
+							Syntax.List<MemberDeclarationSyntax>(
+								Syntax.ClassDeclaration(specificationGetMethodsPerClass.Key)
+									.WithModifiers(Syntax.Token(SyntaxKind.PartialKeyword))
+									.WithMembers(Syntax.List<MemberDeclarationSyntax>(members))))))
+				.NormalizeWhitespace()
+				.ToString();
+			WriteCopyright();
+#>
+<#=codeValue#>			
+<#+
+		}
+	}
+	fileManager.Process();
+}
+#>

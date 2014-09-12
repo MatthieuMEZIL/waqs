@@ -1,0 +1,237 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+static string _entityBaseType = ", ICustomJsonSerializable";
+
+void CompleteEntityType(CodeGenerationTools code, EntityType entityType)
+{
+    new EntityTypeCompletion(Write).CompleteEntityType(code, entityType);
+}
+
+partial class EntitiesGeneration
+{
+    void CompleteEntityType(CodeGenerationTools code, EntityType entityType)
+    {
+        var thisAsT4CustomGenerator = ((object)this) as T4CustomGenerator;
+        if (thisAsT4CustomGenerator == null)
+            throw new InvalidOperationException();
+        new EntityTypeCompletion(thisAsT4CustomGenerator.Write).CompleteEntityType(code, entityType);
+    }
+}
+
+class EntityTypeCompletion
+{
+    private Action<string> _write;
+
+    public EntityTypeCompletion(Action<string> write)
+    {
+        _write = write;
+    }
+
+    public void Write(string text)
+    {
+        _write(text);
+    }
+    
+    public void CompleteEntityType(CodeGenerationTools code, EntityType entityType)
+    {
+#>
+    
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+<#+
+        if (entityType.BaseType == null)
+        {
+#>
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        result.Append("\"");
+<#+
+        }
+        else
+        {
+#>
+        result = base.Serialize(result, alreadySerialized, ref index);
+<#+
+        }
+        foreach (var edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)))
+        {
+            var propertyName = code.Escape(edmProperty);
+#>
+        if (<#=propertyName#> != default(<#=code.Escape(edmProperty.TypeUsage)#>))
+        {
+            result.Append(",\"<#=propertyName#>\":");
+            result.Append(JsonExtension.GetJson(<#=propertyName#>));
+        }
+<#+
+        }
+        foreach(var complexProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == entityType && IsPublic(p)))
+        {
+            var propertyName = code.Escape(complexProperty);
+#>
+        if (<#=propertyName#> != null)
+        {
+            result.Append(",\"<#=propertyName#>\":");
+            ((ICustomJsonSerializable)<#=propertyName#>).Serialize(result, alreadySerialized, ref index);
+        }
+<#+
+        }
+        foreach (var navProperty in entityType.NavigationProperties.Where(np => np.DeclaringType == entityType && IsPublic(np)))
+        {
+            var propertyName = code.Escape(navProperty);
+            if (navProperty.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+#>
+        if (<#=propertyName#>.Count != 0)
+        {
+            result.Append(",\"<#=propertyName#>\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromEnumerable(result, <#=propertyName#>, e => ((ICustomJsonSerializable)e).Serialize(result, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+<#+
+            }
+            else
+            {
+#>
+        if (<#=propertyName#> != null)
+        {
+            result.Append(",\"<#=propertyName#>\":");
+            ((ICustomJsonSerializable)<#=propertyName#>).Serialize(result, alreadySerialized, ref index);
+        }
+<#+
+            }
+        }
+#>
+        SerializeSpecificationsProperties(result, alreadySerialized, ref index);
+        result.Append(",\"ChangeTracker\":");
+        ((ICustomJsonSerializable)ChangeTracker).Serialize(result, alreadySerialized, ref index);
+        return result;
+    }
+
+    partial void SerializeSpecificationsProperties(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index);
+    
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        OnDeserializingMethod(default(StreamingContext));
+
+<#+
+        if (entityType.BaseType != null)
+        {
+#>
+        base.Deserialize(jr, alreadyDeserialized, getTypes);
+<#+
+        }
+#>
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+<#+
+        foreach (var edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)))
+        {
+            var propertyName = code.Escape(edmProperty);
+            var propertyTypeName = code.Escape(edmProperty.TypeUsage);
+#>
+        if (JsonExtension.MoveToProperty(jr, "<#=propertyName#>"<#+
+                    string jsonBeforeProperty = JsonBeforeSetProperty(propertyTypeName);
+                    if (! string.IsNullOrEmpty(jsonBeforeProperty))
+                    {
+#>, () => <#=jsonBeforeProperty#><#+
+                    }
+#>
+))
+        {
+            <#=propertyName#> = <#=JsonCast(propertyTypeName)#>;
+<#+
+                    string jsonAfterProperty = JsonAfterSetProperty(propertyTypeName);
+                    if (! string.IsNullOrEmpty(jsonAfterProperty))
+                    {
+#>
+            <#=jsonAfterProperty#>
+<#+
+                    }
+#>
+            jr.Read();
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+<#+
+        }
+        foreach(var complexProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && p.DeclaringType == entityType && IsPublic(p)))
+        {
+            var propertyName = code.Escape(complexProperty);
+            var propertyTypeName = code.Escape(complexProperty.TypeUsage);
+#>
+        if (JsonExtension.MoveToProperty(jr, "<#=propertyName#>"))
+        {
+            <#=propertyName#> = JsonExtension.CreateFromJson<<#=propertyTypeName#>>(jr, alreadyDeserialized, getTypes);
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+<#+
+        }
+        foreach (var navProperty in entityType.NavigationProperties.Where(np => np.DeclaringType == entityType && IsPublic(np)))
+        {
+            var propertyName = code.Escape(navProperty);
+            var propertyTypeName = code.Escape(navProperty.TypeUsage);
+#>
+        if (JsonExtension.MoveToProperty(jr, "<#=propertyName#>"))
+        {
+<#+
+            if (navProperty.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+                var elementTypeName = code.Escape(navProperty.ToEndMember.GetEntityType());
+#>
+            <#=propertyName#> = JsonExtension.ListFromJson<TrackableCollection<<#=elementTypeName#>>, <#=elementTypeName#>>(jr, () => JsonExtension.CreateFromJson<<#=elementTypeName#>>(jr, alreadyDeserialized, getTypes));
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+<#+
+            }
+            else
+            {
+#>
+            <#=propertyName#> = JsonExtension.CreateFromJson<<#=propertyTypeName#>>(jr, alreadyDeserialized, getTypes);
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+<#+
+            }
+        }
+#>
+        DeserializeSpecificationsProperties(jr, alreadyDeserialized, getTypes);
+
+        if (JsonExtension.MoveToProperty(jr, "ChangeTracker"))
+            ChangeTracker = JsonExtension.CreateFromJson<ObjectChangeTracker>(jr, alreadyDeserialized, getTypes);
+
+        OnDeserializedMethod(default(StreamingContext));
+    }
+
+    partial void DeserializeSpecificationsProperties(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes);
+<#+
+    }
+}
+#>

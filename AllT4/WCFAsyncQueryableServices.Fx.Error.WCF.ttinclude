@@ -1,0 +1,14 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _errorBaseType = "";
+string _errorDetailBaseType = "";
+
+void CompleteError()
+{
+}
+
+void CompleteErrorDetail()
+{
+}
+#>

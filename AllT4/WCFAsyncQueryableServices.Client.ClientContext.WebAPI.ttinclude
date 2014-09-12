@@ -1,0 +1,68 @@
+<#@ include file="WCFAsyncQueryableServices.QueryResult.WCFAndWebAPI.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _serviceType = "WebAPIProxy";
+string _proxyHelperType = "WebAPI";
+string _jsonNamespace;
+string[] _additionalUsings;
+string _proxyAsync = "Async";
+
+void WriteClientClientContext(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string clientFxComponentModelNamespace, string clientFxEntitiesNamespace, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string clientFxQueryResultNamespace, string clientEntitiesNamespace, string clientServiceNamespace, string clientContextInterfacesNamespace, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, bool utc, Dictionary<string, string> namespacesReplacement, int nbRetryOnTimeout, string namespaceName, bool useAsyncPrefix, string relativePath, string jsonNamespace)
+{
+    _jsonNamespace = jsonNamespace;
+    _additionalUsings = new string[] { "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", jsonNamespace };
+    WriteClientClientContext(edmxPath, specificationPathes, dtoPathes, dtoNamespace, serverEntitiesPath, clientFxComponentModelNamespace, clientFxEntitiesNamespace, clientFxEntitiesTrackingNamespace, clientFxClientContextInterfacesNamespace, clientFxClientContextNamespace, clientFxQueryResultNamespace, clientEntitiesNamespace, clientServiceNamespace, clientContextInterfacesNamespace, serverFxCommonNamespace, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, utc, namespacesReplacement, nbRetryOnTimeout, namespaceName, useAsyncPrefix, relativePath);
+}
+
+void LoadPageExp()
+{
+#>service.LoadPageAsync(pageSize, query.Expression, query.WithSpecificationsProperties.ToArray(), identifiers)<#+
+}
+
+void ExecuteQueriesExp()
+{
+#>service.ExecuteManyAsync(MakeQueriesSerialization(queries, out includes))<#+
+}
+
+void ExecuteQueriesInternalExecuteQueriesExp()
+{
+#>service.ExecuteManyAsync(MakeQueriesSerialization(query, out includes))<#+
+}
+
+void ExecuteQueriesInternalExecuteQueryExp()
+{
+#>service.ExecuteAsync(MakeQuerySerialization(query))<#+
+}
+
+void DbDateTimeExp()
+{
+#>service.GetDbDateTimeAsync()<#+
+}
+
+void SaveChangesExp()
+{
+#>service.SaveChangesAsync(sentContext)<#+
+}
+
+void ValidateOnServerExp(string typeName)
+{
+#>service.ValidateAsync(entity)<#+
+}
+
+void GetServiceBeginExp(StringBuilder valueSB)
+{
+    valueSB.Append("service.");
+}
+
+void GetServiceEndExp(StringBuilder valueSB, string methodName)
+{
+    if (valueSB[valueSB.Length - 1] == ' ' && valueSB[valueSB.Length - 2] == ',')
+        valueSB.Length -= 2;
+    valueSB.Append(")");
+}
+
+void EnumerableSerialization(StringBuilder valueSB, IParameterSymbol pSymbol)
+{
+}
+#>

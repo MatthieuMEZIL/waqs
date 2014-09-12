@@ -1,0 +1,22 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.Json.ttinclude"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxJson(string namespaceName = null)
+{
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+    MetadataLoader loader = new MetadataLoader(this);
+    CodeRegion region = new CodeRegion(this, 1);
+    MetadataTools ef = new MetadataTools(this);
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    WriteJsonExtension(fileManager, code, namespaceName);
+
+    fileManager.Process();
+}
+#>

@@ -1,0 +1,251 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+static string JsonBeforeSetProperty(string typeName)
+{
+    if (typeName.EndsWith("[]"))
+        typeName = typeName.Substring(0, typeName.Length - 2);
+    switch (typeName)
+    {
+        case "decimal":
+        case "Decimal":
+        case "System.Decimal":
+        case "decimal?":
+        case "Decimal?":
+        case "System.Decimal?":
+        case "Nullable<decimal>":
+        case "Nullable<Decimal>":
+        case "Nullable<System.Decimal>":
+        case "System.Nullable<decimal>":
+        case "System.Nullable<Decimal>":
+        case "System.Nullable<System.Decimal>":
+            return "jr.FloatParseHandling = FloatParseHandling.Decimal";
+        case "DateTimeOffset":
+        case "System.DateTimeOffset":
+        case "Nullable<DateTimeOffset>":
+        case "Nullable<System.DateTimeOffset>":
+        case "System.Nullable<DateTimeOffset>":
+        case "System.Nullable<System.DateTimeOffset>":
+            return "jr.DateParseHandling = DateParseHandling.DateTimeOffset";
+    }
+    return "";
+}
+
+static bool IsSupported(string typeName)
+{
+    return IsSupportedType(typeName) || typeName.EndsWith("[]") && IsSupportedType(typeName.Substring(0, typeName.Length - 2));
+}
+
+static bool IsSupportedType(string typeName)
+{
+    return typeName == "int" || typeName == "Int32" || typeName == "System.Int32" || typeName == "int?" || typeName == "Int32?" || typeName == "System.Int32?" || typeName == "Nullable<int>" || typeName == "Nullable<Int32>" || typeName == "Nullable<System.Int32>" || typeName == "System.Nullable<int>" || typeName == "System.Nullable<Int32>" || typeName == "System.Nullable<System.Int32>" || typeName == "uint" || typeName == "UInt32" || typeName == "System.UInt32" || typeName == "uint?" || typeName == "UInt32?" || typeName == "System.UInt32?" || typeName == "Nullable<uint>" || typeName == "Nullable<UInt32>" || typeName == "Nullable<System.UInt32>" || typeName == "System.Nullable<uint>" || typeName == "System.Nullable<UInt32>" || typeName == "System.Nullable<System.UInt32>" || typeName == "short" || typeName == "Int16" || typeName == "System.Int16" || typeName == "short?" || typeName == "Int16?" || typeName == "System.Int16?" || typeName == "Nullable<short>" || typeName == "Nullable<Int16>" || typeName == "Nullable<System.Int16>" || typeName == "System.Nullable<short>" || typeName == "System.Nullable<Int16>" || typeName == "System.Nullable<System.Int16>" || typeName == "ushort" || typeName == "UInt16" || typeName == "System.UInt16" || typeName == "ushort?" || typeName == "UInt16?" || typeName == "System.UInt16?" || typeName == "Nullable<ushort>" || typeName == "Nullable<UInt16>" || typeName == "Nullable<System.UInt16>" || typeName == "System.Nullable<ushort>" || typeName == "System.Nullable<UInt16>" || typeName == "System.Nullable<System.UInt16>" || typeName == "byte" || typeName == "Byte" || typeName == "System.Byte" || typeName == "byte?" || typeName == "Byte?" || typeName == "System.Byte?" || typeName == "Nullable<byte>" || typeName == "Nullable<Byte>" || typeName == "Nullable<System.Byte>" || typeName == "System.Nullable<byte>" || typeName == "System.Nullable<Byte>" || typeName == "System.Nullable<System.Byte>" || typeName == "char" || typeName == "Char" || typeName == "System.Char" || typeName == "char?" || typeName == "Char?" || typeName == "System.Char?" || typeName == "Nullable<char>" || typeName == "Nullable<Char>" || typeName == "Nullable<System.Char>" || typeName == "System.Nullable<char>" || typeName == "System.Nullable<Char>" || typeName == "System.Nullable<System.Char>" || typeName == "ulong" || typeName == "UInt64" || typeName == "System.UInt64" || typeName == "ulong?" || typeName == "UInt64?" || typeName == "System.UInt64?" || typeName == "Nullable<ulong>" || typeName == "Nullable<UInt64>" || typeName == "Nullable<System.UInt64>" || typeName == "System.Nullable<ulong>" || typeName == "System.Nullable<UInt64>" || typeName == "System.Nullable<System.UInt64>" || typeName == "long" || typeName == "Int64" || typeName == "System.Int64" || typeName == "long?" || typeName == "Int64?" || typeName == "System.Int64?" || typeName == "Nullable<long>" || typeName == "Nullable<Int64>" || typeName == "Nullable<System.Int64>" || typeName == "System.Nullable<long>" || typeName == "System.Nullable<Int64>" || typeName == "System.Nullable<System.Int64>" || typeName == "bool" || typeName == "Boolean" || typeName == "System.Boolean" || typeName == "bool?" || typeName == "Boolean?" || typeName == "System.Boolean?" || typeName == "Nullable<bool>" || typeName == "Nullable<Boolean>" || typeName == "Nullable<System.Boolean>" || typeName == "System.Nullable<bool>" || typeName == "System.Nullable<Boolean>" || typeName == "System.Nullable<System.Boolean>" || typeName == "decimal" || typeName == "Decimal" || typeName == "System.Decimal" || typeName == "decimal?" || typeName == "Decimal?" || typeName == "System.Decimal?" || typeName == "Nullable<decimal>" || typeName == "Nullable<Decimal>" || typeName == "Nullable<System.Decimal>" || typeName == "System.Nullable<decimal>" || typeName == "System.Nullable<Decimal>" || typeName == "System.Nullable<System.Decimal>" || typeName == "double" || typeName == "Double" || typeName == "System.Double" || typeName == "double?" || typeName == "Double?" || typeName == "System.Double?" || typeName == "Nullable<double>" || typeName == "Nullable<Double>" || typeName == "Nullable<System.Double>" || typeName == "System.Nullable<double>" || typeName == "System.Nullable<Double>" || typeName == "System.Nullable<System.Double>" || typeName == "DateTime" || typeName == "DateTime?" || typeName == "System.DateTime" || typeName == "Nullable<DateTime>" || typeName == "Nullable<System.DateTime>" || typeName == "System.Nullable<DateTime>" || typeName == "System.Nullable<System.DateTime>" || typeName == "DateTimeOffset" || typeName == "DateTimeOffset?" || typeName == "System.DateTimeOffset" || typeName == "Nullable<DateTimeOffset>" || typeName == "Nullable<System.DateTimeOffset>" || typeName == "System.Nullable<DateTimeOffset>" || typeName == "System.Nullable<System.DateTimeOffset>" || typeName == "TimeSpan" || typeName == "TimeSpan?" || typeName == "System.TimeSpan" || typeName == "Nullable<TimeSpan>" || typeName == "Nullable<System.TimeSpan>" || typeName == "System.Nullable<TimeSpan>" || typeName == "System.Nullable<System.TimeSpan>" || typeName == "string" || typeName == "String" || typeName == "System.String";
+}
+
+static string JsonCast(string typeName)
+{
+    if (typeName.EndsWith("[]"))
+    {
+        return string.Concat("JsonExtension.ArrayFromJson(jr, () => ", JsonCastType(typeName), ", true);");
+    }
+    else
+        return JsonCastType(typeName);
+}
+
+static string JsonCastType(string typeName)
+{
+    bool isNullable = typeName.EndsWith("?") || typeName.StartsWith("System.Nullable<") || typeName.StartsWith("Nullable<");
+    switch (typeName)
+    {
+        case "int":
+        case "Int32":
+        case "System.Int32":
+        case "int?":
+        case "Int32?":
+        case "System.Int32?":
+        case "Nullable<int>":
+        case "Nullable<Int32>":
+        case "Nullable<System.Int32>":
+        case "System.Nullable<int>":
+        case "System.Nullable<Int32>":
+        case "System.Nullable<System.Int32>":
+        case "uint":
+        case "UInt32":
+        case "System.UInt32":
+        case "uint?":
+        case "UInt32?":
+        case "System.UInt32?":
+        case "Nullable<uint>":
+        case "Nullable<UInt32>":
+        case "Nullable<System.UInt32>":
+        case "System.Nullable<uint>":
+        case "System.Nullable<UInt32>":
+        case "System.Nullable<System.UInt32>":
+        case "short":
+        case "Int16":
+        case "System.Int16":
+        case "short?":
+        case "Int16?":
+        case "System.Int16?":
+        case "Nullable<short>":
+        case "Nullable<Int16>":
+        case "Nullable<System.Int16>":
+        case "System.Nullable<short>":
+        case "System.Nullable<Int16>":
+        case "System.Nullable<System.Int16>":
+        case "ushort":
+        case "UInt16":
+        case "System.UInt16":
+        case "ushort?":
+        case "UInt16?":
+        case "System.UInt16?":
+        case "Nullable<ushort>":
+        case "Nullable<UInt16>":
+        case "Nullable<System.UInt16>":
+        case "System.Nullable<ushort>":
+        case "System.Nullable<UInt16>":
+        case "System.Nullable<System.UInt16>":
+        case "byte":
+        case "Byte":
+        case "System.Byte":
+        case "byte?":
+        case "Byte?":
+        case "System.Byte?":
+        case "Nullable<byte>":
+        case "Nullable<Byte>":
+        case "Nullable<System.Byte>":
+        case "System.Nullable<byte>":
+        case "System.Nullable<Byte>":
+        case "System.Nullable<System.Byte>":
+        case "char":
+        case "Char":
+        case "System.Char":
+        case "char?":
+        case "Char?":
+        case "System.Char?":
+        case "Nullable<char>":
+        case "Nullable<Char>":
+        case "Nullable<System.Char>":
+        case "System.Nullable<char>":
+        case "System.Nullable<Char>":
+        case "System.Nullable<System.Char>":
+            return string.Concat("(", typeName, ")(long", isNullable ? "?" : "", ")jr.Value");
+        case "ulong":
+        case "UInt64":
+        case "System.UInt64":
+        case "ulong?":
+        case "UInt64?":
+        case "System.UInt64?":
+        case "Nullable<ulong>":
+        case "Nullable<UInt64>":
+        case "Nullable<System.UInt64>":
+        case "System.Nullable<ulong>":
+        case "System.Nullable<UInt64>":
+        case "System.Nullable<System.UInt64>":
+            return (isNullable ? "jr.Value == null ? (ulong?)null : " : "") + "ulong.Parse(jr.Value)";
+        case "long":
+        case "Int64":
+        case "System.Int64":
+        case "long?":
+        case "Int64?":
+        case "System.Int64?":
+        case "Nullable<long>":
+        case "Nullable<Int64>":
+        case "Nullable<System.Int64>":
+        case "System.Nullable<long>":
+        case "System.Nullable<Int64>":
+        case "System.Nullable<System.Int64>":
+        case "bool":
+        case "Boolean":
+        case "System.Boolean":
+        case "bool?":
+        case "Boolean?":
+        case "System.Boolean?":
+        case "Nullable<bool>":
+        case "Nullable<Boolean>":
+        case "Nullable<System.Boolean>":
+        case "System.Nullable<bool>":
+        case "System.Nullable<Boolean>":
+        case "System.Nullable<System.Boolean>":
+        case "decimal":
+        case "Decimal":
+        case "System.Decimal":
+        case "decimal?":
+        case "Decimal?":
+        case "System.Decimal?":
+        case "Nullable<decimal>":
+        case "Nullable<Decimal>":
+        case "Nullable<System.Decimal>":
+        case "System.Nullable<decimal>":
+        case "System.Nullable<Decimal>":
+        case "System.Nullable<System.Decimal>":
+        case "double":
+        case "Double":
+        case "System.Double":
+        case "double?":
+        case "Double?":
+        case "System.Double?":
+        case "Nullable<double>":
+        case "Nullable<Double>":
+        case "Nullable<System.Double>":
+        case "System.Nullable<double>":
+        case "System.Nullable<Double>":
+        case "System.Nullable<System.Double>":
+        case "DateTime":
+        case "DateTime?":
+        case "System.DateTime":
+        case "Nullable<DateTime>":
+        case "Nullable<System.DateTime>":
+        case "System.Nullable<DateTime>":
+        case "System.Nullable<System.DateTime>":
+        case "DateTimeOffset":
+        case "DateTimeOffset?":
+        case "System.DateTimeOffset":
+        case "Nullable<DateTimeOffset>":
+        case "Nullable<System.DateTimeOffset>":
+        case "System.Nullable<DateTimeOffset>":
+        case "System.Nullable<System.DateTimeOffset>":
+        case "TimeSpan":
+        case "TimeSpan?":
+        case "System.TimeSpan":
+        case "Nullable<TimeSpan>":
+        case "Nullable<System.TimeSpan>":
+        case "System.Nullable<TimeSpan>":
+        case "System.Nullable<System.TimeSpan>":
+        case "string":
+        case "String":
+        case "System.String":
+            return string.Concat("(", typeName, ")jr.Value");
+    }
+    return "jr.Value";
+}
+
+static string JsonAfterSetProperty(string typeName)
+{
+    if (typeName.EndsWith("[]"))
+        typeName = typeName.Substring(0, typeName.Length - 2);
+    switch (typeName)
+    {
+        case "decimal":
+        case "Decimal":
+        case "System.Decimal":
+        case "decimal?":
+        case "Decimal?":
+        case "System.Decimal?":
+        case "Nullable<decimal>":
+        case "Nullable<Decimal>":
+        case "Nullable<System.Decimal>":
+        case "System.Nullable<decimal>":
+        case "System.Nullable<Decimal>":
+        case "System.Nullable<System.Decimal>":
+            return "jr.FloatParseHandling = FloatParseHandling.Double;";
+        case "DateTimeOffset":
+        case "System.DateTimeOffset":
+        case "Nullable<DateTimeOffset>":
+        case "Nullable<System.DateTimeOffset>":
+        case "System.Nullable<DateTimeOffset>":
+        case "System.Nullable<System.DateTimeOffset>":
+            return "jr.DateParseHandling = DateParseHandling.DateTime;";
+    }
+    return "";
+}
+#>

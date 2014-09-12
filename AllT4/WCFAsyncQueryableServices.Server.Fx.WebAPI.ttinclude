@@ -1,0 +1,177 @@
+<#@ include file="WCFAsyncQueryableServices.Fx.Error.Proxy.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Fx.LoadPageBodyParameter.WebAPI.ttinclude"#>
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxWebAPI(string serverFxServiceInterfacesNamespace, string serverFxServiceNamespace, string serverFxCommonNamespace, string fxExpressionsNamespaceName, string fxJsonNamespace, string namespaceName = null)
+{
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+    MetadataLoader loader = new MetadataLoader(this);
+    CodeRegion region = new CodeRegion(this, 1);
+    MetadataTools ef = new MetadataTools(this);
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    fileManager.StartNewFile("BaseApiController.cs");
+    WriteHeader(namespaceName, code, "System", "System.Data.Entity.Core", "System.Linq", "System.Net", "System.Net.Http", "System.Web.Http", serverFxServiceNamespace);
+#>
+public abstract partial class BaseApiController : ApiController
+{
+    protected void TryRethrowFault(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            throw new HttpResponseException(Request.CreateResponse(HttpStatusCode.BadRequest, GetErrorDetail(e)));
+        }
+    }
+    
+    protected T TryRethrowFault<T>(Func<T> action)
+    {
+        try
+        {
+            return action();
+        }
+        catch (Exception e)
+        {
+            throw new HttpResponseException(Request.CreateResponse(HttpStatusCode.BadRequest, GetErrorDetail(e)));
+        }
+    }
+
+    protected virtual object GetErrorDetail(Exception e)
+    {
+        object value = null;
+        GetCustomErrorDetail(e, ref value);
+        if (value != null)
+            return value;
+        var validationException = e as ValidationException;
+        if (validationException != null)
+            return new ErrorCollection { Errors = validationException.Errors.ToArray() };
+        var updateException = e as UpdateException;
+        if (updateException != null)
+            return new EntitiesFaultDetail { ErrorType = e.GetType().FullName, ErrorMessage = e.Message, Entities = updateException.StateEntries.Select(ose => ose.Entity).ToArray() };
+        return new FaultDetail { ErrorType = e.GetType().FullName, ErrorMessage = e.Message };
+    }
+    partial void GetCustomErrorDetail(Exception e, ref object value);
+
+    public HttpResponseMessage CreateHttpResponseMessageFromJson(string json, HttpStatusCode statusCode = HttpStatusCode.OK)
+    {
+        var responseMessage = new HttpResponseMessage(statusCode);
+        responseMessage.Content = new StringContent(json);
+        responseMessage.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        return responseMessage;
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("WAQSDependencyResolver.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Web.Http.Dependencies", "Microsoft.Practices.Unity");
+#>
+public class WAQSDependencyResolver : IDependencyResolver
+{
+    private IDependencyResolver _base;
+    private IUnityContainer _unityContainer;
+
+    public WAQSDependencyResolver(IDependencyResolver @base, IUnityContainer unityContainer)
+    {
+        _base = @base;
+        _unityContainer = unityContainer;
+    }
+
+    public object GetService(Type serviceType)
+    {
+        try
+        {
+            if (typeof(BaseApiController).IsAssignableFrom(serviceType) && _unityContainer.IsRegistered<IUnityContainer>(serviceType.FullName))
+                return _unityContainer.Resolve<IUnityContainer>(serviceType.FullName).Resolve(serviceType);
+            return _base.GetService(serviceType);
+        }
+        catch (ResolutionFailedException)
+        {
+            return null;
+        }
+    }
+
+    public IEnumerable<object> GetServices(Type serviceType)
+    {
+        try
+        {
+            if (typeof(BaseApiController).IsAssignableFrom(serviceType) && _unityContainer.IsRegistered<IUnityContainer>(serviceType.FullName))
+                return _unityContainer.Resolve<IUnityContainer>(serviceType.FullName).ResolveAll(serviceType);
+            return _base.GetServices(serviceType);
+        }
+        catch (ResolutionFailedException)
+        {
+            return new object[0];
+        }
+    }
+
+    public IDependencyScope BeginScope()
+    {
+        return new WAQSDependencyResolver(_base, _unityContainer);
+    }
+
+    public void Dispose()
+    {
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ErrorCollection.WebAPI.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", serverFxServiceInterfacesNamespace, fxJsonNamespace);
+#>
+public class ErrorCollection<#=_errorCollectionBaseType#>
+{
+    public Error[] Errors { get; set; }
+<#+
+    CompleteErrorCollection();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ErrorDetail.WebAPI.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", serverFxServiceInterfacesNamespace, fxJsonNamespace);
+#>
+public partial class FaultDetail<#=_faultDetailBaseType#>
+{
+    public string ErrorType { get; set; }
+    
+    public string ErrorMessage { get; set; }
+<#+
+    CompleteFaultDetail();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("EntitiesFaultDetail.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", serverFxServiceInterfacesNamespace, fxJsonNamespace);
+#>
+public class EntitiesFaultDetail : FaultDetail
+{
+    public object[] Entities { get; set; }
+<#+
+    CompleteEntitiesFaultDetail();
+#>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("LoadPageBodyParameters.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", serverFxServiceInterfacesNamespace, fxExpressionsNamespaceName, fxJsonNamespace);
+    WriteLoadPageBodyParametersClass();
+    WriteFooter(namespaceName);
+
+    fileManager.Process();
+}
+#>

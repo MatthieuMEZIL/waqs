@@ -1,0 +1,315 @@
+<#@ include file="WCFAsyncQueryableServices.Service.Base.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.SerializableContext.WCFAndWebAPI.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Json.T4Helper.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.WebAPIProxiesDTO.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _entitiesNamespace;
+string _fxJsonNamespace;
+string _serverFxJsonNamespace;
+
+void WriteServerWebAPI(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath entitiesPath, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string fxJsonNamespace, string serverFxWebAPINamespace, string serverFxSerializableExpressionsNamespace, string serverEntitiesNamespace, string serverServiceInterfacesNamespace, string namespaceName = null)
+{
+    _entitiesNamespace = serverEntitiesNamespace;
+    _serverFxJsonNamespace = _fxJsonNamespace = fxJsonNamespace;
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+    var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+    var code = edmxElements.Code;
+    var dtoTypes = GetClasses(dtoPathes).ToList();
+    var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Server);
+    var edmxName = edmxElements.EdmxName;
+
+    fileManager.StartNewFile(edmxName + "Controller.cs");
+    WriteHeader(edmxElements.NamespaceName + ".Controllers", code, "System", "System.Collections.Generic", "System.Linq", "System.Net.Http", "System.Text", "System.Web.Http", "Newtonsoft.Json", serverFxCommonNamespace, serverFxEntitiesNamespace, serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, fxJsonNamespace, serverFxWebAPINamespace, serverEntitiesNamespace, serverServiceInterfacesNamespace, edmxElements.NamespaceName + ".ViewModels");
+#>
+[RoutePrefix("api/<#=edmxName#>")]
+public partial class <#=edmxName#>Controller : BaseApiController
+{	
+    private Func<I<#=edmxName#>Service> _serviceFactory;
+
+    public <#=edmxName#>Controller(Func<I<#=edmxName#>Service> serviceFactory)
+    {
+        _serviceFactory = serviceFactory;
+    }
+        
+    private new void TryRethrowFault(Action action)
+    {
+        Action<Action> metaRethrow = null;
+        TryMetaRethrow(ref metaRethrow);
+        if (metaRethrow == null)
+            base.TryRethrowFault(action);
+        else
+            metaRethrow(() => base.TryRethrowFault(action));
+    }
+    partial void TryMetaRethrow(ref Action<Action> action);
+        
+    private new T TryRethrowFault<T>(Func<T> action)
+    {
+        Func<Func<T>, T> metaRethrow = null;
+        TryMetaRethrow(ref metaRethrow);
+        if (metaRethrow == null)
+            return base.TryRethrowFault(action);
+        return metaRethrow(() => base.TryRethrowFault(action));
+    }
+    partial void TryMetaRethrow<T>(ref Func<Func<T>, T> action);    
+
+<#+
+    foreach (EdmFunction edmFunction in edmxElements.Container.FunctionImports.Where(f => IsPublic(f)))
+    {
+        TypeUsage returnType;
+        var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+        if (returnType == null)
+            continue;
+        FunctionImportParameter[] parameters;
+        var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+#>
+    [HttpGet]
+    [Route("<#=code.Escape(edmFunction)#>")]
+    public List<<#=returnTypeName#>> <#=code.Escape(edmFunction)#>(<#=parametersAsString#>)
+    {
+        return TryRethrowFault(() => 
+            {
+                using (var service = _serviceFactory())
+                {
+                    return service.<#=code.Escape(edmFunction)#>(<#=String.Join(", ", parameters.Select(p => p.FunctionParameterName).ToArray())#>);
+                }
+            });
+    }
+
+<#+
+    }
+#>
+
+    [HttpPost]
+    [Route("Execute")]
+    public HttpResponseMessage Execute([FromBody]string queryString)
+    {
+        Executing(ref queryString);
+        return CreateHttpResponseMessageFromJson(
+            JsonExtension.CreateJsonFrom(TryRethrowFault(() =>
+                {
+                    using (var service = _serviceFactory())
+                    {
+                        var query = JsonExtension.CreateFromJson<QuerySerialization>(queryString, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "QuerySerialization", () => new QuerySerialization() }, { "SerializableType", () => new SerializableType() }, { "SerializableBinaryExpression", () => new SerializableBinaryExpression() }, { "SerializableUnaryExpression", () => new SerializableUnaryExpression() }, { "SerializableEntitySetExpression", () => new SerializableEntitySetExpression() }, { "SerializableMethodCallExpression", () => new SerializableMethodCallExpression() }, { "SerializablePropertyGetterExpression", () => new SerializablePropertyGetterExpression() }, { "SerializablePropertySetterExpression", () => new SerializablePropertySetterExpression() }, { "SerializableConstructorExpression", () => new SerializableConstructorExpression() }, { "SerializableLambdaExpression", () => new SerializableLambdaExpression() }, { "SerializableParameterExpression", () => new SerializableParameterExpression() }, { "SerializableConstantExpression", () => new SerializableConstantExpression() }, { "SerializableMemberInitExpression", () => new SerializableMemberInitExpression() }, { "SerializableConditionalExpression", () => new SerializableConditionalExpression() }, { "SerializableTypeBinaryExpression", () => new SerializableTypeBinaryExpression() }, { "SerializablePropertyExpression", () => new SerializablePropertyExpression()}<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+    foreach (var dtoType in dtoTypes)
+    {
+#>, { "<#=dtoType.Name#>", () => new <#=dtoType.Name#>() }<#+
+    }
+#> } );
+                        return service.Execute(query);
+                    }
+                })));
+    }
+    partial void Executing(ref string query);
+
+    [HttpPost]
+    [Route("ExecuteMany")]
+    public HttpResponseMessage ExecuteMany([FromBody]string queriesString)
+    {
+        ExecutingMany(ref queriesString);
+        return TryRethrowFault(() => 
+            {
+                return CreateHttpResponseMessageFromJson(
+                    JsonExtension.CreateJsonFrom(TryRethrowFault(() =>
+                    {
+                        using (var service = _serviceFactory())
+                        {
+                            var queries = JsonExtension.CreateFromJson<QueriesSerialization>(queriesString, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "QuerySerialization", () => new QuerySerialization() }, { "QueriesSerialization", () => new QueriesSerialization() }, { "SerializableType", () => new SerializableType() }, { "SerializableBinaryExpression", () => new SerializableBinaryExpression() }, { "SerializableUnaryExpression", () => new SerializableUnaryExpression() }, { "SerializableEntitySetExpression", () => new SerializableEntitySetExpression() }, { "SerializableMethodCallExpression", () => new SerializableMethodCallExpression() }, { "SerializablePropertyGetterExpression", () => new SerializablePropertyGetterExpression() }, { "SerializablePropertySetterExpression", () => new SerializablePropertySetterExpression() }, { "SerializableConstructorExpression", () => new SerializableConstructorExpression() }, { "SerializableLambdaExpression", () => new SerializableLambdaExpression() }, { "SerializableParameterExpression", () => new SerializableParameterExpression() }, { "SerializableConstantExpression", () => new SerializableConstantExpression() }, { "SerializableMemberInitExpression", () => new SerializableMemberInitExpression() }, { "SerializableConditionalExpression", () => new SerializableConditionalExpression() }, { "SerializableTypeBinaryExpression", () => new SerializableTypeBinaryExpression() }, { "SerializablePropertyExpression", () => new SerializablePropertyExpression() }<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+    foreach (var dtoType in dtoTypes)
+    {
+#>, { "<#=dtoType.Name#>", () => new <#=dtoType.Name#>() }<#+
+    }
+#> } );
+                            return service.ExecuteMany(queries);
+                        }
+                    })));
+            });
+    }
+    partial void ExecutingMany(ref string queries);
+
+    [HttpPost]
+    [Route("LoadPage")]
+    public HttpResponseMessage LoadPage(int pageSize, [FromBody] string loadPageBodyParametersString)
+    {
+        LoadingPage(pageSize, ref loadPageBodyParametersString);
+        return CreateHttpResponseMessageFromJson(
+            JsonExtension.CreateJsonFrom(TryRethrowFault(() =>
+                {
+                    using (var service = _serviceFactory())
+                    {
+                        var loadPageBodyParameters = JsonExtension.CreateFromJson<LoadPageBodyParameters>(loadPageBodyParametersString, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "LoadPageBodyParameters", () => new LoadPageBodyParameters() }, { "LoadPageParameter", () => new LoadPageParameter() }, { "SerializableType", () => new SerializableType() }, { "SerializableBinaryExpression", () => new SerializableBinaryExpression() }, { "SerializableUnaryExpression", () => new SerializableUnaryExpression() }, { "SerializableEntitySetExpression", () => new SerializableEntitySetExpression() }, { "SerializableMethodCallExpression", () => new SerializableMethodCallExpression() }, { "SerializablePropertyGetterExpression", () => new SerializablePropertyGetterExpression() }, { "SerializablePropertySetterExpression", () => new SerializablePropertySetterExpression() }, { "SerializableConstructorExpression", () => new SerializableConstructorExpression() }, { "SerializableLambdaExpression", () => new SerializableLambdaExpression() }, { "SerializableParameterExpression", () => new SerializableParameterExpression() }, { "SerializableConstantExpression", () => new SerializableConstantExpression() }, { "SerializableMemberInitExpression", () => new SerializableMemberInitExpression() }, { "SerializableConditionalExpression", () => new SerializableConditionalExpression() }, { "SerializableTypeBinaryExpression", () => new SerializableTypeBinaryExpression() }, { "SerializablePropertyExpression", () => new SerializablePropertyExpression() }<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+    foreach (var dtoType in dtoTypes)
+    {
+#>, { "<#=dtoType.Name#>", () => new <#=dtoType.Name#>() }<#+
+    }
+#> } );
+                        return service.LoadPage(pageSize, loadPageBodyParameters.QueryExpression, loadPageBodyParameters.WithSpecificationsProperties, loadPageBodyParameters.Identifiers);
+                    }
+                })));
+    }
+    partial void LoadingPage(int pageSize, ref string loadPageBodyParameters);
+
+    [HttpGet]
+    [Route("GetDbDateTime")]
+    public DateTime GetDbDateTime()
+    {
+        return TryRethrowFault(() => 
+            {
+                using (var service = _serviceFactory())
+                {
+                    return service.GetDbDateTime();
+                }
+            });
+    }
+
+    [HttpPost]
+    [Route("SaveChanges")]
+    public HttpResponseMessage SaveChanges([FromBody] string clientContextString)
+    {
+        SavingChanges(ref clientContextString);
+        return CreateHttpResponseMessageFromJson(
+            JsonExtension.CreateJsonFrom(TryRethrowFault(() =>
+                {
+                    var clientContext = JsonExtension.CreateFromJson<<#=edmxName#>SerializableContext>(clientContextString, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "<#=edmxName#>SerializableContext", () => new <#=edmxName#>SerializableContext() }, { "ObjectChangeTracker", () => new ObjectChangeTracker() }<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+#> } );
+                    return SaveChanges(clientContext);
+                })));
+    }
+    partial void SavingChanges(ref string clientContext);
+
+    public <#=edmxName#>SerializableContext SaveChanges(<#=edmxName#>SerializableContext clientContext)
+    {
+        using (var service = _serviceFactory())
+        {
+<#+
+    foreach (EntitySet entitySet in edmxElements.EntitySets.Where(es => IsPublic(es.ElementType)))
+    {
+        EntityType entity = entitySet.ElementType;
+        var entitySetName = code.Escape(entitySet);
+#>
+            if (clientContext.<#=entitySetName#> != null)
+                foreach (var entity in clientContext.<#=entitySetName#>)
+                    service.ApplyChanges(entity);
+<#+
+    }
+#>
+            service.SaveChanges();
+            return clientContext;
+        }
+    }
+<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string typeName = edmxElements.Code.Escape(edmType);
+#>
+    
+    [HttpPost]
+    [Route("Validate<#=typeName#>")]
+    public List<Error> Validate([FromBody]<#=typeName#> entity)
+    {
+        return TryRethrowFault(() => 
+            {
+                using (var service = _serviceFactory())
+                {
+                    return service.Validate(entity).ToList();
+                }
+            });
+    }
+<#+
+    }
+    foreach (var specificationServiceMethod in specificationsElements.AllServiceMethods)
+        WriteServiceMethod(specificationServiceMethod, specificationsElements, edmxElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, WriteServiceMethod, dtoTypes: dtoTypes);
+#>
+}
+
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+
+    fileManager.StartNewFile(edmxName + "SerializableContext.cs");
+    WriteHeader(edmxElements.NamespaceName + ".ViewModels", code, "System", "System.Collections.Generic", "System.Text", "Newtonsoft.Json", fxJsonNamespace);
+    var entitySets = edmxElements.Container.BaseEntitySets.OfType<EntitySet>().Where(es => IsPublic(es.ElementType)).ToList();
+#>
+public class <#=edmxName#>SerializableContext : ICustomJsonSerializable
+{
+<#+
+    foreach (EntitySet entitySet in entitySets)
+    {
+#>
+    public List<<#=serverEntitiesNamespace#>.<#=code.Escape(entitySet.ElementType)#>> <#=code.Escape(entitySet)#> { get; set; }
+<#+
+    }
+    CompleteSerializableContext(code, entitySets);
+#>
+}
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+
+    fileManager.Process();
+}
+
+void WriteServiceMethod(MethodDeclarationSyntax specificationServiceMethod, IEnumerable<ParameterSyntax> parameters, TypeSyntax returnType, ISemanticModel semanticModel, SpecificationsElements specificationsElements, EdmxElements edmxElements, string contextName, string serviceName, List<MethodSymbol> addedSubMethods, List<MethodDeclarationSyntax> methods, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, IEnumerable<TypeSymbol> dtos, DTOAndInterfacesTypesRewriter dtoAndInterfacesTypesRewriter)
+{
+    Dictionary<ParameterSyntax, string> parametersTransformation;
+    List<ParameterSyntax> parametersList;
+    List<ParameterSyntax> parametersFromBody;
+    MethodSymbol methodSymbol;
+    GenerateWebAPIProxyDTO(specificationServiceMethod, parameters, semanticModel, specificationsElements, edmxElements, out parametersTransformation, out parametersList, out parametersFromBody, out methodSymbol);
+
+    bool returnVoid = methodSymbol.ReturnsVoid;
+    bool httpGet = parametersFromBody.Count == 0 && ! returnVoid;
+
+#>
+
+    [<#=httpGet ? "HttpGet" : "HttpPost"#>]
+    [Route("<#=specificationServiceMethod.Identifier.ValueText#>")]
+    public <#=SyntaxFactory.MethodDeclaration(returnType, specificationServiceMethod.Identifier.ValueText)
+    .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList<ParameterSyntax>(parametersList.Select(p => 
+        {
+            var pValue = SyntaxFactory.Parameter(p.Identifier).WithType(p.Type);
+            if (parametersFromBody.Contains(p))
+                pValue = pValue.WithAttributeLists(SyntaxFactory.List(new[] { SyntaxFactory.AttributeList(SyntaxFactory.SeparatedList(new[] { SyntaxFactory.Attribute(SyntaxFactory.ParseName("FromBody")) }, new SyntaxToken[0])) }));
+            return pValue;
+        }), parametersList.Skip(1).Select(v => SyntaxFactory.Token(SyntaxKind.CommaToken))))).NormalizeWhitespace().ToString()#>
+    {
+<#+
+        PredefinedTypeSyntax pts = specificationServiceMethod.ReturnType as PredefinedTypeSyntax;
+#>
+        <#=returnVoid ? "" : "return "#>TryRethrowFault(() => 
+            {
+                using (var service = _serviceFactory())
+                {
+                    // TODO custom deserialization
+                    <#=returnVoid ? "" : "return "#>service.<#=specificationServiceMethod.Identifier.ValueText#>(<#=parameters.Any() ? parameters.Select(p => 
+                    {
+                        string property;
+                        if (parametersTransformation.TryGetValue(p, out property))
+                            return property;
+                        return p.Identifier.ValueText;
+                    }).Aggregate((p1, p2) => string.Concat(p1, ", ", p2)) : ""#>)<#=Regex.IsMatch(semanticModel.GetSymbolInfo(specificationServiceMethod.ReturnType).Symbol.ToString(), "^System.Collections.Generic.IEnumerable<.*?>$") ? ".ToList()" : ""#>;
+                }
+            });
+    }
+<#+
+}
+#>

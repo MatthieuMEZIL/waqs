@@ -1,0 +1,365 @@
+<#@ include file="WCFAsyncQueryableServices.Client.ClientContext.Base.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.DTO.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Json.T4Helper.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.WebAPIProxiesDTO.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _serverFxJsonNamespace;
+
+void WriteWebAPIProxy(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath serverEntitiesPath, string serverFxJsonNamespaceName, string clientFxEntitiesTrackingNamespace, string clientFxClientContextInterfacesNamespace, string clientFxClientContextNamespace, string fxJsonNamespaceName, string fxWebAPINamespaceName, string clientEntitiesNamespace, string clientContextInterfacesNamespace, string clientContextNamespace, string serverEntitiesNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, Dictionary<string, string> namespacesReplacement, string namespaceName = null)
+{
+    _serverFxJsonNamespace = serverFxJsonNamespaceName;
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+    DefineMetadata();
+    var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+    var code = edmxElements.Code;
+    var dtoTypes = GetClasses(dtoPathes).ToList();
+    var dtoNamespaces = GetNamespaces(dtoPathes).Select(n => n.ToString()).ToList();
+    var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, serverEntitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Client);
+    var edmxName = edmxElements.EdmxName;
+    fileManager.StartNewFile(edmxName + "WebAPIProxy.cs");
+    IEnumerable<string> usings = new string[] { "System", "System.Collections.Generic", "System.Configuration", "System.Net.Http", "System.Net.Http.Headers", "System.ServiceModel", "System.Text", "System.Threading.Tasks", "Newtonsoft.Json", clientFxEntitiesTrackingNamespace, clientFxClientContextInterfacesNamespace + ".Errors", clientFxClientContextInterfacesNamespace + ".Query", clientFxClientContextInterfacesNamespace + ".ExpressionSerialization", clientFxClientContextInterfacesNamespace + ".Querying", clientFxClientContextNamespace + ".Fault", clientFxClientContextNamespace + ".QueryResult", fxJsonNamespaceName, fxWebAPINamespaceName, clientContextInterfacesNamespace + ".Serialization", clientContextNamespace + ".QueryResult" };
+    List<string> specificationMethodsUsings;
+    if (specificationsElements.Usings.TryGetValue("@ServiceContract", out specificationMethodsUsings))
+    {
+        bool withDto = false;
+        specificationMethodsUsings = specificationMethodsUsings.Where(u => 
+            {
+                var value = dtoNamespaces.Contains(u);
+                if (value)
+                    withDto = true;
+                return ! value;
+            }).Select(u => 
+            {
+                string newUsing;
+                if (namespacesReplacement.TryGetValue(u, out newUsing))
+                    return newUsing;
+                return u;
+            }).ToList();
+        if (withDto)
+            specificationMethodsUsings.Add(dtoNamespace);		    
+        usings = usings.Union(specificationMethodsUsings);
+    }
+    WriteHeader(edmxElements.NamespaceName, code, usings.OrderBy(u => u).ToArray());
+#>
+public class <#=edmxName#>WebAPIProxy : I<#=edmxName#>WebAPIProxy
+{
+    private HttpClient _httpClient;
+
+    public <#=edmxName#>WebAPIProxy()
+    {
+        _httpClient = new HttpClient();
+        _httpClient.BaseAddress = new Uri(ConfigurationManager.AppSettings["<#=edmxName#>Service"]);
+        _httpClient.DefaultRequestHeaders.Accept.Clear();
+        _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+    }
+
+<#+
+    foreach (EdmFunction edmFunction in edmxElements.Container.FunctionImports.Where(f => IsPublic(f)))
+    {
+        TypeUsage returnType;
+        var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+        if (returnType == null)
+            continue;
+        FunctionImportParameter[] parameters;
+        var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+
+        var functionName = code.Escape(edmFunction);
+#>
+    public async Task<List<<#=returnTypeName#>>> <#=functionName#>Async(<#=parametersAsString#>)
+    {
+        var sb = new StringBuilder();
+        sb.Append("api/<#=edmxName#>/<#=functionName#>");
+<#+
+        var functionParametersEnumerator = parameters.Select(p => p.Source).GetEnumerator();
+        if (functionParametersEnumerator.MoveNext())
+        {
+            for(;;)
+            {
+#>
+        sb.Append("<#=functionParametersEnumerator.Current.Name#>=");
+        sb.Append(<#=functionParametersEnumerator.Current.Name#>)
+<#+
+                if (functionParametersEnumerator.MoveNext())
+                {
+#>
+                    sb.Append("&");
+<#+
+                }
+                else
+                    break;
+            }
+        }
+#>
+        var response = await _httpClient.GetJson(sb.ToString());
+        if (response.IsSuccessStatusCode)
+        {
+            throw new NotImplementedException();
+        }
+        else
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+<#+
+    }
+#>
+
+    private async Task<T> Try<T>(HttpResponseMessage response, Func<Task<T>> func)
+    {
+        if (response.IsSuccessStatusCode)
+            return await func();
+        else
+            switch (response.StatusCode)
+            {
+                case System.Net.HttpStatusCode.RequestTimeout:
+                    throw new TimeoutException();
+                case System.Net.HttpStatusCode.BadRequest:
+                    string serializedContent = await response.Content.ReadAsStringAsync();
+                    var detail = JsonExtension.CreateFromJson<ICustomJsonSerializable>(serializedContent, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "ObjectChangeTracker", () => new ObjectChangeTracker() }<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+#>, { "Error", () => new Error() }, { "ErrorDetail", () => new ErrorDetail() }, { "ErrorCollection", () => new ErrorCollection() }, { "FaultDetail", () => new FaultDetail() }, { "EntitiesFaultDetail", () => new EntitiesFaultDetail() } });
+                    var faultDetail = detail as FaultDetail;
+                    if (faultDetail == null)
+                    {
+                        var errorCollection = detail as ErrorCollection;
+                        if (errorCollection == null)
+                            throw new InvalidOperationException(serializedContent);
+                        throw new FaultException<ErrorCollection>(errorCollection);
+                    }
+                    var entitiesFaultDetail = faultDetail as EntitiesFaultDetail;
+                    if (entitiesFaultDetail == null)
+                        throw new FaultException<FaultDetail>(faultDetail);
+                    throw new FaultException<EntitiesFaultDetail>(entitiesFaultDetail);
+                default:
+                    throw new InvalidOperationException(response.StatusCode.ToString());
+            }
+    }
+
+    public async Task<<#=edmxName#>QueryResult> ExecuteAsync(QuerySerialization query)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/<#=edmxName#>/Execute", JsonExtension.CreateJsonFrom(query));
+        return await Try(response, async () =>
+            {
+                string serializedContent = await response.Content.ReadAsStringAsync();
+                return JsonExtension.CreateFromJson<<#=edmxName#>QueryResult>(serializedContent, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "<#=edmxName#>QueryResult", () => new <#=edmxName#>QueryResult() }, { "QueryResult", () => new QueryResult() }, { "QueryResultRecord", () => new QueryResultRecord() }, { "QueryResultProperty", () => new QueryResultProperty() }, { "ObjectChangeTracker", () => new ObjectChangeTracker()}<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+    foreach (var dtoType in dtoTypes)
+    {
+#>, { "<#=dtoType.Name#>", () => new <#=dtoType.Name#>() }<#+
+    }
+#> });
+        });
+    }
+
+    public async Task<<#=edmxName#>QueriesResult> ExecuteManyAsync(QueriesSerialization queries)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/<#=edmxName#>/ExecuteMany", JsonExtension.CreateJsonFrom(queries));
+        return await Try(response, async () =>
+            {
+                string serializedContent = await response.Content.ReadAsStringAsync();
+                return JsonExtension.CreateFromJson<<#=edmxName#>QueriesResult>(serializedContent, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "<#=edmxName#>QueriesResult", () => new <#=edmxName#>QueriesResult() }, { "<#=edmxName#>QueryResult", () => new <#=edmxName#>QueryResult() }, { "QueryResult", () => new QueryResult() }, { "QueryResultRecord", () => new QueryResultRecord() }, { "QueryResultProperty", () => new QueryResultProperty() }, { "ObjectChangeTracker", () => new ObjectChangeTracker()}<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+    foreach (var dtoType in dtoTypes)
+    {
+#>, { "<#=dtoType.Name#>", () => new <#=dtoType.Name#>() }<#+
+    }
+#> });
+        });
+    }
+
+    public async Task<<#=edmxName#>QueryResultPage> LoadPageAsync(int pageSize, SerializableExpression queryExpression, string[] withSpecificationsProperties, LoadPageParameter[] identifiers)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/<#=edmxName#>/LoadPage?pageSize=" + pageSize.ToString(), JsonExtension.CreateJsonFrom(new LoadPageBodyParameters { QueryExpression = queryExpression, WithSpecificationsProperties = withSpecificationsProperties, Identifiers = identifiers }));
+        return await Try(response, async () =>
+        {
+            string serializedContent = await response.Content.ReadAsStringAsync();
+            return JsonExtension.CreateFromJson<<#=edmxName#>QueryResultPage>(serializedContent, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "<#=edmxName#>QueryResultPage", () => new <#=edmxName#>QueryResultPage() }, { "<#=edmxName#>QueryResult", () => new <#=edmxName#>QueryResult() }, { "QueryResult", () => new QueryResult() }, { "QueryResultRecord", () => new QueryResultRecord() }, { "QueryResultProperty", () => new QueryResultProperty() }, { "ObjectChangeTracker", () => new ObjectChangeTracker() }<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+    foreach (var dtoType in dtoTypes)
+    {
+#>, { "<#=dtoType.Name#>", () => new <#=dtoType.Name#>() }<#+
+    }
+#> });
+        });
+    }
+
+    public async Task<DateTime> GetDbDateTimeAsync()
+    {
+        var response = await _httpClient.GetAsync("api/<#=edmxName#>/GetDbDateTime");
+        return await Try(response, async () =>
+        {
+            string serializedContent = await response.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<DateTime>(serializedContent);
+        });
+    }
+
+    public async Task<<#=edmxName#>SerializableContext> SaveChangesAsync(<#=edmxName#>SerializableContext clientContext)
+    {
+        var response = await _httpClient.PostAsJsonAsync("api/<#=edmxName#>/SaveChanges", JsonExtension.CreateJsonFrom(clientContext));
+        return await Try(response, async () =>
+        {
+            string serializedContent = await response.Content.ReadAsStringAsync();
+            return JsonExtension.CreateFromJson<<#=edmxName#>SerializableContext>(serializedContent, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "<#=edmxName#>SerializableContext>", () => new <#=edmxName#>SerializableContext() }, { "ObjectChangeTracker", () => new ObjectChangeTracker() }<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string edmTypeName = code.Escape(edmType);
+#>, { "<#=edmTypeName#>", () => new <#=edmTypeName#>() }<#+
+    }
+#> });
+        });
+    }
+<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string typeName = edmxElements.Code.Escape(edmType);
+#>
+
+    public async Task<Error[]> ValidateAsync(<#=typeName#> entity)
+    {
+        return await ValidateAsync(await _httpClient.PostAsJsonAsync("api/<#=edmxName#>/Validate<#=typeName#>", JsonExtension.CreateJsonFrom(entity)));
+    }
+<#+
+    }
+#>
+    private async Task<Error[]> ValidateAsync(HttpResponseMessage response)
+    {
+        return await Try(response, async () =>
+        {
+            string serializedContent = await response.Content.ReadAsStringAsync();
+            return JsonExtension.ArrayFromJson<Error>(serializedContent, new Dictionary<string, Func<ICustomJsonSerializable>>() { { "Error", () => new Error() }, { "ErrorDetail", () => new ErrorDetail() } });
+        });
+    }
+<#+
+    foreach (var specificationServiceMethod in specificationsElements.AllServiceMethods)
+    {
+        ISemanticModel semanticModel;
+        bool executeOnServer;
+        IEnumerable<ParameterSyntax> parameters;
+        bool returnEntity, returnEntities, returnDTO, returnDTOs;
+        MethodSymbol specificationServiceMethodSymbol;
+        foreach (var specificationServiceMethodLoop in GetServiceMethod(specificationsElements, edmxElements, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationServiceMethod, clientEntitiesNamespace, dtoTypes, dtoNamespace, out semanticModel, out executeOnServer, out parameters, out returnEntity, out returnEntities, out returnDTO, out returnDTOs, out specificationServiceMethodSymbol))
+        {
+            if (specificationServiceMethodLoop == null)
+                continue;
+            var specificationServiceMethodValue = specificationServiceMethodLoop;
+            if (executeOnServer)
+            {
+                specificationServiceMethodValue = specificationServiceMethodValue.WithIdentifier(SyntaxFactory.Identifier(specificationServiceMethodValue.Identifier.ValueText + "Async"));
+
+                    Dictionary<ParameterSyntax, string> parametersTransformation;
+                    List<ParameterSyntax> parametersList;
+                    List<ParameterSyntax> parametersFromBody;
+                    MethodSymbol methodSymbol;
+                    GenerateWebAPIProxyDTO(specificationServiceMethod, specificationServiceMethodLoop.ParameterList.Parameters, semanticModel, specificationsElements, edmxElements, out parametersTransformation, out parametersList, out parametersFromBody, out methodSymbol);
+#>
+
+    public <#=specificationServiceMethodValue.NormalizeWhitespace().ToString()#>
+    {
+        throw new NotImplementedException();
+    }
+<#+
+            }
+        }
+    }
+#>
+
+    public void Dispose()
+    {
+        _httpClient.Dispose();
+    }
+}    
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+
+    fileManager.StartNewFile("I" + edmxName + "WebAPIProxy.cs");
+    usings = new [] { "System", "System.Collections.Generic", "System.Threading.Tasks", clientFxClientContextInterfacesNamespace + ".Errors", clientFxClientContextInterfacesNamespace + ".Query", clientFxClientContextInterfacesNamespace + ".ExpressionSerialization", clientFxClientContextInterfacesNamespace + ".Querying", clientContextInterfacesNamespace + ".Serialization", clientFxClientContextNamespace, clientContextNamespace + ".QueryResult" };
+    if (specificationMethodsUsings != null)
+        usings = usings.Union(specificationMethodsUsings).OrderBy(u => u);
+    WriteHeader(edmxElements.NamespaceName, code, usings.ToArray());
+#>
+public interface I<#=edmxName#>WebAPIProxy : IWebAPIProxy
+{
+<#+
+    foreach (EdmFunction edmFunction in edmxElements.Container.FunctionImports.Where(f => IsPublic(f)))
+    {
+        TypeUsage returnType;
+        var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+        if (returnType == null)
+            continue;
+        FunctionImportParameter[] parameters;
+        var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+
+        var functionName = code.Escape(edmFunction);
+#>
+    Task<List<<#=returnTypeName#>>> <#=functionName#>Async(<#=parametersAsString#>);
+
+<#+
+    }
+#>
+    Task<<#=edmxName#>QueryResult> ExecuteAsync(QuerySerialization query);
+
+    Task<<#=edmxName#>QueriesResult> ExecuteManyAsync(QueriesSerialization queries);
+
+    Task<<#=edmxName#>QueryResultPage> LoadPageAsync(int pageSize, SerializableExpression queryExpression, string[] withSpecificationsProperties, LoadPageParameter[] identifiers);
+
+    Task<DateTime> GetDbDateTimeAsync();
+
+    Task<<#=edmxName#>SerializableContext> SaveChangesAsync(<#=edmxName#>SerializableContext clientContext);
+<#+
+    foreach (var edmType in edmxElements.EdmTypes.Where(e => IsPublic(e)))
+    {
+        string typeName = edmxElements.Code.Escape(edmType);
+#>
+
+    Task<Error[]> ValidateAsync(<#=typeName#> entity);
+<#+
+    }
+    foreach (var specificationServiceMethod in specificationsElements.AllServiceMethods)
+    {
+        ISemanticModel semanticModel;
+        bool executeOnServer;
+        IEnumerable<ParameterSyntax> parameters;
+        bool returnEntity, returnEntities, returnDTO, returnDTOs;
+        MethodSymbol specificationServiceMethodSymbol;
+        foreach (var specificationServiceMethodLoop in GetServiceMethod(specificationsElements, edmxElements, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, specificationServiceMethod, clientEntitiesNamespace, dtoTypes, dtoNamespace, out semanticModel, out executeOnServer, out parameters, out returnEntity, out returnEntities, out returnDTO, out returnDTOs, out specificationServiceMethodSymbol))
+        {
+            if (specificationServiceMethodLoop == null)
+                continue;
+            var specificationServiceMethodValue = specificationServiceMethodLoop;
+            if (executeOnServer)
+            {
+                specificationServiceMethodValue = specificationServiceMethodValue.WithIdentifier(SyntaxFactory.Identifier(specificationServiceMethodValue.Identifier.ValueText + "Async"));
+#>
+
+    <#=specificationServiceMethodValue.NormalizeWhitespace().ToString()#>;
+<#+
+            }
+        }
+    }
+#>
+}    
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+
+    fileManager.Process();
+}
+#>

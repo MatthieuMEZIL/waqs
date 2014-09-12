@@ -1,0 +1,127 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _objectChangeTrackerBaseType = " : ICustomJsonSerializable";
+
+void CompleteObjectChangeTracker()
+{
+#>
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        int value;
+        if (alreadySerialized.TryGetValue(this, out value))
+        {
+            result.Append(string.Concat("\"$Id", value.ToString(), "\""));
+            return result;
+        }
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        result.Append("\",\"State\":");
+        result.Append(JsonExtension.GetJson((byte)State));
+        if (!(ObjectsRemovedFromCollectionProperties == null || ObjectsRemovedFromCollectionProperties.Count == 0))
+        {
+            result.Append(",\"ObjectsRemovedFromCollectionProperties\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromDictionary(result, ObjectsRemovedFromCollectionProperties, key => result.Append(JsonExtension.GetJson(key)), value => JsonExtension.AppendJsonFromEnumerable(result, value, o => ((ICustomJsonSerializable)o).Serialize(result, alreadySerialized, ref indexTmp)));
+            index = indexTmp;
+        }
+        if (!(OriginalValues == null || OriginalValues.Count == 0))
+        {
+            result.Append(",\"OriginalValues\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromDictionary(result, OriginalValues, key => result.Append(JsonExtension.GetJson(key)), value => JsonExtension.CreateJsonFrom(value, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+        if (!(ModifiedProperties == null || ModifiedProperties.Count == 0))
+        {
+            result.Append(",\"ModifiedProperties\":");
+            result.Append(JsonExtension.GetJson(ModifiedProperties));
+        }
+        if (!(ExtendedProperties == null || ExtendedProperties.Count == 0))
+        {
+            result.Append(",\"ExtendedProperties\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromDictionary(result, ExtendedProperties, key => result.Append(JsonExtension.GetJson(key)), value => JsonExtension.CreateJsonFrom(value, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+        if (!(ObjectsAddedToCollectionProperties == null || ObjectsAddedToCollectionProperties.Count == 0))
+        {
+            result.Append(",\"ObjectsAddedToCollectionProperties\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromDictionary(result, ObjectsAddedToCollectionProperties, key => result.Append(JsonExtension.GetJson(key)), value => JsonExtension.AppendJsonFromEnumerable(result, value, o => ((ICustomJsonSerializable)o).Serialize(result, alreadySerialized, ref indexTmp)));
+            index = indexTmp;
+        }
+        return result;
+    }
+
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        OnDeserializingMethod(default(StreamingContext));
+
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (!JsonExtension.MoveToProperty(jr, "State"))
+            throw new InvalidOperationException();
+        State = (ObjectState)(long)jr.Value;
+        jr.Read();
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "ObjectsRemovedFromCollectionProperties"))
+        {
+            ObjectsRemovedFromCollectionProperties = JsonExtension.DictionaryFromJson<ObjectsRemovedFromCollectionProperties, string, ObjectList>(jr, () => (string)jr.Value, () => JsonExtension.ListFromJson<ObjectList, object>(jr, () => JsonExtension.CreateFromJson<ICustomJsonSerializable>(jr, alreadyDeserialized, getTypes)), true);
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "OriginalValues"))
+        {
+            OriginalValues = JsonExtension.DictionaryFromJson<OriginalValuesDictionary, string, object>(jr, () => (string)jr.Value, () => JsonExtension.CreateFromJson<ICustomJsonSerializable>(jr, alreadyDeserialized, getTypes), true);
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "ModifiedProperties"))
+        {
+            ModifiedProperties = JsonExtension.ListFromJson(jr, () => (string)jr.Value, true);
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "ExtendedProperties"))
+        {
+            ExtendedProperties = JsonExtension.DictionaryFromJson<ExtendedPropertiesDictionary, string, object>(jr, () => (string)jr.Value, () => JsonExtension.CreateFromJson<ICustomJsonSerializable>(jr, alreadyDeserialized, getTypes), true);
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "ObjectsAddedToCollectionProperties"))
+            ObjectsAddedToCollectionProperties = JsonExtension.DictionaryFromJson<ObjectsAddedToCollectionProperties, string, ObjectList>(jr, () => (string)jr.Value, () => JsonExtension.ListFromJson<ObjectList, object>(jr, () => JsonExtension.CreateFromJson<ICustomJsonSerializable>(jr, alreadyDeserialized, getTypes)), true);
+
+        OnDeserializedMethod(default(StreamingContext));
+    }
+<#+
+}
+#>

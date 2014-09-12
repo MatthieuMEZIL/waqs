@@ -1,0 +1,15 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string[] _additionalUsingsQueryResult = new string[0].
+string _querySerializationBaseType = "";
+string _queriesSerializationBaseType = "";
+
+void CompleteQuerySerialization()
+{
+}
+
+void CompleteQueriesSerialization()
+{
+}
+#>

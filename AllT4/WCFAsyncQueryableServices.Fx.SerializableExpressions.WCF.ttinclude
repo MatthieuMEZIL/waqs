@@ -1,0 +1,71 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _serializableExpressionBaseType = "";
+string _serializablePropertyExpressionBaseType = "";
+string _serializableTypeBaseType = "";
+
+void CompleteSerializableBinaryExpression()
+{
+}
+
+void CompleteSerializableTypeBinaryExpression()
+{
+}
+
+void CompleteSerializableConstantExpression()
+{
+}
+
+void CompleteSerializableConstructorExpression()
+{
+}
+
+void CompleteSerializableEntitySetExpression()
+{
+}
+
+void CompleteSerializableExpression()
+{
+}
+
+void CompleteSerializableLambdaExpression()
+{
+}
+
+void CompleteSerializableMemberExpression()
+{
+}
+
+void CompleteSerializableMemberInitExpression()
+{
+}
+
+void CompleteSerializableParameterExpression()
+{
+}
+
+void CompleteSerializablePropertyExpression()
+{
+}
+
+void CompleteSerializableConditionalExpression()
+{
+}
+
+void CompleteSerializableType()
+{
+}
+
+void CompleteSerializableUnaryExpression()
+{
+}
+
+void CompleteSerializableMethodCall()
+{
+}
+
+void CompleteSerializablePropertySetterExpression()
+{
+}
+#>

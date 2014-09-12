@@ -1,0 +1,105 @@
+<#@ template language="C#" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#@ import namespace="System"#>
+<#@ import namespace="System.IO"#>
+<#@ import namespace="System.Linq"#>
+<#@ import namespace="System.Text" #>
+
+<#+ 
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClient(string waqsFilePath, string namespaceBase, string relativePath = "")
+{
+	var merge = string.IsNullOrEmpty(relativePath) ? "" : ".merge";
+	
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	var root = XElement.Load(Path.Combine(Path.GetDirectoryName(Host.TemplateFile), waqsFilePath));
+	string asyncSuffix = "true";
+	var asyncSuffixAttribute = root.Attribute("AsyncSuffix");
+	if (asyncSuffixAttribute != null)
+		asyncSuffix = asyncSuffixAttribute.Value;
+
+	var globalClientContext = root.Element("ClientContext");
+	if (globalClientContext != null)
+	{
+		var namespaceNameAttribute = globalClientContext.Attribute("NamespaceName");
+		string namespaceName;
+		if (namespaceNameAttribute == null)
+			namespaceName = namespaceBase ?? code.VsNamespaceSuggestion() + ".GlobalClientContext";
+		else
+			namespaceName = namespaceNameAttribute.Value;
+		var contextsValue = globalClientContext.Attribute("Contexts").Value;
+		var contextsPathDirectory = Path.GetDirectoryName(contextsValue);
+		var contextsPath = Path.Combine(Path.GetDirectoryName(Host.TemplateFile), contextsValue);
+		var contextsSB = new StringBuilder();
+		var contextsEnumerator = XElement.Load(contextsPath).Elements("Context").GetEnumerator();
+		if (contextsEnumerator.MoveNext())
+		{
+			for(;;)
+			{
+				var context = contextsEnumerator.Current;
+				contextsSB.Append("new ClientContext { Name = \"");
+				contextsSB.Append(context.Attribute("Name").Value);
+				contextsSB.Append("\", WAQS = @\"");
+				contextsSB.Append(Path.Combine(contextsPathDirectory, context.Attribute("WAQS").Value));
+				contextsSB.Append("\" }");
+				if (contextsEnumerator.MoveNext())
+					contextsSB.Append(", ");
+				else
+					break;
+			}
+		}
+		var globalClientContextInterfaces = root.Element("ClientContextInterfaces");
+		var frameworkElement = root.Element("Framework");
+		var fxClientContextInterfacesNamespace = frameworkElement.Element("ClientContextInterfaces").Attribute("NamespaceName").Value;
+		var fxClientContextNamespace = frameworkElement.Element("ClientContext").Attribute("NamespaceName").Value;
+		string wcfNamespace = null;
+		string globalClientContextInterfacesNamespace = namespaceName;
+		if (globalClientContextInterfaces != null)
+		{
+			var globalContextInterfacesNamespaceNameAttribute = globalClientContextInterfaces.Attribute("NamespaceName");
+			if (globalContextInterfacesNamespaceNameAttribute != null)
+				globalClientContextInterfacesNamespace = globalContextInterfacesNamespaceNameAttribute.Value;
+			var generateGlobalContextInterfacesAttribute = globalClientContextInterfaces.Attribute("Generate");
+			if (generateGlobalContextInterfacesAttribute == null || generateGlobalContextInterfacesAttribute.Value != "false")
+			{
+				fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Global.ClientContext.Interfaces.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{8}WCFAsyncQueryableServices.{5}.{6}.Client.{7}.Global.ClientContext.Interfaces{9}.ttinclude\"#{1}{0}#WriteClientGlobalClientContextInterfaces(\"{2}\", \"{3}\", {4});#{1}", "<", ">", fxClientContextInterfacesNamespace, globalClientContextInterfacesNamespace, asyncSuffix, vsVersion, netVersion, clientType, relativePath, merge)#>
+<#+
+			}
+		}
+		if (wcfNamespace == null)
+			wcfNamespace = "http://Global.net";
+		var generateGlobalContextAttribute = globalClientContext.Attribute("Generate");
+		if (generateGlobalContextAttribute == null || generateGlobalContextAttribute.Value != "false")
+		{
+			var wcfNamespaceAttribute = globalClientContextInterfaces.Attribute("WCFNamespace");
+			if (wcfNamespaceAttribute == null)
+				wcfNamespace = "http://Global.net";
+			else
+				wcfNamespace = wcfNamespaceAttribute.Value;
+			var globalContextNamespaceNameAttribute = globalClientContextInterfaces.Attribute("NamespaceName");
+			if (globalContextNamespaceNameAttribute != null)
+				namespaceName = globalContextNamespaceNameAttribute.Value;
+			fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Global.ClientContext.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{12}WCFAsyncQueryableServices.{9}.{10}.Client.{11}.Global.ClientContext{13}.ttinclude\"#{1}{0}#WriteClientGlobalClientContext(new [] {{{2}}}, \"{3}\", \"{4}\", \"{5}\", \"{6}\", \"{7}\", {8});#{1}", "<", ">", contextsSB.ToString(), wcfNamespace, fxClientContextInterfacesNamespace, fxClientContextNamespace, globalClientContextInterfacesNamespace, namespaceName, asyncSuffix, vsVersion, netVersion, clientType, relativePath, merge)#>
+<#+
+			var wsdlAttribute = globalClientContext.Attribute("WSDL");
+			if (wsdlAttribute != null)
+			{
+				fileManager.StartNewFile(string.Format("WCFAsyncQueryableServices.Client.{0}.Global.ClientContext.Proxy.tt", clientType));
+#>
+<#=string.Format("{0}#@ include file=\"{9}WCFAsyncQueryableServices.{6}.{7}.Client.{8}.Global.ServiceProxy{10}.ttinclude\"#{1}{0}#WriteClientGlobalClientContextProxy(new [] {{{2}}}, \"{3}\", \"{4}\", \"{5}\");#{1}", "<", ">", contextsSB.ToString(), wsdlAttribute.Value, wcfNamespace, namespaceName, vsVersion, netVersion, clientType, relativePath, merge)#>
+<#+
+			}
+		}
+	}
+
+	fileManager.Process();
+}
+#>

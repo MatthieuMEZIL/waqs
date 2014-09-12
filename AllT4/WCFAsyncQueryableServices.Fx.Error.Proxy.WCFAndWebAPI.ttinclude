@@ -1,0 +1,148 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _errorCollectionBaseType = " : ICustomJsonSerializable";
+string _faultDetailBaseType = " : ICustomJsonSerializable";
+
+void CompleteErrorCollection()
+{
+#>
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        int value;
+        if (alreadySerialized.TryGetValue(this, out value))
+        {
+            result.Append(string.Concat("\"$Id", value.ToString(), "\""));
+            return result;
+        }
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        if (! (Errors == null || Errors.Length == 0))
+        {
+            result.Append(",\"Errors\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromEnumerable(result, Errors, e => ((ICustomJsonSerializable)e).Serialize(result, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+        return result;
+    }
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "Errors"))
+            Errors = JsonExtension.ArrayFromJson(jr, () => JsonExtension.CreateFromJson<Error>(jr, alreadyDeserialized, getTypes));
+    }
+<#+
+}
+
+void CompleteFaultDetail()
+{
+#>
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        int value;
+        if (alreadySerialized.TryGetValue(this, out value))
+        {
+            result.Append(string.Concat("\"$Id", value.ToString(), "\""));
+            return result;
+        }
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        if (ErrorType != null)
+        {
+            result.Append(",\"ErrorType\":");
+            result.Append(JsonExtension.GetJson(ErrorType));
+        } 
+        if (ErrorMessage != null)
+        {
+            result.Append(",\"ErrorMessage\":");
+            result.Append(JsonExtension.GetJson(ErrorMessage));
+        } 
+        return result;
+    }
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "ErrorType"))
+        {
+            ErrorType = (string)jr.Value;
+            jr.Read();
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        if (JsonExtension.MoveToProperty(jr, "ErrorMessage"))
+        {
+            ErrorMessage = (string)jr.Value;
+            jr.Read();
+        }
+    }
+<#+
+}
+
+void CompleteEntitiesFaultDetail()
+{
+#>
+
+    protected override StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result = base.Serialize(result, alreadySerialized, ref index);
+        if (! (Entities == null || Entities.Length == 0))
+        {
+            result.Append(",\"Entities\":");
+            int indexTmp = index;
+            JsonExtension.AppendJsonFromEnumerable(result, Entities, e => ((ICustomJsonSerializable)e).Serialize(result, alreadySerialized, ref indexTmp));
+            index = indexTmp;
+        }
+        return result;
+    }
+    protected override void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        base.Deserialize(jr, alreadyDeserialized, getTypes);
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "Entities"))
+            Entities = JsonExtension.ArrayFromJson(jr, () => JsonExtension.CreateFromJson<ICustomJsonSerializable>(jr, alreadyDeserialized, getTypes));
+    }
+<#+
+}
+#>

@@ -1,0 +1,6 @@
+<#@ include file="WCFAsyncQueryableServices.Entities.Specifications.WCF.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+static string[] _additionalUsings = new string[0];
+#>

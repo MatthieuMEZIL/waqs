@@ -1,0 +1,19 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _queryResultBaseType = "";
+string _queryResultRecordBaseType = "";
+string _queryResultPropertyBaseType = "";
+
+void CompleteQueryResult()
+{
+}
+
+void CompleteQueryResultRecord()
+{
+}
+
+void CompleteQueryResultProperty()
+{
+}
+#>

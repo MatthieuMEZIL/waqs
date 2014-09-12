@@ -1,0 +1,69 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string _loadPageParameterBaseType = " : ICustomJsonSerializable";
+
+void CompleteLoadPageParameter()
+{
+#>
+
+    StringBuilder ICustomJsonSerializable.Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        alreadySerialized.Add(this, index);
+        result.Append("{");
+        Serialize(result, alreadySerialized, ref index);
+        result.Append("}");
+        return result;
+    }
+    protected virtual StringBuilder Serialize(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+        result.Append("\"$Id\":");
+        result.Append(JsonExtension.GetJson(index++));
+        result.Append(",\"$Type\":\"");
+        result.Append(GetType().Name);
+        result.Append("\"");
+        if (PropertyName != null)
+        {
+            result.Append(",\"PropertyName\":\"");
+            result.Append(PropertyName);
+            result.Append("\"");
+        }
+        if (Value != null)
+            JsonExtension.AppendJsonFromObjectValueType(result, Value, startWithComma:true);
+        if (Descending)
+        {
+            result.Append(",\"Descending\":");
+            result.Append(JsonExtension.GetJson(Descending));
+        }
+        return result;
+    }
+
+    void ICustomJsonSerializable.Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        Deserialize(jr, alreadyDeserialized, getTypes);
+    }
+    protected virtual void Deserialize(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+        if (jr.TokenType == JsonToken.EndObject)
+            return;
+        if (jr.TokenType != JsonToken.PropertyName)
+            throw new NotImplementedException();
+        if (JsonExtension.MoveToProperty(jr, "PropertyName"))
+        {
+            PropertyName = (string)jr.Value;
+            jr.Read();
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+        Value = JsonExtension.ObjectValueTypeFromJson(jr);
+        if (JsonExtension.MoveToProperty(jr, "Descending"))
+        {
+            Descending = (bool)jr.Value;
+            jr.Read();
+        }
+    }
+<#+
+}
+#>

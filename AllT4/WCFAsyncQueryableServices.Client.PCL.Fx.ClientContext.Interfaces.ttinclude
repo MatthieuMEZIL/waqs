@@ -1,0 +1,14 @@
+<#@ include file="WCFAsyncQueryableServices.Client.Fx.ClientContext.Interfaces.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+bool expectionHasSource = false;
+
+void WriteSpecificClasses(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string clientFxComponentModelNamespace, string clientFxEntitiesTrackingNamespace, string namespaceName)
+{
+}
+
+void AddAddPropertyMethods()
+{
+}
+#>

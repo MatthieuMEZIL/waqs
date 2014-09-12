@@ -1,0 +1,115 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+partial class EntitiesGeneration
+{
+    void CompleteEntityType(ConcurrentDictionary<string, List<MemberDeclarationSyntax>> members, List<PropertyFromGetMethod> notOverridenProperties)
+    {
+        var currentFileStringBuilder = CurrentFileStringBuilder;
+        CurrentFileStringBuilder = new StringBuilder();
+#>
+    
+    partial void SerializeSpecificationsProperties(StringBuilder result, Dictionary<object, int> alreadySerialized, ref int index)
+    {
+<#+
+        if (notOverridenProperties.Count != 0)
+        {
+#>
+        var specifications = GetSpecifications();
+<#+
+        }
+        foreach (var p in notOverridenProperties)
+        {
+            var propertyName = p.Property.Identifier.ValueText;
+            var propertyTypeName = p.Property.Type.ToString();
+#>
+        if (specifications.Has<#=propertyName#>)
+        {
+<#+
+            if (IsSupported(propertyTypeName))
+            {
+#>
+            result.Append(",\"<#=propertyName#>\":");
+            result.Append(JsonExtension.GetJson(<#=propertyName#>));
+<#+
+            }
+            else
+            {
+#>
+            result.Append(",\"<#=propertyName#>\":");
+            ((ICustomJsonSerializable)<#=propertyName#>).Serialize(result, alreadySerialized, ref index);
+<#+
+            }
+#>
+        }
+<#+
+        }
+#>
+    }
+    
+    partial void DeserializeSpecificationsProperties(JsonReader jr, Dictionary<int, object> alreadyDeserialized, Dictionary<string, Func<ICustomJsonSerializable>> getTypes)
+    {
+<#+
+        foreach (var p in notOverridenProperties)
+        {
+            var propertyName = p.Property.Identifier.ValueText;
+            var propertyTypeName = p.Property.Type.ToString();
+#>
+        if (JsonExtension.MoveToProperty(jr, "<#=propertyName#>"<#+
+            if (IsSupported(propertyTypeName))
+            {
+                string jsonBeforeProperty = JsonBeforeSetProperty(propertyTypeName);
+                if (! string.IsNullOrEmpty(jsonBeforeProperty))
+                {
+#>, () => <#=jsonBeforeProperty#><#+
+                }
+#>))
+        {
+            <#=propertyName#> = <#=JsonCast(propertyTypeName)#>;
+<#+
+                string jsonAfterProperty = JsonAfterSetProperty(propertyTypeName);
+                if (! string.IsNullOrEmpty(jsonAfterProperty))
+                {
+#>
+            <#=jsonAfterProperty#>
+<#+
+                }
+#>
+            jr.Read();
+<#+
+            }
+            else
+            {
+                var typeSymbol = p.SpecificationsElements.GetTypeSymbol(p.GetMethod.ReturnType, p.SemanticModel);
+                var typeSymbolFullName = typeSymbol.ToString();
+                string customJsonSerializable = _jsonNamespace + "ICustomJsonSerializable";
+                if (p.DTOTypes.Contains(typeSymbol) || p.EdmxElements.EdmTypes.Any(t => typeSymbolFullName == string.Concat(p.ServerEntitiesNamespace, ".", p.EdmxElements.Code.Escape(t.Name))) || typeSymbol.AllInterfaces.Any(i => i.ToString() == customJsonSerializable))
+                {
+#>
+            <#=propertyName#> = JsonExtension.CreateFromJson<<#=propertyTypeName#>>(jr, alreadyDeserialized, getTypes);
+<#+
+                }
+                else
+                {
+#>
+            // WAQS with Web API is in Beta. Use extension method to deserialiaze it yourself.
+            Set<#=propertyName#>(jr, alreadyDeserialized, getTypes);
+<#+
+                }
+            }
+#>
+            if (jr.TokenType == JsonToken.EndObject)
+                return;
+            if (jr.TokenType != JsonToken.PropertyName)
+                throw new NotImplementedException();
+        }
+<#+
+        }
+#>
+    }
+<#+
+        members.TryAdd("@WebAPISerialization", new List<MemberDeclarationSyntax>(SyntaxFactory.ParseCompilationUnit(CurrentFileStringBuilder.ToString()).Members.OfType<MemberDeclarationSyntax>()));
+        CurrentFileStringBuilder = currentFileStringBuilder;
+    }
+}
+#>
