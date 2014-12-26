@@ -28,6 +28,7 @@ function GetAvailableVersions()
 		'10.0' {$version = @("NET40")}
 		'11.0' {$version = @("NET40", "NET45")}
 		'12.0' {$version = @("NET40", "NET45")}
+		'14.0' {$version = @("NET40", "NET45")}
 	}
 	return $version
 }
