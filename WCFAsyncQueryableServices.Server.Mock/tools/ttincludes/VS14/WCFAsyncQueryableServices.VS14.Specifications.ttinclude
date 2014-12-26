@@ -1,0 +1,109 @@
+<#@ assembly name="System.Collections.Immutable" #>
+<#@ assembly name="System.Runtime" #>
+<#@ assembly name="Microsoft.CodeAnalysis" #>
+<#@ assembly name="Microsoft.CodeAnalysis.CSharp" #>
+<#@ assembly name="Microsoft.CodeAnalysis.Workspaces" #>
+<#@ assembly name="Microsoft.CodeAnalysis.CSharp.Workspaces" #>
+<#@ import namespace="Microsoft.CodeAnalysis" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp.Syntax" #>
+<#@ import namespace="Microsoft.CodeAnalysis.CSharp.Symbols" #>
+<#@ import namespace="Microsoft.CodeAnalysis.FindSymbols" #>
+<#@ import namespace="Microsoft.CodeAnalysis.MSBuild" #>
+<#@ import namespace="ISolution = Microsoft.CodeAnalysis.Solution" #>
+<#@ import namespace="IProject = Microsoft.CodeAnalysis.Project" #>
+<#@ import namespace="SyntaxVisitor = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor" #>
+<#@ import namespace="SyntaxRewriter = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxRewriter" #>
+<#@ import namespace="SyntaxVisitorOfBool = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor<bool>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfString = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor<System.Collections.Generic.IEnumerable<string>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfSyntaxNode = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor<System.Collections.Generic.IEnumerable<Microsoft.CodeAnalysis.SyntaxNode>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfMethodDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor<System.Collections.Generic.IEnumerable<Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfClassDeclarationSyntax = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor<System.Collections.Generic.IEnumerable<Microsoft.CodeAnalysis.CSharp.Syntax.ClassDeclarationSyntax>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfTypeSymbol = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor<System.Collections.Generic.IEnumerable<Microsoft.CodeAnalysis.ITypeSymbol>>" #>
+<#@ import namespace="SyntaxVisitorOfIEnumerableOfNamespaceSymbol = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor<System.Collections.Generic.IEnumerable<Microsoft.CodeAnalysis.INamespaceSymbol>>" #>
+<#@ import namespace="ISolution = Microsoft.CodeAnalysis.Solution" #>
+<#@ import namespace="ISemanticModel = Microsoft.CodeAnalysis.SemanticModel" #>
+<#@ import namespace="IDocument = Microsoft.CodeAnalysis.Document" #>
+<#@ import namespace="RoslynAccessibility = Microsoft.CodeAnalysis.Accessibility" #>
+<#@ import namespace="NamespaceSymbol = Microsoft.CodeAnalysis.INamespaceSymbol" #>
+<#@ import namespace="TypeSymbol = Microsoft.CodeAnalysis.ITypeSymbol" #>
+<#@ import namespace="MethodSymbol = Microsoft.CodeAnalysis.IMethodSymbol" #>
+<#@ import namespace="PropertySymbol = Microsoft.CodeAnalysis.IPropertySymbol" #>
+<#@ import namespace="NamedTypeSymbol = Microsoft.CodeAnalysis.INamedTypeSymbol" #>
+<#@ import namespace="ParameterSymbol = Microsoft.CodeAnalysis.IParameterSymbol" #>
+<#@ import namespace="LocalSymbol = Microsoft.CodeAnalysis.ILocalSymbol" #>
+<#@ import namespace="ArrayTypeSymbol = Microsoft.CodeAnalysis.IArrayTypeSymbol" #>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+    public static Solution LoadSolution(string path, ITextTemplatingEngineHost host)
+    {
+        return MSBuildWorkspace.Create().OpenSolutionAsync(path).Result;
+    }
+
+    public static ISymbol FindSourceDefinition(ISymbol symbol, ISolution solution)
+    {
+        return SymbolFinder.FindSourceDefinitionAsync(symbol, solution).Result;
+    }
+
+    public static SyntaxTree GetSyntaxTree(Document document)
+    {
+        return document.GetSyntaxTreeAsync().Result;
+    }
+
+    public static Compilation GetCompilation(Project project)
+    {
+        return project.GetCompilationAsync().Result;
+    }
+
+    public static SyntaxNode GetSyntaxRoot(Document document)
+    {
+        return document.GetSyntaxRootAsync().Result;
+    }
+
+    public static SemanticModel GetSemanticModel(Document document)
+    {
+        return document.GetSemanticModelAsync().Result;
+    }
+
+    public static SyntaxKind GetKind(CSharpSyntaxNode node)
+    {
+        return node.CSharpKind();
+    }
+
+    public static SyntaxKind GetKind(SyntaxNode node)
+    {
+        return GetKind((CSharpSyntaxNode)node);
+    }
+
+    public static SyntaxKind GetKind(SyntaxToken node)
+    {
+        return node.CSharpKind();
+    }
+
+    public static bool IsAssignExpression(SyntaxKind kind)
+    {
+        return kind == SyntaxKind.SimpleAssignmentExpression;
+    }
+
+    public enum RoslynSyntaxKind
+    {
+        AssignExpression = SyntaxKind.SimpleAssignmentExpression, 
+        AddAssignExpression = SyntaxKind.AddAssignmentExpression, 
+        SubtractAssignExpression = SyntaxKind.SubtractAssignmentExpression, 
+        MultiplyAssignExpression = SyntaxKind.MultiplyAssignmentExpression, 
+        DivideAssignExpression = SyntaxKind.DivideAssignmentExpression, 
+        ModuloAssignExpression = SyntaxKind.ModuloAssignmentExpression, 
+        AsExpression = SyntaxKind.AsExpression
+    }
+
+    public const SyntaxKind SyntaxKindAssignExpression = SyntaxKind.SimpleAssignmentExpression;
+    public const SyntaxKind SyntaxKindMemberAccessExpression = SyntaxKind.SimpleMemberAccessExpression;
+
+    public static Project AddDocument(Project project, string name, string text, IEnumerable<string> folders, out DocumentId documentId)
+    {
+        var document = project.AddDocument(name, text, folders);
+        documentId = document.Id;
+        return document.Project;
+    }
+#>

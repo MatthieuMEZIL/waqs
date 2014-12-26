@@ -1,0 +1,7 @@
+<#@ include file="WCFAsyncQueryableServices.VS14.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.WPF.Global.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string vsVersion = "VS14";
+#>

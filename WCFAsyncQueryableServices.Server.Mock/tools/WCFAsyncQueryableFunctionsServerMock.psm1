@@ -28,6 +28,7 @@ function GetAvailableVersions()
 		'10.0' {$version = @("NET40")}
 		'11.0' {$version = @("NET40", "NET45")}
 		'12.0' {$version = @("NET40", "NET45")}
+		'14.0' {$version = @("NET40", "NET45")}
 	}
 	return $version
 }
@@ -136,6 +137,7 @@ function WCFAsyncQueryableServicesServerMockInternal($edmxPath, $kind, $sourceCo
 		'10.0' {$VSVersion = "VS10"}
 		'11.0' {$VSVersion = "VS11"}
 		'12.0' {$VSVersion = "VS12"}
+		'14.0' {$VSVersion = "VS14"}
 	}
 	$exeArgs = @('"' + $edmxPath + '"', '"' + $projectDirectoryPath + '"', '"' + $toolsPathServerMock + '"', '"' + $defaultNamespace + '"', '"' + $waqsDirectory + '"', '"' + $waqsGeneralDirectory + '"', '"' + $entitiesSolutionPath + '"', '"' + $entitiesProjectPath + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $kind + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"')
 	if ($kind -eq "All" -or $kind -eq "WithoutFramework")
@@ -264,6 +266,7 @@ function WCFAsyncQueryableServicesServerMockInternal($edmxPath, $kind, $sourceCo
 	   {
     		'11.0' {$vsVersion = 'VS11'}
     		'12.0' {$vsVersion = 'VS12'}
+			'14.0' {$VSVersion = 'VS14'}
 	   }
        $ttincludesFolderVS = Join-Path $ttincludesFolder $vsVersion
 	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolderVS))
