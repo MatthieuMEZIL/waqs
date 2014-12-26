@@ -28,6 +28,7 @@ function GetAvailableVersions()
 		'10.0' {$version = @("NET40")}
 		'11.0' {$version = @("NET40", "NET45")}
 		'12.0' {$version = @("NET40", "NET45")}
+		'14.0' {$version = @("NET40", "NET45")}
 	}
 	return $version
 }
@@ -169,6 +170,7 @@ function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $ne
 		'10.0' {$VSVersion = "VS10"}
 		'11.0' {$VSVersion = "VS11"}
 		'12.0' {$VSVersion = "VS12"}
+		'14.0' {$VSVersion = "VS14"}
 	}
 	$exeArgs = @('"' + $edmxPath + '"', '"' + $edmxProjectPath + '"', '"' + $projectDirectoryPath + '"', '"' + $toolsPathServer + '"', '"' + $defaultNamespace + '"', '"' + $assemblyName + '"', '"' + $assemblyVersion + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $kind + '"', '"' + $appKind + '"', '"' + $waqsDirectory + '"', '"' + ($DTE.Solution.FindProjectItem($edmxPath).ContainingProject.ProjectItems | ?{$_.Name -eq "App.Config"} | foreach {$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"')
 	if ($kind -eq "GlobalOnly")
@@ -298,6 +300,7 @@ function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $ne
 	   {
     		'11.0' {$vsVersion = 'VS11'}
     		'12.0' {$vsVersion = 'VS12'}
+			'14.0' {$vsVersion = 'VS14'}
 	   }
        $ttincludesFolderVS = Join-Path $ttincludesFolder $vsVersion
 	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolderVS))
