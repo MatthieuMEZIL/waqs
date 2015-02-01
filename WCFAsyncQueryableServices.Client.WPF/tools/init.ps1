@@ -18,6 +18,7 @@ switch($DTE.Version)
 	"10.0" { $vsVersion = "VS10" }
 	"11.0" { $vsVersion = "VS11" }
 	"12.0" { $vsVersion = "VS12" }
+	"14.0" { $vsVersion = "VS14" }
 }
 
 $ttIncludeSource = "$toolsPath\ttincludes" 

@@ -28,6 +28,7 @@ function GetAvailableVersions()
 		'10.0' {$version = @("NET40")}
 		'11.0' {$version = @("NET40", "NET45")}
 		'12.0' {$version = @("NET40", "NET45")}
+		'14.0' {$version = @("NET40", "NET45")}
 	}
 	return $version
 }
@@ -160,6 +161,7 @@ function WCFAsyncQueryableServicesClientPCLInternal($edmxPath, $svcUrl, $kind, $
 		'10.0' {$VSVersion = "VS10"}
 		'11.0' {$VSVersion = "VS11"}
 		'12.0' {$VSVersion = "VS12"}
+		'14.0' {$VSVersion = "VS14"}
 	}
 	$exeArgs = @('"' + $edmxPath + '"', '"' + $pclToolsPath + '"', '"' + $defaultNamespace + '"', '"' + $svcUrl +'"', '"' + $waqsDirectory + '"', '"' + $waqsGeneralDirectory + '"', '"' + ($DTE.Solution.FindProjectItem(($edmxName + ".Client.PCL.ClientContext.tt")).ProjectItems | ?{$_.Name -eq ($edmxName + "ExpressionTransformer.cs")} | foreach{$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + (($DTE.Solution.FindProjectItem(($edmxName + ".Client.PCL.ServiceProxy.tt")).ProjectItems | ?{$_.Name -eq ("I" + $edmxName + "Service.cs")}).Properties | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + (GetFirstCsFile($DTE.Solution.FindProjectItem(($edmxName + ".Client.PCL.Entities.tt")))) + '"', '"' + ($DTE.Solution.FindProjectItem(($edmxName + ".Client.PCL.ClientContext.tt")).ProjectItems | ?{$_.Name -eq ($edmxName + "ClientContext.cs")} | foreach{$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + ($DTE.Solution.FindProjectItem(($edmxName + ".Client.PCL.ClientContext.Interfaces.tt")).ProjectItems | ?{$_.Name -eq ("I" + $edmxName + "ClientContext.cs")} | foreach{$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + $entitiesSolutionPath + '"', '"' + $entitiesProjectPath + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $kind + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"')
 	if ($kind -eq "All" -or $kind -eq "WithoutFramework" -or $kind -eq "WithoutGlobal" -or $kind -eq "WithoutGlobalWithoutFramework")
@@ -501,6 +503,7 @@ function WCFAsyncQueryableServicesGlobalClientPCLInternal($contexts, $svcUrl, $s
 		'10.0' {$VSVersion = "VS10"}
 		'11.0' {$VSVersion = "VS11"}
 		'12.0' {$VSVersion = "VS12"}
+		'14.0' {$VSVersion = "VS14"}
 	}
 	
 	if (Test-Path $waqsDirectory)

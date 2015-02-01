@@ -1,0 +1,5 @@
+<#@ include file="WCFAsyncQueryableServices.VS14.Edmx.Utility.ttinclude"#>
+<#@ include file="WCFAsyncQueryableServices.Client.WPF.WCFServiceProxy.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

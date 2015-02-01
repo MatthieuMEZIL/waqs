@@ -28,6 +28,7 @@ function GetAvailableVersions()
 		'10.0' {$version = @("NET40")}
 		'11.0' {$version = @("NET40", "NET45")}
 		'12.0' {$version = @("NET40", "NET45")}
+		'14.0' {$version = @("NET40", "NET45")}
 	}
 	return $version
 }
@@ -182,6 +183,7 @@ function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $
 		'10.0' {$VSVersion = "VS10"}
 		'11.0' {$VSVersion = "VS11"}
 		'12.0' {$VSVersion = "VS12"}
+		'14.0' {$VSVersion = "VS14"}
 	}
 	$exeArgs = @('"' + $edmxPath + '"', '"' + $projectDirectoryPath + '"', '"' + $wpfToolsPath + '"', '"' + $defaultNamespace + '"', '"' + $svcUrl +'"', '"' + $waqsDirectory + '"', '"' + $waqsGeneralDirectory + '"', '"' + ($DTE.Solution.FindProjectItem(($edmxName + ".Client.WPF.ClientContext.tt")).ProjectItems | ?{$_.Name -eq ($edmxName + "ExpressionTransformer.cs")} | foreach{$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + (($DTE.Solution.FindProjectItem(($edmxName + ".Client.WPF.ServiceProxy.tt")).ProjectItems | ?{$_.Name -eq ("I" + $edmxName + "Service.cs")}).Properties | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + (GetFirstCsFile($DTE.Solution.FindProjectItem(($edmxName + ".Client.WPF.Entities.tt")))) + '"', '"' + ($DTE.Solution.FindProjectItem(($edmxName + ".Client.WPF.ClientContext.tt")).ProjectItems | ?{$_.Name -eq ($edmxName + "ClientContext.cs")} | foreach{$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + ($DTE.Solution.FindProjectItem(($edmxName + ".Client.WPF.ClientContext.Interfaces.tt")).ProjectItems | ?{$_.Name -eq ("I" + $edmxName + "ClientContext.cs")} | foreach{$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + $entitiesSolutionPath + '"', '"' + $entitiesProjectPath + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $kind + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"')
 	if ($kind -eq "All" -or $kind -eq "WithoutFramework" -or $kind -eq "WithoutGlobal" -or $kind -eq "WithoutGlobalWithoutFramework")
@@ -319,6 +321,7 @@ function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $
 	   {
     		'11.0' {$vsVersion = 'VS11'}
     		'12.0' {$vsVersion = 'VS12'}
+			'14.0' {$vsVersion = 'VS14'}
 	   }
        $ttincludesFolderVS = Join-Path $ttincludesFolder $vsVersion
 	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolderVS))
@@ -567,6 +570,7 @@ function WCFAsyncQueryableServicesGlobalClientWPFInternal($contexts, $svcUrl, $s
 		'10.0' {$VSVersion = "VS10"}
 		'11.0' {$VSVersion = "VS11"}
 		'12.0' {$VSVersion = "VS12"}
+		'14.0' {$VSVersion = "VS14"}
 	}
 	
     $appConfigFilePath = $DTE.Solution.FindProjectItem($contexts).ContainingProject.ProjectItems | ?{$_.Name -eq 'App.config'} | foreach{$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value
