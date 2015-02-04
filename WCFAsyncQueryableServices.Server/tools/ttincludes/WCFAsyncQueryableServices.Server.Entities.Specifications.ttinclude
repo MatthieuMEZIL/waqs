@@ -599,7 +599,7 @@
                         {
                             var interfaceTypes =
                                 interfaces.Where(i => specificationsElements.InterfaceSpecifications.Any(i2 => i2.Equals(i)))
-                                    .Select(i => SyntaxFactory.ParseTypeName(i.Name + "Specifications"))
+                                    .Select(i => GetBaseType(SyntaxFactory.ParseTypeName(i.Name + "Specifications")))
                                     .ToList();
                             if (interfaceTypes.Count != 0)
                                 @class =

@@ -172,7 +172,7 @@ class AddDataContractAttribute : DTOAndInterfacesTypesRewriter
 												SyntaxFactory.ParseExpression("IsReference = true")), 
 											SyntaxFactory.AttributeArgument(
 												SyntaxFactory.ParseExpression(
-													string.Concat("Namespace = \"", _dataContractNamespace, "\")")))
+													string.Concat("Namespace = \"", _dataContractNamespace, "\"")))
 										}, 
 										new SyntaxToken[] { SyntaxFactory.Token(SyntaxKind.CommaToken) }))) 
 						},
@@ -202,12 +202,12 @@ class AddDataContractAttribute : DTOAndInterfacesTypesRewriter
 			modifiers.Add(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
 		if (!modifiers.Any(m => GetKind(m) == SyntaxKind.PartialKeyword))
 			modifiers.Add(SyntaxFactory.Token(SyntaxKind.PartialKeyword));
-		var baseList = node.BaseList == null ? Enumerable.Empty<TypeSyntax>() : originalNode.BaseList.Types.Select(t =>
+		var baseList = node.BaseList == null ? Enumerable.Empty<BaseTypeSyntax>() : originalNode.BaseList.Types.Select(t =>
 			{
 				if (baseType == null || !_inheritedTypes.ContainsKey(baseTypeString))
 					return t;
 				if ((SemanticModel.GetSymbolInfo(t).Symbol).ToString() == baseTypeString)
-					return SyntaxFactory.ParseTypeName(baseType.Name);
+					return GetBaseType(SyntaxFactory.ParseTypeName(baseType.Name));
 				return t;
 			}).ToList();
 		return node

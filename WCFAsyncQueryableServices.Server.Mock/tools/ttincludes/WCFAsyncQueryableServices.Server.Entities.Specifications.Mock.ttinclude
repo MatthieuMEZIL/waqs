@@ -322,7 +322,7 @@ public class StubMethodSyntaxRewriter : DTOAndInterfacesTypesRewriter
 		else if (isVirtual)
 			body = MakeAbstractVirtualBody(node, body, method, parameters);
 		SyntaxKind kind;
-		return SyntaxFactory.MethodDeclaration(attributes, SyntaxFactory.TokenList(new [] { SyntaxFactory.Token(SyntaxKind.PublicKeyword) }.Union(value.Modifiers.Where(m => !((kind = GetKind(m)) == SyntaxKind.PublicKeyword || kind == SyntaxKind.InternalKeyword || kind == SyntaxKind.ProtectedKeyword || kind == SyntaxKind.PrivateKeyword)))), value.ReturnType, value.ExplicitInterfaceSpecifier, value.Identifier, value.TypeParameterList, SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList<ParameterSyntax>(parameters, parameters.Skip(1).Select(p => SyntaxFactory.Token(SyntaxKind.CommaToken)))), value.ConstraintClauses, body);
+		return SyntaxFactory.MethodDeclaration(value.ReturnType, value.Identifier).WithAttributeLists(attributes).WithModifiers(SyntaxFactory.TokenList(new [] { SyntaxFactory.Token(SyntaxKind.PublicKeyword) }.Union(value.Modifiers.Where(m => !((kind = GetKind(m)) == SyntaxKind.PublicKeyword || kind == SyntaxKind.InternalKeyword || kind == SyntaxKind.ProtectedKeyword || kind == SyntaxKind.PrivateKeyword))))).WithExplicitInterfaceSpecifier(value.ExplicitInterfaceSpecifier).WithTypeParameterList(value.TypeParameterList).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList<ParameterSyntax>(parameters, parameters.Skip(1).Select(p => SyntaxFactory.Token(SyntaxKind.CommaToken))))).WithConstraintClauses(value.ConstraintClauses).WithBody(body);
 	}
 
 	private BlockSyntax MakeAbstractVirtualBody(MethodDeclarationSyntax methodSyntax, BlockSyntax body, MethodSymbol method, List<ParameterSyntax> parameters)

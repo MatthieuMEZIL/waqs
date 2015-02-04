@@ -77,8 +77,13 @@ private string GenerateViews(string edmxFilePath)
             {
                 var providerManifestToken = ssdl.Attribute("ProviderManifestToken");
                 int providerManifestTokenValue;
-                if (providerManifestToken != null && int.TryParse(providerManifestToken.Value, out providerManifestTokenValue) && providerManifestTokenValue > 2008)
-                    providerManifestToken.Value = "2008";
+				if (providerManifestToken != null)
+                {
+                    if (providerManifestToken.Value.EndsWith(".Azure"))
+                        providerManifestToken.Value = providerManifestToken.Value.Substring(0, providerManifestToken.Value.Length - 6);
+                    if (int.TryParse(providerManifestToken.Value, out providerManifestTokenValue) && providerManifestTokenValue > 2008)
+					    providerManifestToken.Value = "2008";
+                }
                 ssdlReader = ssdl.CreateReader();
             }
 

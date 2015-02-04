@@ -17,6 +17,7 @@
 <#@ import namespace="SyntaxFactory = Roslyn.Compilers.CSharp.Syntax" #>
 <#@ import namespace="RoslynAccessibility = Roslyn.Compilers.CSharp.Accessibility" #>
 <#@ import namespace="RoslynSyntaxKind = Roslyn.Compilers.CSharp.SyntaxKind" #>
+<#@ import namespace="BaseTypeSyntax = Roslyn.Compilers.CSharp.TypeSyntax" #>
 <#+
 // Copyright (c) Matthieu MEZIL.  All rights reserved.
 
@@ -72,4 +73,14 @@
     {
         return project.AddDocument(name, text, folders, out documentId);
     }
+
+	public static bool IsSwitchDefaultLabel(SwitchLabelSyntax switchLabel)
+	{
+		return GetKind(switchLabel.CaseOrDefaultKeyword) == SyntaxKind.DefaultKeyword;
+	}
+
+	public static TypeSyntax GetBaseType(TypeSyntax t)
+	{
+		return t;
+	}
 #>

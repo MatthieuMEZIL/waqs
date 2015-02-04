@@ -1,5 +1,7 @@
 <#@ assembly name="System.Collections.Immutable" #>
 <#@ assembly name="System.Runtime" #>
+<#@ assembly name="System.Text.Encoding" #>
+<#@ assembly name="System.Threading.Tasks" #>
 <#@ assembly name="Microsoft.CodeAnalysis" #>
 <#@ assembly name="Microsoft.CodeAnalysis.CSharp" #>
 <#@ assembly name="Microsoft.CodeAnalysis.Workspaces" #>
@@ -106,4 +108,14 @@
         documentId = document.Id;
         return document.Project;
     }
+
+	public static bool IsSwitchDefaultLabel(SwitchLabelSyntax switchLabel)
+	{
+		return switchLabel is DefaultSwitchLabelSyntax;
+	}
+
+	public static BaseTypeSyntax GetBaseType(TypeSyntax t)
+	{
+		return SyntaxFactory.SimpleBaseType(t);
+	}
 #>

@@ -17,6 +17,7 @@ function GetVersion()
 	{
 		"4.0" {return "NET40"}
 		"4.5" {return "NET45"}
+		"4.6" {return "NET46"}
 	}
 	return $null
 }
@@ -27,8 +28,8 @@ function GetAvailableVersions()
 	{
 		'10.0' {$version = @("NET40")}
 		'11.0' {$version = @("NET40", "NET45")}
-		'12.0' {$version = @("NET40", "NET45")}
-		'14.0' {$version = @("NET40", "NET45")}
+		'12.0' {$version = @("NET40", "NET45", "NET46")}
+		'14.0' {$version = @("NET40", "NET45", "NET46")}
 	}
 	return $version
 }
@@ -54,6 +55,11 @@ function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $
 	if (($svcUrl -eq $null) -and ($kind -ne "FrameworkOnly"))
 	{
 		throw "If kind is not FrameworkOnly, svcUrl cannot be null"
+	}
+	
+	if ($netVersion -eq "NET46")
+	{
+	    Write-Host "Note that .NET 4.6 new operators are not supported on specifications yet"
 	}
 
 	$projectDirectoryPath = [System.IO.Path]::GetDirectoryName((Get-Project).FullName)
@@ -539,6 +545,11 @@ function WCFAsyncQueryableServicesGlobalClientWPFInternal($contexts, $svcUrl, $s
 		throw "If kind is not FrameworkOnly, svcUrl cannot be null"
 	}
 
+	if ($netVersion -eq "NET46")
+	{
+	    Write-Host "Note that .NET 4.6 new operators are not supported on specifications yet"
+	}
+
     $projectPath = (Get-Project).FullName
 	$projectDirectoryPath = [System.IO.Path]::GetDirectoryName($projectPath)
 	$waqsDirectory = Join-Path $projectDirectoryPath "WAQSGlobal"
@@ -770,7 +781,7 @@ function MergeWPFClientTTIncludes()
             foreach ($tt in $wpfClientTemplates.SubProject.ProjectItems | ?{$_.Name.EndsWith('.merge.tt')})
             {
                 $transformTemplatesArgs = ('"' + (Join-Path $ttFolderPath $tt.Name) + '"', '-I "' + $ttIncludePath + '"')
-                start-process -filepath $transformTemplatesExePath -ArgumentList $transformTemplatesArgs -Wait
+                start-process -filepath $transformTemplatesExePath -ArgumentList $transformTemplatesArgs -WindowStyle Hidden -Wait
             }
         }
     }

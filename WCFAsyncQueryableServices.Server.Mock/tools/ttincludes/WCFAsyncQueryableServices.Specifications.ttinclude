@@ -6228,7 +6228,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
             }
             foreach (var sectionTestNull in sectionTestNulls)
                 ApplyRemoveStatements(sectionTestNull);
-            if (switchSections.Any(s => s.Labels.Any(l => GetKind(l.CaseOrDefaultKeyword) == SyntaxKind.DefaultKeyword)))
+            if (switchSections.Any(s => s.Labels.Any(l => IsSwitchDefaultLabel(l))))
                 foreach (var alreadyTested in sectionTestNulls.Select(s => (IEnumerable<string>)s._alreadyTestedNullableExpressions).Aggregate((atne1, atne2) => atne1.Intersect(atne2)))
                     _alreadyTestedNullableExpressions.Add(alreadyTested);
             return SyntaxFactory.SwitchStatement(expression, SyntaxFactory.List<SwitchSectionSyntax>(switchSections));
