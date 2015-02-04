@@ -1,0 +1,6 @@
+<#@ include file="WCFAsyncQueryableServices.VS14.Client.WPF.Global.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string netVersion = "NET45";
+#>
