@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
     <metadata>
         <id>WCFAsyncQueryableServices.Server.Mock</id>
-        <version>1.9.2.10</version>
+        <version>1.9.2.9</version>
         <authors>Matthieu MEZIL</authors>
         <owners>Matthieu MEZIL</owners>
         <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
