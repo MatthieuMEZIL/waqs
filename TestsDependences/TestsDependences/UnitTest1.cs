@@ -5,18 +5,39 @@ using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Roslyn.Compilers.CSharp;
 using Roslyn.Services;
+using System.Reflection;
 
 namespace TestsDependences
 {
     [TestClass]
     public class UnitTest1
     {
+        private const string SolutionName = "TestsDependences.sln";
+        private static readonly string SolutionPath;
+
+        static UnitTest1()
+        {
+            var location = Assembly.GetExecutingAssembly().Location;
+            try
+            {
+                do
+                {
+                    location = Path.GetDirectoryName(location);
+                    SolutionPath = Path.Combine(location, SolutionName);
+                } while (!File.Exists(SolutionPath));
+            }
+            catch (ArgumentNullException)
+            {
+                throw new InvalidOperationException(String.Format("Cannot find {0} relative to {1}", SolutionName, Assembly.GetExecutingAssembly().Location));
+            }
+        }
+
         private List<List<PropertySymbolInfo>> GetDependentProperties(string methodName)
         {
-            var solution = Solution.Load(Path.GetFullPath(@"..\..\..\TestsDependences.sln"));
+            var solution = Solution.Load(SolutionPath);
             var project =
                 solution.Projects.First(
-                    p => p.FilePath == Path.GetFullPath(@"..\..\..\ClassLibrary1\ClassLibrary1.csproj"));
+                    p => Path.GetFileName(p.FilePath) == @"ClassLibrary1.csproj");
             var document = project.Documents.First(d => d.Name == "Class1.cs");
             var @class =
                 ((CompilationUnitSyntax) document.GetSyntaxRoot()).Members
