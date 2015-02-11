@@ -1,0 +1,20 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/NuGet Programs/InitViewModel/bin/Debug
+/NuGet Programs/InitViewModel/obj/x86/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientPCL/bin/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientPCL/obj/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientPCLGlobal/bin/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientPCLGlobal/obj/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientWPF/bin/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientWPF/obj/x86/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientWPFGlobal/bin/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesClientWPFGlobal/obj/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesServer/bin/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesServer/obj/x86/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesServerMock/bin/Debug
+/NuGet Programs/InitWCFAsyncQueryableServicesServerMock/obj/Debug
+/NuGet Programs/WAQSNuGetPrograms.sln.ide
+*.suo

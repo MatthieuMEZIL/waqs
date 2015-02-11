@@ -72,7 +72,8 @@
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
   </Target>
-  <Target Name="AfterBuild">
-  </Target>
   -->
+  <Target Name="AfterBuild">
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).exe" DestinationFolder="$(MSBuildProjectDirectory)\..\..\WAQS.Client\PCL\tools\Client.PCL" />
+  </Target>
 </Project>
