@@ -18,3 +18,7 @@
 /NuGet Programs/InitWCFAsyncQueryableServicesServerMock/obj/Debug
 /NuGet Programs/WAQSNuGetPrograms.sln.ide
 *.suo
+
+# Manual additions
+
+/New-NuGetPackages
