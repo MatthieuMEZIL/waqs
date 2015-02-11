@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Roslyn.Compilers.CSharp;
 using Roslyn.Services;
@@ -12,10 +13,10 @@ namespace TestsDependences
     {
         private List<List<PropertySymbolInfo>> GetDependentProperties(string methodName)
         {
-            var solution = Solution.Load(@"C:\VS Projects\TestsDependences\TestsDependences.sln");
+            var solution = Solution.Load(Path.GetFullPath(@"..\..\..\TestsDependences.sln"));
             var project =
                 solution.Projects.First(
-                    p => p.FilePath == @"C:\VS Projects\TestsDependences\ClassLibrary1\ClassLibrary1.csproj");
+                    p => p.FilePath == Path.GetFullPath(@"..\..\..\ClassLibrary1\ClassLibrary1.csproj"));
             var document = project.Documents.First(d => d.Name == "Class1.cs");
             var @class =
                 ((CompilationUnitSyntax) document.GetSyntaxRoot()).Members
