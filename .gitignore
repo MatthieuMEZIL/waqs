@@ -19,6 +19,11 @@
 /NuGet Programs/WAQSNuGetPrograms.sln.ide
 *.suo
 
-# Manual additions
+/TestResults
+/TestsDependences/ClassLibrary1/bin/Debug
+/TestsDependences/ClassLibrary1/obj/Debug
+/TestsDependences/TestsDependences/bin/Debug
+/TestsDependences/TestsDependences/obj/Debug
+/TestsDependences/TestsDependences.sln.ide
 
 /New-NuGetPackages
