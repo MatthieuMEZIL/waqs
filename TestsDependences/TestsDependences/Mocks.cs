@@ -11,6 +11,17 @@ using ISemanticModel = Microsoft.CodeAnalysis.SemanticModel;
 
 namespace TestsDependences
 {
+    public enum RoslynSyntaxKind
+    {
+        AssignExpression = SyntaxKind.SimpleAssignmentExpression,
+        AddAssignExpression = SyntaxKind.AddAssignmentExpression,
+        SubtractAssignExpression = SyntaxKind.SubtractAssignmentExpression,
+        MultiplyAssignExpression = SyntaxKind.MultiplyAssignmentExpression,
+        DivideAssignExpression = SyntaxKind.DivideAssignmentExpression,
+        ModuloAssignExpression = SyntaxKind.ModuloAssignmentExpression,
+        AsExpression = SyntaxKind.AsExpression
+    }
+
     partial class GetMembersVisitor
     {
         public static SyntaxKind GetKind(CSharpSyntaxNode node)

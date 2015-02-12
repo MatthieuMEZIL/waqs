@@ -62,7 +62,7 @@ if ($LASTEXITCODE)
     exit $LASTEXITCODE
 }
 
-msbuild '.\TestsDependences\TestsDependences.sln'
+msbuild '.\TestsDependences\TestsDependences.sln' /p:Platform="Any CPU"
 if ($LASTEXITCODE)
 {
     exit $LASTEXITCODE

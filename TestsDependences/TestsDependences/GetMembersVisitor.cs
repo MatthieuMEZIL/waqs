@@ -15,17 +15,6 @@ using TypeSymbol = Microsoft.CodeAnalysis.ITypeSymbol;
 
 namespace TestsDependences
 {
-    public enum RoslynSyntaxKind
-    {
-        AssignExpression = SyntaxKind.SimpleAssignmentExpression,
-        AddAssignExpression = SyntaxKind.AddAssignmentExpression,
-        SubtractAssignExpression = SyntaxKind.SubtractAssignmentExpression,
-        MultiplyAssignExpression = SyntaxKind.MultiplyAssignmentExpression,
-        DivideAssignExpression = SyntaxKind.DivideAssignmentExpression,
-        ModuloAssignExpression = SyntaxKind.ModuloAssignmentExpression,
-        AsExpression = SyntaxKind.AsExpression
-    }
-
     partial class GetMembersVisitor : SyntaxVisitor
     {
         private const int MaxFailed = 50;
