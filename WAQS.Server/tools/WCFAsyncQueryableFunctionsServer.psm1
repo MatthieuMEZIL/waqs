@@ -178,7 +178,7 @@ function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $ne
 		'12.0' {$VSVersion = "VS12"}
 		'14.0' {$VSVersion = "VS14"}
 	}
-	$exeArgs = @('"' + $edmxPath + '"', '"' + $edmxProjectPath + '"', '"' + $projectDirectoryPath + '"', '"' + $toolsPathServer + '"', '"' + $defaultNamespace + '"', '"' + $assemblyName + '"', '"' + $assemblyVersion + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $kind + '"', '"' + $appKind + '"', '"' + $waqsDirectory + '"', '"' + ($DTE.Solution.FindProjectItem($edmxPath).ContainingProject.ProjectItems | ?{$_.Name -eq "App.Config"} | foreach {$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"')
+	$exeArgs = @('"' + $edmxPath + '"', '"' + $edmxProjectPath + '"', '"' + $projectDirectoryPath + '"', '"' + $toolsPathServer + '"', '"' + $defaultNamespace + '"', '"' + $assemblyName + '"', '"' + $assemblyVersion + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $kind + '"', '"' + $appKind + '"', '"' + $waqsDirectory + '"', '"' + ($DTE.Solution.FindProjectItem($edmxPath).ContainingProject.ProjectItems | ?{$_.Name -eq "App.Config"} | foreach {$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value) + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"', 'WCF')
 	if ($kind -eq "GlobalOnly")
 	{
 		$exeArgs = $exeArgs + ('"' + (GetFirstCsFile($DTE.Solution.FindProjectItem($edmxName + ".Server.DAL.Interfaces.tt"))) + '"')
