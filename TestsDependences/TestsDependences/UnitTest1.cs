@@ -1,10 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Roslyn.Compilers.CSharp;
-using Roslyn.Services;
+using System.Collections.Concurrent;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.MSBuild;
+using ISemanticModel = Microsoft.CodeAnalysis.SemanticModel;
+using MethodSymbol = Microsoft.CodeAnalysis.IMethodSymbol;
+using System.IO;
 using System.Reflection;
 
 namespace TestsDependences
@@ -12,48 +16,36 @@ namespace TestsDependences
     [TestClass]
     public class UnitTest1
     {
-        private const string SolutionName = "TestsDependences.sln";
-        private static readonly string SolutionPath;
-
-        static UnitTest1()
+        private List<List<PropertySymbolInfo>> GetDependentProperties(string methodName, Func<ClassDeclarationSyntax, List<MethodDeclarationSyntax>> getMethods = null)
         {
-            var location = Assembly.GetExecutingAssembly().Location;
-            try
-            {
-                do
-                {
-                    location = Path.GetDirectoryName(location);
-                    SolutionPath = Path.Combine(location, SolutionName);
-                } while (!File.Exists(SolutionPath));
-            }
-            catch (ArgumentNullException)
-            {
-                throw new InvalidOperationException(String.Format("Cannot find {0} relative to {1}", SolutionName, Assembly.GetExecutingAssembly().Location));
-            }
-        }
-
-        private List<List<PropertySymbolInfo>> GetDependentProperties(string methodName)
-        {
-            var solution = Solution.Load(SolutionPath);
+            var rootPath = Path.GetFullPath(Assembly.GetExecutingAssembly().Location + @"..\..\..\..\..");
+            var slnPath = Path.Combine(rootPath, "TestsDependences.sln");
+            var solution = MSBuildWorkspace.Create().OpenSolutionAsync(slnPath).Result;
+            var projectPath = Path.Combine(rootPath, @"ClassLibrary1\ClassLibrary1.csproj");
             var project =
                 solution.Projects.First(
-                    p => Path.GetFileName(p.FilePath) == @"ClassLibrary1.csproj");
+                    p => p.FilePath == projectPath);
             var document = project.Documents.First(d => d.Name == "Class1.cs");
             var @class =
-                ((CompilationUnitSyntax) document.GetSyntaxRoot()).Members
+                ((CompilationUnitSyntax)document.GetSyntaxRootAsync().Result).Members
                     .OfType<NamespaceDeclarationSyntax>()
                     .First()
                     .Members
                     .OfType<ClassDeclarationSyntax>()
                     .First();
-            var semanticModel = project.GetCompilation().GetSemanticModel(document.GetSyntaxTree());
-            var semanticModelsPerMethod = @class.Members.OfType<MethodDeclarationSyntax>().ToDictionary(m => m, m => semanticModel);
-            var methodsPerMethodSymbol =
-                @class.Members.OfType<MethodDeclarationSyntax>()
-                    .ToDictionary(m => semanticModel.GetDeclaredSymbol(m).ToString());
+            var semanticModel = project.GetCompilationAsync().Result.GetSemanticModel(document.GetSyntaxTreeAsync().Result);
+            var semanticModelsPerMethod = new ConcurrentDictionary<MethodDeclarationSyntax, ISemanticModel>();
+            foreach (var m in @class.Members.OfType<MethodDeclarationSyntax>())
+                semanticModelsPerMethod.TryAdd(m, semanticModel);
+            var methodsPerMethodSymbol = new ConcurrentDictionary<string, MethodDeclarationSyntax>();
+            foreach (var m in @class.Members.OfType<MethodDeclarationSyntax>())
+                methodsPerMethodSymbol.TryAdd(semanticModel.GetDeclaredSymbol(m).ToString(), m);
             var method = @class.Members.OfType<MethodDeclarationSyntax>().First(m => m.Identifier.ValueText == methodName);
-            var methodSymbol = (MethodSymbol) semanticModel.GetDeclaredSymbol(method);
-            var getMembersVisitor = new GetMembersVisitor(semanticModel, new SpecificationsElements(), methodSymbol, methodSymbol.Parameters[0].Name, "Server.Fx.DAL.Interfaces", semanticModelsPerMethod, methodsPerMethodSymbol, new Dictionary<string, List<MethodDeclarationSyntax>>(), @class.Members.OfType<MethodDeclarationSyntax>().ToList());
+            var methodSymbol = (MethodSymbol)semanticModel.GetDeclaredSymbol(method);
+            var getMethodsDico = new Dictionary<string, List<MethodDeclarationSyntax>>();
+            if (getMethods != null)
+                getMethodsDico.Add(@class.Identifier.ValueText, getMethods(@class));
+            var getMembersVisitor = new GetMembersVisitor(semanticModel, new SpecificationsElements(), methodSymbol, methodSymbol.Parameters[0].Name, "Server.Fx.DAL.Interfaces", semanticModelsPerMethod, methodsPerMethodSymbol, getMethodsDico, @class.Members.OfType<MethodDeclarationSyntax>().ToList());
             getMembersVisitor.Visit(method);
             return getMembersVisitor.GetProperties();
         }
@@ -721,41 +713,16 @@ namespace TestsDependences
         {
             var properties = GetDependentProperties("TestGetC2");
             Assert.AreEqual(10, properties.Count);
-            Assert.AreEqual(1, properties[0].Count);
-            Assert.AreEqual("Customer", properties[0][0].Name);
-            Assert.AreEqual(2, properties[1].Count);
-            Assert.AreEqual("Customer", properties[1][0].Name);
-            Assert.AreEqual("Id", properties[1][1].Name);
-            Assert.AreEqual(2, properties[2].Count);
-            Assert.AreEqual("Customer", properties[2][0].Name);
-            Assert.AreEqual("Orders", properties[2][1].Name);
-            Assert.AreEqual(3, properties[3].Count);
-            Assert.AreEqual("Customer", properties[3][0].Name);
-            Assert.AreEqual("Orders", properties[3][1].Name);
-            Assert.AreEqual("OrderDetails", properties[3][2].Name);
-            Assert.AreEqual(2, properties[4].Count);
-            Assert.AreEqual("Customer", properties[4][0].Name);
-            Assert.AreEqual("Orders2", properties[4][1].Name);
-            Assert.AreEqual(3, properties[5].Count);
-            Assert.AreEqual("Customer", properties[5][0].Name);
-            Assert.AreEqual("Orders2", properties[5][1].Name);
-            Assert.AreEqual("OrderDetails", properties[5][2].Name);
-            Assert.AreEqual(4, properties[6].Count);
-            Assert.AreEqual("Customer", properties[6][0].Name);
-            Assert.AreEqual("Orders", properties[6][1].Name);
-            Assert.AreEqual("OrderDetails", properties[6][2].Name);
-            Assert.AreEqual("UnitPrice", properties[6][3].Name);
-            Assert.AreEqual(4, properties[7].Count);
-            Assert.AreEqual("Customer", properties[7][0].Name);
-            Assert.AreEqual("Orders2", properties[7][1].Name);
-            Assert.AreEqual("OrderDetails", properties[7][2].Name);
-            Assert.AreEqual("UnitPrice", properties[7][3].Name);
-            Assert.AreEqual(1, properties[8].Count);
-            Assert.AreEqual("Id", properties[8][0].Name);
-            Assert.AreEqual(3, properties[9].Count);
-            Assert.AreEqual("Customer", properties[9][0].Name);
-            Assert.AreEqual("Orders2", properties[9][1].Name);
-            Assert.AreEqual("Id", properties[9][2].Name);
+            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "Customer"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Customer" && ps[1].Name == "Id"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Customer" && ps[1].Name == "Orders"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "Customer" && ps[1].Name == "Orders" && ps[2].Name == "OrderDetails"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Customer" && ps[1].Name == "Orders2"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "Customer" && ps[1].Name == "Orders2" && ps[2].Name == "OrderDetails"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 4 && ps[0].Name == "Customer" && ps[1].Name == "Orders" && ps[2].Name == "OrderDetails" && ps[3].Name == "UnitPrice"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 4 && ps[0].Name == "Customer" && ps[1].Name == "Orders2" && ps[2].Name == "OrderDetails" && ps[3].Name == "UnitPrice"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "Id"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "Customer" && ps[1].Name == "Orders2" && ps[2].Name == "Id"));
         }
 
         [TestMethod]
@@ -877,19 +844,79 @@ namespace TestsDependences
         }
 
         [TestMethod]
-        public void TestGetTauxTvaDateDelivrance()
+        public void TestGetQteACder()
         {
-            var properties = GetDependentProperties("GetTauxTvaDateDelivrance");
-            Assert.AreEqual(9, properties.Count);
-            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "BienEtServiceTarifie"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "BienEtServiceTarifie" && ps[1].Name == "HistoriqueTvas"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtServiceTarifie" && ps[1].Name == "HistoriqueTvas" && ps[2].Name == "DateDebut"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "Prestation"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Prestation" && ps[1].Name == "DateDelivrance"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtServiceTarifie" && ps[1].Name == "HistoriqueTvas" && ps[2].Name == "CodeTva"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 4 && ps[0].Name == "BienEtServiceTarifie" && ps[1].Name == "HistoriqueTvas" && ps[2].Name == "CodeTva" && ps[3].Name == "HistoriqueTauxTvas"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 5 && ps[0].Name == "BienEtServiceTarifie" && ps[1].Name == "HistoriqueTvas" && ps[2].Name == "CodeTva" && ps[3].Name == "HistoriqueTauxTvas" && ps[4].Name == "DateDebut"));
-            Assert.IsTrue(properties.Any(ps => ps.Count == 5 && ps[0].Name == "BienEtServiceTarifie" && ps[1].Name == "HistoriqueTvas" && ps[2].Name == "CodeTva" && ps[3].Name == "HistoriqueTauxTvas" && ps[4].Name == "Taux"));
+            var properties = GetDependentProperties("GetQteACder");
+            Assert.AreEqual(15, properties.Count);
+            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "BienEtService"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "BienEtService" && ps[1].Name == "BesoinCommandes"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtService" && ps[1].Name == "BesoinCommandes" && ps[2].Name == "IdLigneCommande"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtService" && ps[1].Name == "BesoinCommandes" && ps[2].Name == "IdFournisseur"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "IdFournisseur"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtService" && ps[1].Name == "BesoinCommandes" && ps[2].Name == "QuantiteACommander"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtService" && ps[1].Name == "BesoinCommandes" && ps[2].Name == "BienEtService"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 4 && ps[0].Name == "BienEtService" && ps[1].Name == "BesoinCommandes" && ps[2].Name == "BienEtService" && ps[3].Name == "CoefNbBoitesEnNbUnites"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "BienEtService" && ps[1].Name == "LigneCommandes"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtService" && ps[1].Name == "LigneCommandes" && ps[2].Name == "Commande"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 4 && ps[0].Name == "BienEtService" && ps[1].Name == "LigneCommandes" && ps[2].Name == "Commande" && ps[3].Name == "IdFournisseur"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 4 && ps[0].Name == "BienEtService" && ps[1].Name == "LigneCommandes" && ps[2].Name == "Commande" && ps[3].Name == "IdEtatCommande"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtService" && ps[1].Name == "LigneCommandes" && ps[2].Name == "QuantiteCommandee"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "BienEtService" && ps[1].Name == "LigneCommandes" && ps[2].Name == "BienEtService"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 4 && ps[0].Name == "BienEtService" && ps[1].Name == "LigneCommandes" && ps[2].Name == "BienEtService" && ps[3].Name == "CoefNbBoitesEnNbUnites"));
         }
+
+        [TestMethod]
+        public void TestGetFirsOrderQuantity()
+        {
+            var properties = GetDependentProperties("GetFirsOrderQuantity", c => c.Members.OfType<MethodDeclarationSyntax>().Where(m => new[] { "GetFirstOD", "GetQuantite2" }.Contains(m.Identifier.ValueText)).ToList());
+            Assert.AreEqual(2, properties.Count);
+            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "FirstOD"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "FirstOD" && ps[1].Name == "Quantite2"));
+        }
+
+        [TestMethod]
+        public void TestGetFirsOrderQuantity2()
+        {
+            var properties = GetDependentProperties("GetFirsOrderQuantity2", c => c.Members.OfType<MethodDeclarationSyntax>().Where(m => new[] { "GetFirstOD", "GetQuantite2" }.Contains(m.Identifier.ValueText)).ToList());
+            Assert.AreEqual(3, properties.Count);
+            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "Orders"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Orders" && ps[1].Name == "FirstOD"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "Orders" && ps[1].Name == "FirstOD" && ps[2].Name == "Quantite2"));
+        }
+
+        [TestMethod]
+        public void TestGetFirsOrderQuantity3()
+        {
+            var properties = GetDependentProperties("GetFirsOrderQuantity3", c => c.Members.OfType<MethodDeclarationSyntax>().Where(m => new[] { "GetFirstOD", "GetQuantite2" }.Contains(m.Identifier.ValueText)).ToList());
+            Assert.AreEqual(5, properties.Count);
+            Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "Orders"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Orders" && ps[1].Name == "FirstOD"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "Orders" && ps[1].Name == "FirstOD" && ps[2].Name == "Quantite2"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Orders" && ps[1].Name == "OrderDetails"));
+            Assert.IsTrue(properties.Any(ps => ps.Count == 3 && ps[0].Name == "Orders" && ps[1].Name == "OrderDetails" && ps[2].Name == "Quantite2"));
+        }
+
+        [TestMethod]
+        public void TestOnDictionary()
+        {
+            var properties = GetDependentProperties("TestOnDictionary", c => c.Members.OfType<MethodDeclarationSyntax>().Where(m => new[] { "GetQuantite2" }.Contains(m.Identifier.ValueText)).ToList());
+            Assert.AreEqual(0, properties.Count);
+        }
+
+        [TestMethod]
+        public void TestOnDictionary2()
+        {
+            var properties = GetDependentProperties("TestOnDictionary2", c => c.Members.OfType<MethodDeclarationSyntax>().Where(m => new[] { "GetQuantite2" }.Contains(m.Identifier.ValueText)).ToList());
+            Assert.AreEqual(0, properties.Count);
+        }
+
+        //[TestMethod]
+        //public void TestOnConditionalAccessExpression()
+        //{
+        //    var properties = GetDependentProperties("TestOnConditionalAccessExpression");
+        //    Assert.AreEqual(2, properties.Count);
+        //    Assert.IsTrue(properties.Any(ps => ps.Count == 1 && ps[0].Name == "Customer"));
+        //    Assert.IsTrue(properties.Any(ps => ps.Count == 2 && ps[0].Name == "Customer" && ps[1].Name == "CompanyName"));
+        //}
     }
 }

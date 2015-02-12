@@ -327,11 +327,67 @@ namespace ClassLibrary1
                 : null;
         }
 
-        public static decimal GetTauxTvaDateDelivrance(this PrestationElementaire pel)
+        public static int? GetQteACder(this Bes_Asso_Fou baf)
         {
-            return GetHistoriqueTauxTvaDateDelivrance(pel).Taux;
+            return baf == null || baf.BienEtService == null ? null :
+                 (int?)(baf.BienEtService.BesoinCommandes.Where(bc => !bc.IdLigneCommande.HasValue
+                  && bc.IdFournisseur == baf.IdFournisseur)
+                 .Sum(bc => bc.QuantiteACommander * bc.BienEtService.CoefNbBoitesEnNbUnites)
+              + baf.BienEtService.LigneCommandes.Where(lc => lc.Commande != null
+                 && lc.Commande.IdFournisseur == baf.IdFournisseur
+                 && (lc.Commande.IdEtatCommande == 1
+                 || lc.Commande.IdEtatCommande == 2
+                 || lc.Commande.IdEtatCommande == 3))
+                 .Sum(l => l.QuantiteCommandee * l.BienEtService.CoefNbBoitesEnNbUnites));
         }
 
+        public static OrderDetail GetFirstOD(this Order o)
+        {
+            return o.OrderDetails.First();
+        }
+
+        public static double GetQuantite2(this OrderDetail od)
+        {
+            return od.Quantity;
+        }
+
+        public static double GetFirsOrderQuantity(this Order o)
+        {
+            return GetQuantite2(GetFirstOD(o));
+        }
+
+
+        public static IEnumerable<Order> GetFirsOrderQuantity(this Customer c)
+        {
+            return c.Orders.Where(o => GetQuantite2(GetFirstOD(o)) > 10);
+        }
+
+
+        public static IEnumerable<Order> GetFirsOrderQuantity2(this Customer c)
+        {
+            return c.Orders.Where(o => GetQuantite2(GetFirstOD(o)) > 10);
+        }
+
+
+        public static IEnumerable<Order> GetFirsOrderQuantity3(this Customer c)
+        {
+            return c.Orders.Where(o => GetQuantite2(GetFirstOD(o)) > GetQuantite2(c.Orders.First().OrderDetails.First()));
+        }
+
+        public static IEnumerable<KeyValuePair<string, OrderDetail>> TestOnDictionary(Dictionary<string, OrderDetail> dico)
+        {
+            return dico.Where(d => GetQuantite2(d.Value) > 10);
+        }
+
+        public static IEnumerable<KeyValuePair<string, OrderDetail>> TestOnDictionary2(Dictionary<string, OrderDetail> dico)
+        {
+            return dico.Where(d => d.Value.Order.Date.Year > 2000);
+        }
+
+        public static int? TestOnConditionalAccessExpression(this Order o)
+        {
+            return o.Customer?.CompanyName?.Length;
+        }
     }
 
     public class Customer
@@ -382,7 +438,6 @@ namespace ClassLibrary1
     public class HistoriqueTauxTva
     {
         public System.DateTime DateDebut { get; set; }
-        public decimal Taux { get; set; }
     }
 
     public class Prestation
@@ -399,6 +454,9 @@ namespace ClassLibrary1
     public class BienEtService
     {
         public List<HistoriqueTva> HistoriqueTvas { get; set; }
+        public List<BesoinCommande> BesoinCommandes { get; set; }
+        public List<LigneCommande> LigneCommandes { get; set; }
+        public int CoefNbBoitesEnNbUnites { get; set; }
     }
 
     public class HistoriqueTva
@@ -410,5 +468,32 @@ namespace ClassLibrary1
     public class CodeTva
     {
         public List<HistoriqueTauxTva> HistoriqueTauxTvas { get; set; }
+    }
+
+    public class Bes_Asso_Fou
+    {
+        public BienEtService BienEtService { get; set; }
+        public int IdFournisseur { get; set; }
+    }
+
+    public class BesoinCommande
+    {
+        public int? IdLigneCommande { get; set; }
+        public int IdFournisseur { get; set; }
+        public int QuantiteACommander { get; set; }
+        public BienEtService BienEtService { get; set; }
+    }
+
+    public class LigneCommande
+    {
+        public Commande Commande { get; set; }
+        public BienEtService BienEtService { get; set; }
+        public int QuantiteCommandee { get; set; }
+    }
+
+    public class Commande
+    {
+        public int IdFournisseur { get; set; }
+        public int IdEtatCommande { get; set; }
     }
 }

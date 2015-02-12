@@ -40,7 +40,6 @@ namespace InitWCFAsyncQueryableServicesServer
                 string appConfigPath = args[argIndex++];
                 bool sourceControl = args[argIndex++] == "WithSourceControl";
                 string slnFilePath = args[argIndex++];
-                string customToolsProjectPath = args[argIndex++];
                 bool isWCF = args[argIndex++] == "WCF";
                 string slnTTIncludesPath = Path.Combine(Path.GetDirectoryName(slnFilePath), "ServerTemplates");
 
@@ -174,7 +173,7 @@ namespace InitWCFAsyncQueryableServicesServer
                             }
                             string globalTTFilePath = Path.Combine(globalDirectoryPath, "GlobalWCFServiceContract.tt");
                             if (!File.Exists(globalTTFilePath))
-                                CopyTTFile(Path.Combine(customToolsProjectPath, "Server.Global.tt"), globalTTFilePath, sourceControl, slnTTIncludesPath, new[] { "$RootNamespace$", rootNamespace }, new[] { "$NetVersion$", netVersion }, new[] { "$VSVersion$", vsVersion });
+                                CopyTTFile(Path.Combine(toolsServerPath, "Server.Global.tt"), globalTTFilePath, sourceControl, slnTTIncludesPath, new[] { "$RootNamespace$", rootNamespace }, new[] { "$NetVersion$", netVersion }, new[] { "$VSVersion$", vsVersion });
 
                             using (var sw = new StreamWriter(Path.Combine(projectDirectoryPath, "Global.svc")))
                             {
@@ -199,9 +198,9 @@ namespace InitWCFAsyncQueryableServicesServer
                 if (kind == "All" || kind == "WithoutFramework" || kind == "GlobalOnly")
                 {
                     if (appKind == "App")
-                        WriteAppGlobal(edmxPath, edmxName, edmxProjectPath, projectDirectoryPath, toolsServerPath, customToolsProjectPath, rootNamespace, assemblyName, assemblyVersion, appConfigPath, addGlobalService);
+                        WriteAppGlobal(edmxPath, edmxName, edmxProjectPath, projectDirectoryPath, toolsServerPath, rootNamespace, assemblyName, assemblyVersion, appConfigPath, addGlobalService);
                     else
-                        WriteWebGlobal(edmxPath, edmxName, edmxProjectPath, projectDirectoryPath, toolsServerPath, customToolsProjectPath, rootNamespace, assemblyNetVersion, assemblyName, assemblyVersion, wcfServiceNamespace, appConfigPath, addGlobalService, isWCF);
+                        WriteWebGlobal(edmxPath, edmxName, edmxProjectPath, projectDirectoryPath, toolsServerPath, rootNamespace, assemblyNetVersion, assemblyName, assemblyVersion, wcfServiceNamespace, appConfigPath, addGlobalService, isWCF);
                 }
 
                 if (!Directory.Exists(waqsDirectory))
@@ -212,23 +211,23 @@ namespace InitWCFAsyncQueryableServicesServer
                     switch (kind)
                     {
                         case "All":
-                            waqsToolsPath = Path.Combine(customToolsProjectPath, "Server.waqs");
+                            waqsToolsPath = Path.Combine(toolsServerPath, "Server.waqs");
                             break;
                         case "WithoutGlobal":
-                            waqsToolsPath = Path.Combine(customToolsProjectPath, "ServerWithoutGlobal.waqs");
+                            waqsToolsPath = Path.Combine(toolsServerPath, "ServerWithoutGlobal.waqs");
                             break;
                         case "WithoutFramework":
-                            waqsToolsPath = Path.Combine(customToolsProjectPath, "ServerWithoutFramework.waqs");
+                            waqsToolsPath = Path.Combine(toolsServerPath, "ServerWithoutFramework.waqs");
                             break;
                         case "WithoutGlobalWithoutFramework":
-                            waqsToolsPath = Path.Combine(customToolsProjectPath, "ServerWithoutGlobalWithoutFramework.waqs");
+                            waqsToolsPath = Path.Combine(toolsServerPath, "ServerWithoutGlobalWithoutFramework.waqs");
                             break;
                         case "FrameworkOnly":
-                            waqsToolsPath = Path.Combine(customToolsProjectPath, "ServerFrameworkOnly.waqs");
+                            waqsToolsPath = Path.Combine(toolsServerPath, "ServerFrameworkOnly.waqs");
                             edmxName = "Framework";
                             break;
                         case "GlobalOnly":
-                            waqsToolsPath = Path.Combine(customToolsProjectPath, "ServerGlobalOnly.waqs");
+                            waqsToolsPath = Path.Combine(toolsServerPath, "ServerGlobalOnly.waqs");
                             break;
                     }
                     string serverWAQS = Path.Combine(waqsDirectory, edmxName + ".Server.waqs");
@@ -288,7 +287,7 @@ namespace InitWCFAsyncQueryableServicesServer
             }
         }
 
-        private static void WriteWebGlobal(string edmxPath, string edmxName, string edmxProjectPath, string projectDirectoryPath, string toolsPath, string customToolsProjectPath, string rootNamespace, string assemblyNetVersion, string assemblyName, string assemblyVersion, string wcfServiceNamespace, string templateWebConfigPath, bool addGlobalService, bool isWCF)
+        private static void WriteWebGlobal(string edmxPath, string edmxName, string edmxProjectPath, string projectDirectoryPath, string toolsPath, string rootNamespace, string assemblyNetVersion, string assemblyName, string assemblyVersion, string wcfServiceNamespace, string templateWebConfigPath, bool addGlobalService, bool isWCF)
         {
             if (wcfServiceNamespace == null)
                 wcfServiceNamespace = rootNamespace + ".WCFService";
@@ -298,13 +297,13 @@ namespace InitWCFAsyncQueryableServicesServer
                 string globalAsaxFilePath = Path.Combine(projectDirectoryPath, "Global.asax");
                 string globalAsaxCsFilePath = Path.Combine(projectDirectoryPath, "Global.asax.cs");
                 if (!File.Exists(globalAsaxFilePath))
-                    CopyFile(Path.Combine(customToolsProjectPath, "Global.asax"), globalAsaxFilePath, new[] { "$RootNamespace$", rootNamespace });
+                    CopyFile(Path.Combine(toolsPath, "Global.asax"), globalAsaxFilePath, new[] { "$RootNamespace$", rootNamespace });
 
-                string globalAsaxCsModelPath = Path.Combine(customToolsProjectPath, "Global.asax.cs");
+                string globalAsaxCsModelPath = Path.Combine(toolsPath, "Global.asax.cs");
                 if (!File.Exists(globalAsaxCsFilePath))
                     CopyFile(globalAsaxCsModelPath, globalAsaxCsFilePath, new[] { "$RootNamespace$", rootNamespace });
 
-                CopyFile(Path.Combine(customToolsProjectPath, "server.svc"), Path.Combine(projectDirectoryPath, edmxName + ".svc"), new[] { "$WCFServiceNamespace$", wcfServiceNamespace }, new[] { "$edmxName$", edmxName });
+                CopyFile(Path.Combine(toolsPath, "server.svc"), Path.Combine(projectDirectoryPath, edmxName + ".svc"), new[] { "$WCFServiceNamespace$", wcfServiceNamespace }, new[] { "$edmxName$", edmxName });
 
                 string globalAsaxCsContent;
                 using (var sr = new StreamReader(globalAsaxCsFilePath))
@@ -318,7 +317,7 @@ namespace InitWCFAsyncQueryableServicesServer
             }
 
             if (!File.Exists(webConfigFilePath))
-                CopyFile(Path.Combine(customToolsProjectPath, "Web.config"), webConfigFilePath, new[] { "$AssemblyNETVersion$", assemblyNetVersion }, new[] { "$AssemblyName$", assemblyName }, new[] { "$AssemblyVersion$", assemblyVersion });
+                CopyFile(Path.Combine(toolsPath, "Web.config"), webConfigFilePath, new[] { "$AssemblyNETVersion$", assemblyNetVersion }, new[] { "$AssemblyName$", assemblyName }, new[] { "$AssemblyVersion$", assemblyVersion });
 
             XElement webConfig = XElement.Load(webConfigFilePath);
             XElement connectionStrings = webConfig.Element("connectionStrings");
@@ -358,7 +357,7 @@ namespace InitWCFAsyncQueryableServicesServer
                 XElement serviceModel = webConfig.Element("system.serviceModel");
                 if (serviceModel == null)
                 {
-                    webConfig.Add(serviceModel = XElement.Parse(XElement.Load(Path.Combine(customToolsProjectPath, "Web.config")).Element("system.serviceModel").ToString().Replace("$AssemblyName$", assemblyName).Replace("$AssemblyVersion$", assemblyVersion)));
+                    webConfig.Add(serviceModel = XElement.Parse(XElement.Load(Path.Combine(toolsPath, "Web.config")).Element("system.serviceModel").ToString().Replace("$AssemblyName$", assemblyName).Replace("$AssemblyVersion$", assemblyVersion)));
                 }
 
                 string service = string.Format("<service behaviorConfiguration=\"WCFAsyncQueryableServicesServiceBehavior\" name=\"{0}.{1}WCFService\"><endpoint behaviorConfiguration=\"WCFAsyncQueryableServicesEndpointBehavior\" address=\"\" binding=\"customBinding\" bindingConfiguration=\"HttpBinaryBinding\" contract=\"{0}.Contract.I{1}WCFService\"/></service>", wcfServiceNamespace, edmxName);
@@ -377,12 +376,12 @@ namespace InitWCFAsyncQueryableServicesServer
             webConfig.Save(webConfigFilePath);
         }
 
-        private static void WriteAppGlobal(string edmxPath, string edmxName, string edmxProjectPath, string projectDirectoryPath, string toolsPath, string customToolsProjectPath, string rootNamespace, string assemblyName, string assemblyVersion, string templateConfigPath, bool addGlobalService)
+        private static void WriteAppGlobal(string edmxPath, string edmxName, string edmxProjectPath, string projectDirectoryPath, string toolsPath, string rootNamespace, string assemblyName, string assemblyVersion, string templateConfigPath, bool addGlobalService)
         {
             string appConfigFilePath = Path.Combine(projectDirectoryPath, "App.config");
 
             if (!File.Exists(appConfigFilePath))
-                CopyFile(Path.Combine(customToolsProjectPath, "App.config"), appConfigFilePath, new[] { "$AssemblyName$", assemblyName }, new[] { "$AssemblyVersion$", assemblyVersion });
+                CopyFile(Path.Combine(toolsPath, "App.config"), appConfigFilePath, new[] { "$AssemblyName$", assemblyName }, new[] { "$AssemblyVersion$", assemblyVersion });
 
             XElement appConfig = XElement.Load(appConfigFilePath);
             XElement connectionStrings = appConfig.Element("connectionStrings");

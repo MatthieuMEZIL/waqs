@@ -1,15 +1,31 @@
-﻿using System;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Roslyn.Compilers.Common;
-using Roslyn.Compilers.CSharp;
+using ISemanticModel = Microsoft.CodeAnalysis.SemanticModel;
+using MethodSymbol = Microsoft.CodeAnalysis.IMethodSymbol;
+using PropertySymbol = Microsoft.CodeAnalysis.IPropertySymbol;
+using SyntaxVisitor = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxVisitor;
+using ParameterSymbol = Microsoft.CodeAnalysis.IParameterSymbol;
+using TypeSymbol = Microsoft.CodeAnalysis.ITypeSymbol;
 
 namespace TestsDependences
 {
+    public enum RoslynSyntaxKind
+    {
+        AssignExpression = SyntaxKind.SimpleAssignmentExpression,
+        AddAssignExpression = SyntaxKind.AddAssignmentExpression,
+        SubtractAssignExpression = SyntaxKind.SubtractAssignmentExpression,
+        MultiplyAssignExpression = SyntaxKind.MultiplyAssignmentExpression,
+        DivideAssignExpression = SyntaxKind.DivideAssignmentExpression,
+        ModuloAssignExpression = SyntaxKind.ModuloAssignmentExpression,
+        AsExpression = SyntaxKind.AsExpression
+    }
+
     partial class GetMembersVisitor : SyntaxVisitor
     {
         private const int MaxFailed = 50;
@@ -18,8 +34,8 @@ namespace TestsDependences
         private ISemanticModel _semanticModel;
         private SpecificationsElements _specificationsElements;
         private string _serverFxDALInterfacesNamespace;
-        private Dictionary<MethodDeclarationSyntax, ISemanticModel> _semanticModelPerMethods;
-        private Dictionary<string, MethodDeclarationSyntax> _methodPerMethodSymbols;
+        private ConcurrentDictionary<MethodDeclarationSyntax, ISemanticModel> _semanticModelPerMethods;
+        private ConcurrentDictionary<string, MethodDeclarationSyntax> _methodPerMethodSymbols;
         private List<MethodDeclarationSyntax> _extensionMethods;
         private Dictionary<string, List<MethodDeclarationSyntax>> _getMethods;
         private Dictionary<string, PropertyDependence> _variables;
@@ -34,8 +50,8 @@ namespace TestsDependences
 
         public GetMembersVisitor(ISemanticModel semanticModel, SpecificationsElements specificationsElements,
             MethodSymbol methodSymbol, string variableName, string serverFxDALInterfacesNamespace,
-            Dictionary<MethodDeclarationSyntax, ISemanticModel> semanticModelPerMethods,
-            Dictionary<string, MethodDeclarationSyntax> methodPerMethodSymbols,
+            ConcurrentDictionary<MethodDeclarationSyntax, ISemanticModel> semanticModelPerMethods,
+            ConcurrentDictionary<string, MethodDeclarationSyntax> methodPerMethodSymbols,
             Dictionary<string, List<MethodDeclarationSyntax>> getMethods, List<MethodDeclarationSyntax> extensionMethods)
             : this(
                 semanticModel, specificationsElements, serverFxDALInterfacesNamespace, semanticModelPerMethods,
@@ -48,8 +64,8 @@ namespace TestsDependences
 
         public GetMembersVisitor(ISemanticModel semanticModel, SpecificationsElements specificationsElements,
             MethodSymbol methodSymbol, string serverFxDALInterfacesNamespace,
-            Dictionary<MethodDeclarationSyntax, ISemanticModel> semanticModelPerMethods,
-            Dictionary<string, MethodDeclarationSyntax> methodPerMethodSymbols,
+            ConcurrentDictionary<MethodDeclarationSyntax, ISemanticModel> semanticModelPerMethods,
+            ConcurrentDictionary<string, MethodDeclarationSyntax> methodPerMethodSymbols,
             Dictionary<string, List<MethodDeclarationSyntax>> getMethods, List<MethodDeclarationSyntax> extensionMethods)
             : this(
                 semanticModel, specificationsElements, serverFxDALInterfacesNamespace, semanticModelPerMethods,
@@ -74,8 +90,8 @@ namespace TestsDependences
 
         private GetMembersVisitor(ISemanticModel semanticModel, SpecificationsElements specificationsElements,
             string serverFxDALInterfacesNamespace,
-            Dictionary<MethodDeclarationSyntax, ISemanticModel> semanticModelPerMethods,
-            Dictionary<string, MethodDeclarationSyntax> methodPerMethodSymbols,
+            ConcurrentDictionary<MethodDeclarationSyntax, ISemanticModel> semanticModelPerMethods,
+            ConcurrentDictionary<string, MethodDeclarationSyntax> methodPerMethodSymbols,
             Dictionary<string, List<MethodDeclarationSyntax>> getMethods, List<MethodDeclarationSyntax> extensionMethods,
             Dictionary<string, PropertyDependence> variables, Dictionary<string, int> fromVariables,
             int linqIndex, List<MethodSymbol> alreadyCalledMethods, bool definePropertyDependences, int failed = 0)
@@ -260,12 +276,12 @@ namespace TestsDependences
                 _properties.Last = _properties.Last;
                 foreach (var m in node.Initializer.Expressions)
                 {
-                    var binary = m as BinaryExpressionSyntax;
-                    if (binary != null && binary.Kind == SyntaxKind.AssignExpression)
+                    var assignment = m as AssignmentExpressionSyntax;
+                    if (IsAssignExpression(GetKind(assignment)))
                     {
                         var initializerVisitor = new GetMembersVisitor(this);
-                        initializerVisitor.Visit(binary.Right);
-                        var propertyName = ((IdentifierNameSyntax)binary.Left).Identifier.ValueText;
+                        initializerVisitor.Visit(assignment.Right);
+                        var propertyName = ((IdentifierNameSyntax)assignment.Left).Identifier.ValueText;
                         if (_properties.PropertiesDependences.ContainsKey(propertyName))
                             _properties.PropertiesDependences[propertyName] = initializerVisitor._properties;
                         else
@@ -334,6 +350,17 @@ namespace TestsDependences
             if (propertySymbol == null)
                 return;
             bool systemProperty = propertySymbol.ContainingType.ContainingNamespace != null && propertySymbol.ContainingType.ContainingNamespace.ToString().StartsWith("System");
+            if (systemProperty)
+            {
+                switch (propertySymbol.ContainingType.ConstructedFrom.ToString())
+                {
+                    case "System.Collections.Generic.KeyValuePair<TKey, TValue>":
+                        _properties.Error = true;
+                        _properties.Last.Error = true;
+                        _proceed = true;
+                        return;
+                }
+            }
 
             Action applyOnParameter = () =>
             {
@@ -350,16 +377,17 @@ namespace TestsDependences
                     }
                 }
                 if (systemProperty)
+                {
+                    _proceed = true;
                     return;
+                }
                 if (knownVariable)
                 {
                     if (variableProperties == null || variableProperties.Last.Dependences.Count == 0)
-                        AddProperty(new List<PropertySymbolInfo>() { propertySymbol });
+                        AddProperty(new List<PropertySymbolInfo>() { PropertySymbolInfo.Get(propertySymbol) });
                     else
-                    {
                         foreach (var dp in variableProperties.Last.Dependences)
-                            AddProperty(new List<PropertySymbolInfo>(dp) { propertySymbol });
-                    }
+                            AddProperty(new List<PropertySymbolInfo>(dp) { PropertySymbolInfo.Get(propertySymbol) });
                     _proceed = true;
                 }
             };
@@ -389,14 +417,17 @@ namespace TestsDependences
                     return;
                 }
                 if (systemProperty)
+                {
+                    _proceed = true;
                     return;
+                }
                 if (membersVisitor._properties.Dependences.Count != 0 || membersVisitor._properties.PropertiesDependences.Count != 0)
                 {
                     var dependencesList = new List<List<PropertySymbolInfo>>();
                     foreach (var pd in membersVisitor._properties.Last.Dependences)
                     {
                         var dependences = new List<PropertySymbolInfo>(pd);
-                        dependences.Add(propertySymbol);
+                        dependences.Add(PropertySymbolInfo.Get(propertySymbol));
                         AddProperty(dependences);
                         dependencesList.Add(dependences);
                     }
@@ -409,12 +440,11 @@ namespace TestsDependences
         public override void VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var methodSymbol = (MethodSymbol)_semanticModel.GetSymbolInfo(node).Symbol;
-            if (!(methodSymbol.IsStatic || SpecificationEquivalentMethod.GetSpecificationEquivalentMethod(_specificationsElements, ref methodSymbol, _semanticModelPerMethods, _extensionMethods) || methodSymbol.ContainingNamespace.ToString() == "System.Linq"))
+            if (methodSymbol == null || !(methodSymbol.IsStatic || _specificationsElements.GetSpecificationEquivalentMethod(ref methodSymbol) || methodSymbol.ContainingNamespace.ToString() == "System.Linq"))
                 return;
             var argumentExpressions = node.ArgumentList.Arguments.Select(a => a.Expression).ToList();
             var memberAccessExpression = node.Expression as MemberAccessExpressionSyntax;
-            if (memberAccessExpression != null &&
-                (_semanticModel.GetSymbolInfo(memberAccessExpression.Expression).Symbol as ITypeSymbol) == null)
+            if (memberAccessExpression != null && (_semanticModel.GetSymbolInfo(memberAccessExpression.Expression).Symbol as ITypeSymbol) == null)
                 argumentExpressions.Insert(0, memberAccessExpression.Expression);
             string methodSymbolString = methodSymbol.ToString();
             MethodDeclarationSyntax method;
@@ -434,8 +464,8 @@ namespace TestsDependences
                     AddProperties(membersVisitor._properties);
                     AddProperty(new List<PropertySymbolInfo>(LastOrDefault(membersVisitor._properties.Dependences))
                     {
-                        new PropertySymbolInfo(methodSymbol.ReturnType,
-                            SpecificationMethods.GetPropertyNameFromMethod(method), methodSymbol.Parameters[0].Type,
+                        new PropertySymbolInfo(TypeSymbolInfo.Get(methodSymbol.ReturnType),
+                            SpecificationMethods.GetPropertyNameFromMethod(method), TypeSymbolInfo.Get(methodSymbol.Parameters[0].Type),
                             method)
                     });
                 }
@@ -461,7 +491,7 @@ namespace TestsDependences
                         membersVisitor._returnProperties = new PropertyDependence();
                         membersVisitor.Visit(method.Body);
                         AddProperties(membersVisitor._properties);
-                        if (! (membersVisitor._returnProperties.Dependences.Count == 0 && membersVisitor._returnProperties.PropertiesDependences.Count == 0))
+                        if (!(membersVisitor._returnProperties.Dependences.Count == 0 && membersVisitor._returnProperties.PropertiesDependences.Count == 0))
                             _properties.Last = membersVisitor._returnProperties;
                         _proceed = true;
                     }
@@ -674,7 +704,7 @@ namespace TestsDependences
                     AddProperties(getInitializerMembersVisitor._properties);
                 }
                 else
-                    initializerProperties = new PropertyDependence {ParameterSymbol = parameter};
+                    initializerProperties = new PropertyDependence { ParameterSymbol = parameter };
             }
             _variables.Add(node.Identifier.ValueText, initializerProperties);
             _proceed = true;
@@ -692,21 +722,21 @@ namespace TestsDependences
             if (variable != null)
             {
                 var variableName = variable.Identifier.ValueText;
-                switch (node.Kind)
+                switch ((RoslynSyntaxKind)GetKind(node))
                 {
-                    case SyntaxKind.AssignExpression:
+                    case RoslynSyntaxKind.AssignExpression:
                         PropertyDependence rightProperties;
-                        if (_variables.TryGetValue(variableName, out rightProperties))
+                        if (_variables.TryGetValue(variableName, out rightProperties) && rightProperties != null)
                         {
                             rightProperties.Dependences.Clear();
                             rightProperties.PropertiesDependences.Clear();
                         }
-                        goto case SyntaxKind.AddAssignExpression;
-                    case SyntaxKind.AddAssignExpression:
-                    case SyntaxKind.SubtractAssignExpression:
-                    case SyntaxKind.MultiplyAssignExpression:
-                    case SyntaxKind.DivideAssignExpression:
-                    case SyntaxKind.ModuloAssignExpression:
+                        goto case RoslynSyntaxKind.AddAssignExpression;
+                    case RoslynSyntaxKind.AddAssignExpression:
+                    case RoslynSyntaxKind.SubtractAssignExpression:
+                    case RoslynSyntaxKind.MultiplyAssignExpression:
+                    case RoslynSyntaxKind.DivideAssignExpression:
+                    case RoslynSyntaxKind.ModuloAssignExpression:
                         var getRightMembersVisitor = new GetMembersVisitor(this);
                         getRightMembersVisitor.Visit(node.Right);
                         AddProperties(getRightMembersVisitor._properties);
@@ -714,7 +744,7 @@ namespace TestsDependences
                             AddProperties(getRightMembersVisitor._properties, rightProperties);
                         _proceed = true;
                         break;
-                    case SyntaxKind.AsExpression:
+                    case RoslynSyntaxKind.AsExpression:
                         var parameter = _semanticModel.GetSymbolInfo(variable).Symbol as ParameterSymbol;
                         if (parameter != null)
                         {
@@ -725,7 +755,7 @@ namespace TestsDependences
                 }
             }
             if (!_proceed)
-                switch (node.Kind)
+                switch (GetKind(node))
                 {
                     case SyntaxKind.AsExpression:
                         Visit(node.Left);
@@ -766,6 +796,13 @@ namespace TestsDependences
             _proceed = true;
         }
 
+        //public override void VisitConditionalAccessExpression(ConditionalAccessExpressionSyntax node)
+        //{
+        //    Visit(node.Expression);
+        //    Visit(node.WhenNotNull); // apply on Last
+        //    _proceed = true;
+        //}
+
         private List<PropertySymbolInfo> LastOrDefault(List<List<PropertySymbolInfo>> properties)
         {
             return properties == null
@@ -797,11 +834,7 @@ namespace TestsDependences
                 {
                     List<string> classes;
                     TypeSymbol typeSymbol;
-                    if (
-                        _specificationsElements.ClassesPerInterfaces.TryGetValue(p.ContainingType.FullName, out classes) &&
-                        (typeSymbol =
-                            _specificationsElements.TypeSymbols.FirstOrDefault(ts => ts.Name == classes.Single())) !=
-                        null)
+                    if (_specificationsElements.ClassesPerInterfaces.TryGetValue(p.ContainingType.FullName, out classes) && _specificationsElements.TypeSymbols.TryGetValue(classes.Single(), out typeSymbol))
                     {
                         var propertySymbol = (PropertySymbol)typeSymbol.GetMembers(p.Name).FirstOrDefault();
                         if (propertySymbol != null)
@@ -827,6 +860,11 @@ namespace TestsDependences
         {
             if (properties == null)
                 properties = _properties;
+            if (addedProperties.Error || properties.Error)
+            {
+                properties.Error = true;
+                return;
+            }
             AddProperties(addedProperties.Dependences, properties.Dependences);
             foreach (var addedPropertyDependences in addedProperties.PropertiesDependences)
             {

@@ -1,13 +1,39 @@
-﻿using System;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Roslyn.Compilers.Common;
-using Roslyn.Compilers.CSharp;
+using MethodSymbol = Microsoft.CodeAnalysis.IMethodSymbol;
+using PropertySymbol = Microsoft.CodeAnalysis.IPropertySymbol;
+using TypeSymbol = Microsoft.CodeAnalysis.ITypeSymbol;
+using ISemanticModel = Microsoft.CodeAnalysis.SemanticModel;
 
 namespace TestsDependences
 {
+    partial class GetMembersVisitor
+    {
+        public static SyntaxKind GetKind(CSharpSyntaxNode node)
+        {
+            return node.CSharpKind();
+        }
+
+        public static SyntaxKind GetKind(SyntaxNode node)
+        {
+            return GetKind((CSharpSyntaxNode)node);
+        }
+
+        public static SyntaxKind GetKind(SyntaxToken node)
+        {
+            return node.CSharpKind();
+        }
+
+        public static bool IsAssignExpression(SyntaxKind kind)
+        {
+            return kind == SyntaxKind.SimpleAssignmentExpression;
+        }
+    }
+
     public class PropertySymbolInfo
     {
         private PropertySymbol _propertySymbol;
@@ -40,14 +66,9 @@ namespace TestsDependences
             return Name;
         }
 
-        public static implicit operator PropertySymbolInfo(PropertySymbol propertySymbol)
+        public static PropertySymbolInfo Get(PropertySymbol propertySymbol)
         {
             return new PropertySymbolInfo(propertySymbol);
-        }
-
-        public static implicit operator PropertySymbol(PropertySymbolInfo propertySymbolInfo)
-        {
-            return propertySymbolInfo._propertySymbol;
         }
     }
 
@@ -90,7 +111,7 @@ namespace TestsDependences
             if (transformType != null)
                 type = transformType(type);
             var namedTypeSymbol = type as INamedTypeSymbol;
-            if (namedTypeSymbol == null || namedTypeSymbol.TypeArguments.Count == 0)
+            if (namedTypeSymbol == null || ! namedTypeSymbol.TypeArguments.Any())
                 return type.Name;
             return string.Concat(type.Name, "<",
                 namedTypeSymbol.TypeArguments.OfType<TypeSymbol>()
@@ -109,14 +130,27 @@ namespace TestsDependences
             return FullName;
         }
 
-        public static implicit operator TypeSymbolInfo(TypeSymbol typeSymbol)
+        public static TypeSymbolInfo Get(TypeSymbol typeSymbol)
         {
             return new TypeSymbolInfo(typeSymbol);
         }
 
-        public static implicit operator TypeSymbol(TypeSymbolInfo typeSymbolInfo)
+        public bool IsAssignableFrom(TypeSymbolInfo typeSymbolInfo)
         {
-            return typeSymbolInfo._typeSymbol;
+            var typeSymbolString = _typeSymbol.ToString();
+            for (var typeSymbolLoop = typeSymbolInfo._typeSymbol; typeSymbolLoop != null; typeSymbolLoop = typeSymbolLoop.BaseType)
+            {
+                if (typeSymbolLoop.ToString() == typeSymbolString)
+                    return true;
+
+                var typeSymbolLoopString = typeSymbolLoop.ToString();
+
+                if (typeSymbolLoop.GetMembers().OfType<IMethodSymbol>().Where(m => m.Name == "op_Implicit" || m.Name == "op_Explicit").Any(op => op.ReturnType.ToString() == typeSymbolString) || _typeSymbol.GetMembers().OfType<IMethodSymbol>().Where(m => m.Name == "op_Implicit" || m.Name == "op_Explicit").Any(op => op.ReturnType.ToString() == typeSymbolLoopString))
+                    return true;
+            }
+            if (typeSymbolInfo._typeSymbol.AllInterfaces.Any(i => i.ToString() == typeSymbolString))
+                return true;
+            return false;
         }
     }
 
@@ -129,14 +163,18 @@ namespace TestsDependences
 
         public static string GetPropertyNameFromMethod(MethodDeclarationSyntax method)
         {
-            return SpecificationMethods.GetPropertyNameFromMethod(method);
+            return method.Identifier.ValueText.Substring(3);
         }
     }
 
     public class SpecificationsElements
     {
         public Dictionary<string, List<string>> ClassesPerInterfaces = new Dictionary<string, List<string>>();
-        public List<TypeSymbol> TypeSymbols = new List<TypeSymbol>();
+        public Dictionary<string, TypeSymbol> TypeSymbols = new Dictionary<string, TypeSymbol>();
+        public bool GetSpecificationEquivalentMethod(ref MethodSymbol methodSymbol, List<TypeSymbol> argumentTypes = null)
+        {
+            return false;
+        }
     }
 
     public class SpecificationEquivalentMethod
