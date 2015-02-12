@@ -379,7 +379,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
         if (manyResult)
         {
             if (query.SerializableType.IsKnownByServer && genericIndex == 0)
-                queryResult.Values = (object[])typeof(<#=edmxName #>Service).GetMethod("GetBaseTypeToArray", BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(<#=edmxName #>SerializableExpressionConverter.Get<#=edmxName #>BaseType(queryType) ?? queryType).Invoke(null, new object[] { result });
+                queryResult.Values = typeof(<#=edmxName #>Service).GetMethod("GetBaseTypeToArray", BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(<#=edmxName #>SerializableExpressionConverter.Get<#=edmxName #>BaseType(queryType) ?? queryType).Invoke(null, new object[] { result });
             else
                 queryResult.Records = ((IEnumerable)result).Cast<object>().Select(o => GetQueryResult(queryType, o)).ToList();
         }
