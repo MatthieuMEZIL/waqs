@@ -27,3 +27,10 @@
 /TestsDependences/TestsDependences.sln.ide
 
 /New-NuGetPackages
+/NuGet Programs/.vs/WAQSNuGetPrograms/vbcs.cache
+/TestsDependences/.vs/TestsDependences/vbcs.cache
+/NuGet Programs/InitWCFAsyncQueryableServicesServerMock/InitWCFAsyncQueryableServicesServerMock.csproj.user
+/NuGet Programs/InitWCFAsyncQueryableServicesClientWPFGlobal/InitWCFAsyncQueryableServicesClientWPFGlobal.csproj.user
+/NuGet Programs/InitWCFAsyncQueryableServicesClientWPF/InitWCFAsyncQueryableServicesClientWPF.csproj.user
+/NuGet Programs/InitWCFAsyncQueryableServicesClientPCL/InitWCFAsyncQueryableServicesClientPCL.csproj.user
+/NuGet Programs/InitViewModel/InitViewModel.csproj.user
