@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>WCFAsyncQueryableServices.Client.PCL</id>
-    <version>1.9.2.13</version>
+    <version>1.9.2.14</version>
     <authors>Matthieu MEZIL</authors>
     <owners>Matthieu MEZIL</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
@@ -17,7 +17,7 @@
       <dependency id="EnvDTE.Helper" version="1.0.0" />
       <dependency id="RoslynGACDeploy" version="1.0.14" />
     </dependencies>
-    <releaseNotes>Version 1.9.2.13</releaseNotes>
+    <releaseNotes>Version 1.9.2.14</releaseNotes>
   </metadata>
   <files>
     <file src="WAQS.Client\PCL\lib\**\*" target="lib" />
