@@ -1,26 +1,27 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
-    <metadata>
-        <id>WCFAsyncQueryableServices.Server.Mock</id>
-        <version>1.9.2.9</version>
-        <authors>Matthieu MEZIL</authors>
-        <owners>Matthieu MEZIL</owners>
-        <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
-        <projectUrl>https://waqs.codeplex.com/</projectUrl>
-        <requireLicenseAcceptance>true</requireLicenseAcceptance>
-        <description>https://waqs.codeplex.com/documentation</description>
-        <summary>http://msmvps.com/blogs/matthieu/archive/2014/04/14/waqs-write-your-code-faster-and-better.aspx</summary>
-        <copyright>Matthieu MEZIL</copyright>
-        <tags>WAQS</tags>
-        <dependencies>
-            <dependency id="T4.Helper" version="1.0.10" />
-            <dependency id="EnvDTE.Helper" version="1.0.0" />
-            <dependency id="RoslynGACDeploy" version="1.0.13" />
-        </dependencies>
-    </metadata>
-    <files>
-        <file src="WAQS.Server.Mock\lib\**\*" target="lib" />
-        <file src="WAQS.Server.Mock\tools\**\*" target="tools" />
-        <file src="ttincludes\**\*" target="tools\ttincludes" />
-    </files>
+  <metadata>
+    <id>WCFAsyncQueryableServices.Server.Mock</id>
+    <version>1.9.2.11</version>
+    <authors>Matthieu MEZIL</authors>
+    <owners>Matthieu MEZIL</owners>
+    <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
+    <projectUrl>https://waqs.codeplex.com/</projectUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <description>https://waqs.codeplex.com/documentation</description>
+    <summary>http://msmvps.com/blogs/matthieu/archive/2014/04/14/waqs-write-your-code-faster-and-better.aspx</summary>
+    <copyright>Matthieu MEZIL</copyright>
+    <tags>WAQS</tags>
+    <dependencies>
+      <dependency id="T4.Helper" version="1.0.10" />
+      <dependency id="EnvDTE.Helper" version="1.0.0" />
+      <dependency id="RoslynGACDeploy" version="1.0.14" />
+    </dependencies>
+    <releaseNotes>Version 1.9.2.11</releaseNotes>
+  </metadata>
+  <files>
+    <file src="WAQS.Server.Mock\lib\**\*" target="lib" />
+    <file src="WAQS.Server.Mock\tools\**\*" target="tools" />
+    <file src="ttincludes\**\*" target="tools\ttincludes" />
+  </files>
 </package>
