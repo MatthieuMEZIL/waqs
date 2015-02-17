@@ -96,10 +96,8 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
     {
         if (checkIfAlreadyExist && EntitiesContains(entity))
                 return false;
-        bool notifyCollectionChanged = false;
-        int? index = 0;
-        var entityKey = GetEntityKey(entity);
-                                   
+        bool notifyCollectionChanged = false;        
+        var entityKey = GetEntityKey(entity);                                   
         IObjectWithChangeTracker entityInEntitySet;
         if (checkIfAlreadyExist && (entityInEntitySet = Entities.Cast<IObjectWithChangeTracker>().FirstOrDefault(e => e == entity || GetEntityKey(e).Equals(entityKey))) != null && (entityInEntitySet == entity || !(entity.HasTemporaryKey && entity.ChangeTracker.State == ObjectState.Added)))
         {
@@ -109,13 +107,12 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
         }
         else
         {
-            EntitiesAdd(entity);
-            index = GetIndex(entity);
+            EntitiesAdd(entity);            
             notifyCollectionChanged = true;
         }
         entity.StateChanged += EntityStateChanged;
         if (notifyCollectionChanged)
-                NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, entity, index.Value));
+                NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, entity));
         return true;
     }
         
@@ -150,10 +147,10 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
             Detach(entity);
         else
             entity.ChangeTracker.State = ObjectState.Deleted;
-        int? index;
-        index = GetIndex(entity);
-        if (index.HasValue)
-            NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, entity, index.Value));
+        if (EntitiesContains(entity)) 
+		{
+            NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, entity));
+		}
     }
                                         
     protected virtual void RemoveCascade(IObjectWithChangeTracker entity)
@@ -166,9 +163,10 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
             entity.ChangeTracker.State = ObjectState.CascadeDeleted;
             entity.StateChanged += EntityStateChanged;
         }
-        int? index = GetIndex(entity);
-        if (index.HasValue)
-            NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, entity, index.Value));
+        if (EntitiesContains(entity)) 
+		{
+            NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, entity));
+		}
     }
                         
     private int? GetIndex(IObjectWithChangeTracker entity)
@@ -185,16 +183,17 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
                                         
     protected virtual void Detach(IObjectWithChangeTracker entity)
     {
-        entity.ChangeTracker.DetachedPreviousState = entity.ChangeTracker.State; 
-        int? index;
+        entity.ChangeTracker.DetachedPreviousState = entity.ChangeTracker.State;       
         entity.StateChanged -= EntityStateChanged;
-        index = GetIndex(entity);
+        bool hasFound = EntitiesContains(entity);
         EntitiesRemove(entity);
         entity.ChangeTracker.AcceptChanges(false);
         entity.ChangeTracker.State = ObjectState.Detached;
         entity.ChangeTracker.ChangeTrackingEnabled = false;
-        if (index.HasValue)
-            NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, entity, index.Value));
+        if (hasFound) 
+		{
+            NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Remove, entity));
+		}
     }
                                         
     void IClientEntitySet<ClientContext>.Add(IObjectWithChangeTracker entity)
