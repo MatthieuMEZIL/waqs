@@ -41,6 +41,7 @@ namespace InitWCFAsyncQueryableServicesClientWPF
                 string slnFilePath = args[argIndex++];
                 string slnTTIncludesPath = Path.Combine(Path.GetDirectoryName(slnFilePath), "WPFClientTemplates");
                 string serverEntitiesFolderPath = null;
+                string specificationsSlnFilePath = slnFilePath;
                 string specificationsCsprojPath = null;
                 string specificationsFolderPath = null;
                 string dtoSlnFilePath = null;
@@ -50,7 +51,7 @@ namespace InitWCFAsyncQueryableServicesClientWPF
 
                 if (kind == "All" || kind == "WithoutFramework" || kind == "WithoutGlobal" || kind == "WithoutGlobalWithoutFramework")
                 {
-                    dtoSlnFilePath = slnFilePath;
+                    dtoSlnFilePath = specificationsSlnFilePath;
                     specificationsCsprojPath = args[argIndex++];
                     specificationsFolderPath = args[argIndex++];
                     dtoCsprojPath = args[argIndex++];

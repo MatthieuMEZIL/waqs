@@ -26,7 +26,7 @@ namespace TestsDependences
     {
         public static SyntaxKind GetKind(CSharpSyntaxNode node)
         {
-            return node.CSharpKind();
+            return node.Kind();
         }
 
         public static SyntaxKind GetKind(SyntaxNode node)
@@ -36,7 +36,7 @@ namespace TestsDependences
 
         public static SyntaxKind GetKind(SyntaxToken node)
         {
-            return node.CSharpKind();
+            return node.Kind();
         }
 
         public static bool IsAssignExpression(SyntaxKind kind)
