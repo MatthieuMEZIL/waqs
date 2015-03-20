@@ -1,0 +1,3 @@
+﻿// Register the Include path for T4 Templates 
+[$RootKey$\TextTemplating\IncludeFolders\.tt]
+"Include18111981-0AEE-0AEE-0AEE-181119810AEE"="$RootFolder$Common7\IDE\Extensions\WCF Async Queryable Services\Templates\Includes\"

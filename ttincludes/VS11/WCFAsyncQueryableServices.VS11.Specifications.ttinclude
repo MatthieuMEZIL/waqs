@@ -83,4 +83,9 @@
 	{
 		return t;
 	}
+
+	public static TypeKind TypeKindArrayType
+	{
+		get { return TypeKind.ArrayType; }
+	}
 #>

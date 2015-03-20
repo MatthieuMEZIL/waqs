@@ -118,4 +118,9 @@
 	{
 		return SyntaxFactory.SimpleBaseType(t);
 	}
+
+	public static TypeKind TypeKindArrayType
+	{
+		get { return TypeKind.Array; }
+	}
 #>

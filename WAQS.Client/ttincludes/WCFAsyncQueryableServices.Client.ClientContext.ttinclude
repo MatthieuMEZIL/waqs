@@ -2834,7 +2834,7 @@ while (dtoTypeLoop != null)
 {
     foreach (var property in dtoTypeLoop.GetMembers().OfType<PropertySymbol>())
     {
-        if (property.Type.TypeKind != TypeKind.ArrayType)
+        if (property.Type.TypeKind != TypeKindArrayType)
         {
             if (property.Type.ContainingNamespace.ToString() == serverEntitiesNamespace && entityTypesName.Contains(property.Type.Name))
             {
