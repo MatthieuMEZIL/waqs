@@ -220,7 +220,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Resources\Package.ico" />
-    <Content Include="WAQS.pkgdef">
+    <Content Include="WAQSKey.pkgdef">
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
     <None Include="Service References\NuGetOData\Reference.datasvcmap">
