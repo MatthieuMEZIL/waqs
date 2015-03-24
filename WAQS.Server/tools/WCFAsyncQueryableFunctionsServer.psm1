@@ -126,7 +126,7 @@ function WAQSServerInternal($edmxPath, $kind, $appKind, $netVersion, $sourceCont
     	Install-Package Unity -Version 3.0.1304.1
     	Install-Package CommonServiceLocator -Version 1.2.0
 	}
-	Install-Package EntityFramework -Version 6.1.2
+	Install-Package EntityFramework -Version 6.1.3
 	
 	try
 	{

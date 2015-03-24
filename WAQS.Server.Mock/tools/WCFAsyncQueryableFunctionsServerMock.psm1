@@ -106,7 +106,7 @@ function WAQSServerMockInternal($edmxPath, $kind, $sourceControl, $netVersion, $
 		$waqsDirectory = Join-Path $projectDirectoryPath ("WAQS" + "." + $edmxName)
 	}
 
-    Install-Package EntityFramework -Version 6.1.2
+    Install-Package EntityFramework -Version 6.1.3
 	
 	try
 	{
