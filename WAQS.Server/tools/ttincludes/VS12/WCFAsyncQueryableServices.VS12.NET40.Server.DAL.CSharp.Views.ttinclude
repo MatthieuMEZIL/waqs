@@ -1,4 +1,0 @@
-<#@ include file="WCFAsyncQueryableServices.VS12.Server.DAL.CSharp.Views.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

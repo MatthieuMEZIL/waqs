@@ -1,4 +1,0 @@
-<#@ include file="WCFAsyncQueryableServices.VS12.Server.Service.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

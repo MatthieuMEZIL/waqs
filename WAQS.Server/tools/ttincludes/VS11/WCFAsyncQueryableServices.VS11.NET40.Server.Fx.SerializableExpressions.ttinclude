@@ -1,4 +1,0 @@
-<#@ include file="WCFAsyncQueryableServices.VS11.Server.Fx.SerializableExpressions.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

@@ -1,1 +1,1 @@
-﻿<%@ ServiceHost Language="C#" Factory="WCFAsyncQueryableServices.WCFService.WCFUnityServiceHostFactory" Service="$WCFServiceNamespace$.$edmxName$WCFService" %>
+<%@ ServiceHost Language="C#" Factory="WAQS.WCFService.WCFUnityServiceHostFactory" Service="$WCFServiceNamespace$.$edmxName$WCFService" %>

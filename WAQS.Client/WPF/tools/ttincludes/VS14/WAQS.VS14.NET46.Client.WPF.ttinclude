@@ -1,0 +1,6 @@
+<#@ include file="WAQS.VS14.Client.WPF.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string netVersion = "NET46";
+#>

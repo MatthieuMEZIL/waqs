@@ -1,0 +1,19 @@
+<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011">
+  <Metadata>
+    <Identity Id="5ad58966-3cff-4af7-9009-15e13cfb963a" Version="2.0" Language="en-US" Publisher="WAQS" />
+    <DisplayName>WAQS</DisplayName>
+    <Description>If you develop a C# data centric software, WAQS is a very useful technology that improves a lot productivity, maintainability, code readability and reliability.</Description>
+    <MoreInfo>https://github.com/MatthieuMEZIL/waqs</MoreInfo>
+  </Metadata>
+  <Installation InstalledByMsi="false">
+    <InstallationTarget Version="[14.0,15.0)" Id="Microsoft.VisualStudio.Community" />
+  </Installation>
+  <Dependencies>
+    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" Version="[4.5,)" />
+    <Dependency Id="Microsoft.VisualStudio.MPF.14.0" DisplayName="Visual Studio MPF 14.0" Version="[14.0]" />
+  </Dependencies>
+  <Assets>
+    <Asset Type="Microsoft.VisualStudio.VsPackage" Path="WAQS.pkgdef" />
+    <Asset Type="Microsoft.VisualStudio.VsPackage" Path="WAQS.pkgdef" />
+  </Assets>
+</PackageManifest>

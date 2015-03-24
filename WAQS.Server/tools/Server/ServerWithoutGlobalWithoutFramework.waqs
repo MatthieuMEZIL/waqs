@@ -1,5 +1,5 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
-<WCFAsyncQueryableServices.Server EdmxPath="$edmxPath$">
+<?xml version="1.0" encoding="utf-8" ?>
+<WAQS.Server EdmxPath="$edmxPath$">
   <Specifications>
     <Specification SlnFilePath="$SpecificationsSlnFilePath$" CsprojPath="$SpecificationsCsprojPath$" FolderPath="$SpecificationsFolderPath$" />
   </Specifications>
@@ -14,15 +14,15 @@
   <WCFService />
   <WCFServiceContract />
   <Framework>
-    <Common NamespaceName="WCFAsyncQueryableServices.Common" Generate="false" />
-    <Specifications NamespaceName="WCFAsyncQueryableServices.Specifications" Generate="false" />
-    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="false" />
-    <DAL NamespaceName="WCFAsyncQueryableServices.DAL" Generate="false" />
-    <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" Generate="false" />
-    <Expressions NamespaceName="WCFAsyncQueryableServices.SerializableExpressions" Generate="false" />
-    <Service NamespaceName="WCFAsyncQueryableServices.Service" Generate="false" />
-    <ServiceInterfaces NamespaceName="WCFAsyncQueryableServices.Service.Interfaces" Generate="false" />
-    <WCFService NamespaceName="WCFAsyncQueryableServices.WCFService" Generate="false" />
-    <WCFServiceContract NamespaceName="WCFAsyncQueryableServices.WCFService.Contract" Generate="false" />
+    <Common NamespaceName="WAQS.Common" Generate="false" />
+    <Specifications NamespaceName="WAQS.Specifications" Generate="false" />
+    <Entities NamespaceName="WAQS.Entities" Generate="false" />
+    <DAL NamespaceName="WAQS.DAL" Generate="false" />
+    <DALInterfaces NamespaceName="WAQS.DAL.Interfaces" Generate="false" />
+    <Expressions NamespaceName="WAQS.SerializableExpressions" Generate="false" />
+    <Service NamespaceName="WAQS.Service" Generate="false" />
+    <ServiceInterfaces NamespaceName="WAQS.Service.Interfaces" Generate="false" />
+    <WCFService NamespaceName="WAQS.WCFService" Generate="false" />
+    <WCFServiceContract NamespaceName="WAQS.WCFService.Contract" Generate="false" />
   </Framework>
-</WCFAsyncQueryableServices.Server>
+</WAQS.Server>

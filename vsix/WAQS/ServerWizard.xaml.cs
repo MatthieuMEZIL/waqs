@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio;
+using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.VisualStudio;
 using System;
@@ -80,8 +80,8 @@ namespace WAQS
         {
             try
             {
-                var lastVersion = new V2FeedContext(new Uri("http://www.nuget.org/api/v2/")).Execute<V2FeedPackage>(new Uri("http://www.nuget.org/api/v2/Packages?$filter=IsAbsoluteLatestVersion and Id eq 'WCFAsyncQueryableServices.Server'&$skip=0&$top=1&$select=Id,Version&targetFramework=&includePrerelease=true")).Single().Version;
-                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "WCFAsyncQueryableServices.Server", lastVersion, false);
+                var lastVersion = new V2FeedContext(new Uri("http://www.nuget.org/api/v2/")).Execute<V2FeedPackage>(new Uri("http://www.nuget.org/api/v2/Packages?$filter=IsAbsoluteLatestVersion and Id eq 'WAQS.Server'&$skip=0&$top=1&$select=Id,Version&targetFramework=&includePrerelease=true")).Single().Version;
+                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "WAQS.Server", lastVersion, false);
 
                 var edmxPath = edmx.SelectedValue as string;
                 var appKind = _project.Properties.Cast<EnvDTE.Property>().Any(p => p.Name.StartsWith("WebApplication")) ? "Web" : "App";
@@ -119,7 +119,7 @@ namespace WAQS
                 var referencesUIHierarchyItems = projectUIHierarchyItems.Cast<EnvDTE.UIHierarchyItem>().First(uihi => uihi.Name == "References").UIHierarchyItems;
                 var referencesExpanded = referencesUIHierarchyItems.Expanded;
 
-                var toolsPath = Path.Combine(_packageInstallerServices.GetPackageLocation("WCFAsyncQueryableServices.Server"), "tools");
+                var toolsPath = Path.Combine(_packageInstallerServices.GetPackageLocation("WAQS.Server"), "tools");
                 var toolsPathServer = Path.Combine(toolsPath, "Server");
                 var defaultNamespace = _project.GetDefaultNamespace();
                 EnvDTE.Project fxProject;
@@ -219,7 +219,7 @@ namespace WAQS
                         vsVersion = "VS14";
                         break;
                 }
-                var exePath = Path.Combine(toolsPathServer, "InitWCFAsyncQueryableServicesServer.exe");
+                var exePath = Path.Combine(toolsPathServer, "InitWAQSServer.exe");
                 string specificationsFolder = null;
                 string dtoFolder = null;
                 var exeArgs = new StringBuilder("\"" + edmxPath + "\" \"" + edmxProjectPath + "\" \"" + projectDirectoryPath + "\" \"" + toolsPathServer + "\" \"" + defaultNamespace + "\" \"" + assemblyName + "\" \"" + assemblyVersion + "\" \"" + netVersion + "\" \"" + vsVersion + "\" \"" + kind.Key + "\" \"" + appKind + "\" \"" + waqsDirectory + "\" \"" + (edmxPath == null ? "" : _dte.Solution.FindProjectItem(edmxPath).ContainingProject.ProjectItems.Cast<EnvDTE.ProjectItem>().FirstOrDefault(pi => pi.Name == "App.Config")?.GetFilePath()) + "\" " + (copyTemplates.IsChecked == true ? "WithSourceControl" : "WithoutSourceControl") + " \"" + _dte.Solution.FullName + "\" WCF");

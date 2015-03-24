@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio;
+using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.VisualStudio;
 using System;
@@ -98,8 +98,8 @@ namespace WAQS
         {
             try
             {
-                var lastVersion = new V2FeedContext(new Uri("http://www.nuget.org/api/v2/")).Execute<V2FeedPackage>(new Uri("http://www.nuget.org/api/v2/Packages?$filter=IsAbsoluteLatestVersion and Id eq 'WCFAsyncQueryableServices.Client." + _clientKind + "'&$skip=0&$top=1&$select=Id,Version&targetFramework=&includePrerelease=true")).Single().Version;
-                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "WCFAsyncQueryableServices.Client." + _clientKind, lastVersion, false);
+                var lastVersion = new V2FeedContext(new Uri("http://www.nuget.org/api/v2/")).Execute<V2FeedPackage>(new Uri("http://www.nuget.org/api/v2/Packages?$filter=IsAbsoluteLatestVersion and Id eq 'WAQS.Client." + _clientKind + "'&$skip=0&$top=1&$select=Id,Version&targetFramework=&includePrerelease=true")).Single().Version;
+                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "WAQS.Client." + _clientKind, lastVersion, false);
 
                 var edmxPath = edmx.SelectedValue as string;
                 var servicePath = service.SelectedValue as string;
@@ -142,7 +142,7 @@ namespace WAQS
                 var referencesUIHierarchyItems = projectUIHierarchyItems.Cast<EnvDTE.UIHierarchyItem>().FirstOrDefault(uihi => uihi.Name == "References")?.UIHierarchyItems;
                 var referencesExpanded = referencesUIHierarchyItems?.Expanded ?? false;
 
-                var toolsPath = Path.Combine(_packageInstallerServices.GetPackageLocation("WCFAsyncQueryableServices.Client." + _clientKind), "tools");
+                var toolsPath = Path.Combine(_packageInstallerServices.GetPackageLocation("WAQS.Client." + _clientKind), "tools");
                 var clientToolsPath = Path.Combine(toolsPath, "Client." + _clientKind);
                 var defaultNamespace = _project.GetDefaultNamespace();
                 var references = ((VSProject)_project.Object).References;
@@ -269,7 +269,7 @@ namespace WAQS
                     }
                 }
 
-                var exePath = Path.Combine(clientToolsPath, "InitWCFAsyncQueryableServicesClient" + _clientKind + ".exe");
+                var exePath = Path.Combine(clientToolsPath, "InitWAQSClient" + _clientKind + ".exe");
                 var exeArgs = new StringBuilder("\"" + edmxPath + "\" \"" + (_clientKind == GenerationOptions.WPF ? projectDirectoryPath + "\" \"" : "") + clientToolsPath + "\" \"" + defaultNamespace + "\" \"" + svcUrl + "\" \"" + waqsDirectory + "\" \"" + waqsGeneralDirectory + "\" \"" + (kind.Kind == GenerationOptions.Kind.GlobalOnly ? _dte.Solution.FindProjectItem(edmxName + ".Client." + _clientKind + ".ClientContext.tt").ProjectItems.Cast<EnvDTE.ProjectItem>().FirstOrDefault(pi => pi.Name == edmxName + "ExpressionTransformer.cs")?.GetFilePath() : "") + "\" \"" + (kind.Kind == GenerationOptions.Kind.GlobalOnly ? _dte.Solution.FindProjectItem(edmxName + ".Client." + _clientKind + ".ServiceProxy.tt").ProjectItems.Cast<EnvDTE.ProjectItem>().FirstOrDefault(pi => pi.Name == "I" + edmxName + "Service.cs")?.GetFilePath() : "") + "\" \"" + (kind.Kind == GenerationOptions.Kind.GlobalOnly ? _dte.Solution.FindProjectItem(edmxName + ".Client." + _clientKind + ".Entities.tt")?.GetFirstCsFilePath() : "") + "\" \"" + (kind.Kind == GenerationOptions.Kind.GlobalOnly ? _dte.Solution.FindProjectItem(edmxName + ".Client." + _clientKind + ".ClientContext.tt").ProjectItems.Cast<EnvDTE.ProjectItem>().FirstOrDefault(pi => pi.Name == edmxName + "ClientContext.cs")?.GetFilePath() : "") + "\" \"" + (kind.Kind == GenerationOptions.Kind.GlobalOnly ? _dte.Solution.FindProjectItem(edmxName + ".Client." + _clientKind + ".ClientContext.Interfaces.tt").ProjectItems.Cast<EnvDTE.ProjectItem>().FirstOrDefault(pi => pi.Name == "I" + edmxName + "ClientContext.cs")?.GetFilePath() : "") + "\" \"" + entitiesSolutionPath + "\" \"" + entitiesProjectPath + "\" \"" + netVersion + "\" \"" + vsVersion + "\" \"" + kind.Key + "\" " + (copyTemplates.IsChecked == true ? "WithSourceControl" : "WithoutSourceControl") + " \"" + _dte.Solution.FullName + "\"");
                 if ((kind.Kind & GenerationOptions.Kind.WithoutGlobalWithoutFramework) != 0)
                 {

@@ -1,5 +1,0 @@
-<#@ include file="WCFAsyncQueryableServices.VS14.Server.DAL.ttinclude"#>
-<#@ include file="WCFAsyncQueryableServices.NET45.Server.DAL.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

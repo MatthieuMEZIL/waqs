@@ -1,0 +1,4 @@
+<#@ include file="WAQS.VS12.Server.Fx.WCFService.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

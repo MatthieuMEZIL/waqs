@@ -12,7 +12,7 @@ function Build-NuPkg([string] $nuspecFile)
 
 function Generate-SpecificationsFile()
 {
-    $file = '.\ttincludes\WCFAsyncQueryableServices.Specifications.Dependences.ttinclude'
+    $file = '.\ttincludes\WAQS.Specifications.Dependences.ttinclude'
     Write-Host -ForegroundColor Cyan  "Building '$file'"
 
     $list = New-Object "System.Collections.Generic.List``1[System.String]"

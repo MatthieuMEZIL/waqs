@@ -1,0 +1,227 @@
+<#@ template language="C#" hostspecific="True"#>
+<#@ output extension=".txt"#>
+<#@ assembly name="EnvDTE"#>
+<#@ assembly name="System.Runtime.Serialization"#>
+<#@ assembly name="System.ServiceModel"#>
+<#@ assembly name="Roslyn.Compilers"#>
+<#@ assembly name="Roslyn.Compilers.CSharp"#>
+<#@ import namespace="System"#>
+<#@ import namespace="System.CodeDom.Compiler"#>
+<#@ import namespace="System.Collections.ObjectModel"#>
+<#@ import namespace="System.Collections.Generic"#>
+<#@ import namespace="System.Diagnostics"#>
+<#@ import namespace="System.IO"#>
+<#@ import namespace="System.Linq"#>
+<#@ import namespace="System.Reflection"#>
+<#@ import namespace="System.Runtime.Serialization"#>
+<#@ import namespace="System.ServiceModel"#>
+<#@ import namespace="System.ServiceModel.Channels"#>
+<#@ import namespace="System.ServiceModel.Description"#>
+<#@ import namespace="System.Text"#>
+<#@ import namespace="System.Text.RegularExpressions"#>
+<#@ import namespace="System.Xml"#>
+<#@ import namespace="System.Xml.Linq"#>
+<#@ import namespace="Microsoft.VisualStudio.TextTemplating"#>
+<#@ import namespace="Microsoft.Silverlight.ServiceReference"#>
+<#@ import namespace="Roslyn.Compilers.CSharp"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteClientWCFServiceProxy(string servicePath, Dictionary<string, string> namespaces, string namespaceName = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion() + ".ServiceReference";
+
+	WSHttpBinding binding = new WSHttpBinding(System.ServiceModel.SecurityMode.None);
+	binding.MaxReceivedMessageSize = int.MaxValue;
+
+	CustomBinding mexBinding = new CustomBinding(binding);
+	foreach (var tmebe in mexBinding.Elements.OfType<TextMessageEncodingBindingElement>())
+	{
+		tmebe.ReaderQuotas.MaxArrayLength = int.MaxValue;
+		tmebe.ReaderQuotas.MaxBytesPerRead = int.MaxValue;
+		tmebe.ReaderQuotas.MaxDepth = int.MaxValue;
+		tmebe.ReaderQuotas.MaxNameTableCharCount = int.MaxValue;
+		tmebe.ReaderQuotas.MaxStringContentLength = int.MaxValue;
+	}
+
+	var mexClient = new MetadataExchangeClient(mexBinding);
+	mexClient.ResolveMetadataReferences = true;
+	mexClient.MaximumResolvedReferences = int.MaxValue;
+
+	EndpointAddress metadataAddress = new EndpointAddress(servicePath);
+
+	var metadata = mexClient.GetMetadata(metadataAddress.Uri, MetadataExchangeClientMode.HttpGet);
+	var metadataSet = new MetadataSet(metadata.MetadataSections);
+
+	var importer = new WsdlImporter(metadataSet);
+	var generator = new ServiceContractGenerator();
+	generator.Options = ServiceContractGenerationOptions.ChannelInterface
+		| ServiceContractGenerationOptions.AsynchronousMethods
+		| ServiceContractGenerationOptions.ClientClass
+		| ServiceContractGenerationOptions.EventBasedAsynchronousMethods
+		;
+	generator.NamespaceMappings.Add("*", namespaceName);
+	importer.State.Remove(typeof(XsdDataContractExporter));
+
+	var importer2 = new XsdDataContractImporter();
+	var options2 = new ImportOptions();
+	options2.EnableDataBinding = true;
+	options2.GenerateInternal = true;
+	options2.Namespaces.Add("*", namespaceName);
+	foreach (var ns in namespaces)
+		options2.Namespaces.Add(ns.Value, ns.Key);
+	options2.ReferencedCollectionTypes.Add(typeof(Array));
+	importer2.Options = options2;
+
+	importer.State.Add(typeof(XsdDataContractImporter), importer2);
+	Collection<ContractDescription> collection = importer.ImportAllContracts();
+	importer.ImportAllEndpoints();
+	foreach (ContractDescription description in collection)
+	{
+		generator.GenerateServiceContractType(description);
+	}
+	if (generator.Errors.Count != 0)
+	{
+		generator.Errors.ToList().ForEach(mce => Console.WriteLine("{0}: {1}", mce.IsWarning ? "Warning" : "Error", mce.Message));
+		throw new Exception("There were errors during code compilation.");
+	}
+	new WcfSilverlightCodeGenerationExtension().ClientGenerated(generator);
+	var options = new CodeGeneratorOptions();
+
+	var provider = CodeDomProvider.CreateProvider("C#");
+
+	var sb = new StringBuilder();
+	var sw = new StringWriter(sb);
+
+	using(var writer = new IndentedTextWriter(sw))
+	{
+		provider.GenerateCodeFromCompileUnit(generator.TargetCompileUnit, writer, options);
+	}
+	string value = sb.ToString();
+
+	var codeExpression = Syntax.ParseCompilationUnit(value);
+	value = GetProxyTransformationValue(namespaces, codeExpression);
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	var documentTree = Syntax.ParseCompilationUnit(value);
+	foreach (var type in new SplitClasses().Visit(documentTree))
+	{
+		fileManager.StartNewFile(type.Key + ".cs");
+		var typeValue = (CompilationUnitSyntax)type.Value;
+		var @namespace = typeValue.ChildNodes().OfType<NamespaceDeclarationSyntax>().First();
+		var @interface = @namespace.ChildNodes().OfType<InterfaceDeclarationSyntax>().FirstOrDefault();
+		if (@interface != null && @interface.BaseList == null)
+			typeValue =  typeValue.WithMembers(
+				Syntax.List(
+					typeValue.Members.Select(m => 
+						m == @namespace ? 
+						@namespace.WithMembers(
+							Syntax.List(@namespace.Members.Select(m2 => 
+								m2 == @interface ?
+								@interface.WithBaseList(
+									Syntax.BaseList(
+										Syntax.SeparatedList<TypeSyntax>(
+											Syntax.ParseTypeName("System.ServiceModel.ICommunicationObject"),
+											Syntax.Token(SyntaxKind.CommaToken),
+											Syntax.ParseTypeName("System.IDisposable")))) : 
+								m2))) :
+						m)));
+#>
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+<#=typeValue.NormalizeWhitespace().ToString()#>
+<#+
+	}
+	WriteSpecificClasses(fileManager, code, servicePath, namespaceName);
+
+	fileManager.Process();
+}
+
+class NamespaceFilter : SyntaxRewriter
+{
+	private IEnumerable<string> _knownNamespaces;
+
+	public NamespaceFilter(IEnumerable<string> knownNamespaces)
+	{
+		_knownNamespaces = knownNamespaces;
+	}
+
+	public override SyntaxNode VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
+	{
+		if (_knownNamespaces.Contains(node.Name.GetText().ToString().Trim()))
+			return null;
+		return base.VisitNamespaceDeclaration(node);
+	}
+}
+
+class SplitClasses : SyntaxVisitor<IEnumerable<KeyValuePair<string, SyntaxNode>>>
+{
+	public override IEnumerable<KeyValuePair<string, SyntaxNode>> VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
+	{
+		CompilationUnitSyntax compilationUnit = node.Parent as CompilationUnitSyntax;
+		if (compilationUnit == null)
+			throw new NotImplementedException();
+		foreach (var memberDeclaration in node.Members)
+		{
+			SyntaxToken identifier;
+			TypeDeclarationSyntax typeDeclaration = memberDeclaration as TypeDeclarationSyntax;
+			StructDeclarationSyntax structDeclaration;
+			DelegateDeclarationSyntax delegateDeclaration;
+			EnumDeclarationSyntax enumDeclaration;
+			if (typeDeclaration != null)
+				identifier = typeDeclaration.Identifier;
+			else if ((structDeclaration = memberDeclaration as StructDeclarationSyntax) != null)
+				identifier = structDeclaration.Identifier;
+			else if ((delegateDeclaration = memberDeclaration as DelegateDeclarationSyntax) != null)
+				identifier = delegateDeclaration.Identifier;
+			else if ((enumDeclaration = memberDeclaration as EnumDeclarationSyntax) != null)
+				identifier = enumDeclaration.Identifier;
+			else
+				throw new NotImplementedException();
+
+			yield return new KeyValuePair<string, SyntaxNode>(identifier.ValueText, Syntax.CompilationUnit(
+				compilationUnit.Externs, 
+				compilationUnit.Usings, 
+				compilationUnit.AttributeLists, 
+				Syntax.List<MemberDeclarationSyntax>(
+					Syntax.NamespaceDeclaration(
+						node.NamespaceKeyword, 
+						node.Name, 
+						node.OpenBraceToken,
+						node.Externs,
+						node.Usings,
+						Syntax.List<MemberDeclarationSyntax>(
+							memberDeclaration),
+						node.CloseBraceToken,
+						node.SemicolonToken)), 
+				compilationUnit.EndOfFileToken));
+		}
+	}
+
+	public override IEnumerable<KeyValuePair<string, SyntaxNode>> Visit(SyntaxNode node)
+	{
+		return base.Visit(node) ?? node.ChildNodes().SelectMany(cn => Visit(cn));
+	}
+}
+
+public static class ClassDeclaration
+{
+	public static ClassDeclarationSyntax DefineMembers(ClassDeclarationSyntax node, IEnumerable<MemberDeclarationSyntax> members)
+	{
+		return Syntax.ClassDeclaration(
+			attributeLists: node.AttributeLists,
+			modifiers: node.Modifiers,
+			keyword: node.Keyword,
+			identifier: node.Identifier,
+			typeParameterList: node.TypeParameterList,
+			baseList: node.BaseList,
+			constraintClauses: node.ConstraintClauses,
+			openBraceToken: node.OpenBraceToken,
+			members: Syntax.List(members),
+			closeBraceToken: node.CloseBraceToken,
+			semicolonToken: node.SemicolonToken);
+	}	
+}
+#>

@@ -1,5 +1,5 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
-<WCFAsyncQueryableServices.Server EdmxPath="$edmxPath$">
+<?xml version="1.0" encoding="utf-8" ?>
+<WAQS.Server EdmxPath="$edmxPath$">
   <Specifications>
     <Specification SlnFilePath="$SpecificationsSlnFilePath$" CsprojPath="$SpecificationsCsprojPath$" FolderPath="$SpecificationsFolderPath$" />
   </Specifications>
@@ -15,15 +15,15 @@
   <WCFServiceContract />
   <Web GlobalClassName="Global" />
   <Framework>
-    <Common NamespaceName="WCFAsyncQueryableServices.Common" />
-    <Specifications NamespaceName="WCFAsyncQueryableServices.Specifications" />
-    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" />
-    <DAL NamespaceName="WCFAsyncQueryableServices.DAL" />
-    <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" />
-    <Expressions NamespaceName="WCFAsyncQueryableServices.SerializableExpressions" />
-    <Service NamespaceName="WCFAsyncQueryableServices.Service" />
-    <ServiceInterfaces NamespaceName="WCFAsyncQueryableServices.Service.Interfaces" />
-    <WCFService NamespaceName="WCFAsyncQueryableServices.WCFService" />
-    <WCFServiceContract NamespaceName="WCFAsyncQueryableServices.WCFService.Contract" />
+    <Common NamespaceName="WAQS.Common" />
+    <Specifications NamespaceName="WAQS.Specifications" />
+    <Entities NamespaceName="WAQS.Entities" />
+    <DAL NamespaceName="WAQS.DAL" />
+    <DALInterfaces NamespaceName="WAQS.DAL.Interfaces" />
+    <Expressions NamespaceName="WAQS.SerializableExpressions" />
+    <Service NamespaceName="WAQS.Service" />
+    <ServiceInterfaces NamespaceName="WAQS.Service.Interfaces" />
+    <WCFService NamespaceName="WAQS.WCFService" />
+    <WCFServiceContract NamespaceName="WAQS.WCFService.Contract" />
   </Framework>
-</WCFAsyncQueryableServices.Server>
+</WAQS.Server>

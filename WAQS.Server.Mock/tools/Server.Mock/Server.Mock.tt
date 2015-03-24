@@ -1,4 +1,4 @@
-<#@ include file="WCFAsyncQueryableServices.$VSVersion$.$NetVersion$.Server.Mock.ttinclude"#>
+<#@ include file="WAQS.$VSVersion$.$NetVersion$.Server.Mock.ttinclude"#>
 <#
 WriteServerMock("$edmxName$.Server.Mock.waqs", "$RootNamespace$");
 #>

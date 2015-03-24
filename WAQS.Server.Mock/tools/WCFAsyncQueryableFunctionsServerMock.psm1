@@ -1,4 +1,4 @@
-﻿function GetToolsPath()
+function GetToolsPath()
 {
 	$modules = (Get-Module WCFAsyncQueryableFunctionsServerMock | select -property path)
 	if ($modules.Length -eq $null -or $modules.Length -eq 1)
@@ -67,7 +67,7 @@ function GetFirstCsFile($projectItem)
 
 
 
-function WCFAsyncQueryableServicesServerMockInternal($edmxPath, $kind, $sourceControl, $netVersion, $option)
+function WAQSServerMockInternal($edmxPath, $kind, $sourceControl, $netVersion, $option)
 {
 	if ($kind -eq $null)
 	{
@@ -129,7 +129,7 @@ function WCFAsyncQueryableServicesServerMockInternal($edmxPath, $kind, $sourceCo
 	$toolsPath = GetToolsPath
 	$toolsPathServerMock = Join-Path $toolsPath "Server.Mock"
 	$defaultNamespace = ((Get-Project).Properties | ? {$_.Name -eq 'RootNamespace'}).Value
-	$exePath = Join-Path $toolsPathServerMock InitWCFAsyncQueryableServicesServerMock.exe
+	$exePath = Join-Path $toolsPathServerMock InitWAQSServerMock.exe
 	$references = (Get-Project).Object.References
 	$null = $references.Add("System")
 	$entitiesProjectPath = $DTE.Solution.FindProjectItem(($edmxName + '.Server.Entities.tt')).ContainingProject.FullName
@@ -255,7 +255,7 @@ function WCFAsyncQueryableServicesServerMockInternal($edmxPath, $kind, $sourceCo
 	   $ttincludesFolder = Join-Path $toolsPath 'ttincludes'
 	   $serverMockTemplatesProjectItems = $serverMockTemplates.ProjectItems
 	   $existingServerMockTTIncludes = $serverMockTemplatesProjectItems | select -ExpandProperty Name
-	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WCFAsyncQueryableServices.")})
+	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WAQS.")})
 	   {
 	       $m = [System.Text.RegularExpressions.Regex]::Match($ttinclude, '.(NET\d+).')
 	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -278,7 +278,7 @@ function WCFAsyncQueryableServicesServerMockInternal($edmxPath, $kind, $sourceCo
 	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolderVS))
 	   {
            $ttincludeName = [System.IO.Path]::GetFileName($ttinclude)
-           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WCFAsyncQueryableServices."))
+           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WAQS."))
            {
     	       $m = [System.Text.RegularExpressions.Regex]::Match($ttinclude, '.(NET\d+).')
     	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -353,7 +353,7 @@ function WCFAsyncQueryableServicesServerMockInternal($edmxPath, $kind, $sourceCo
     }
 }
 
-function WCFAsyncQueryableServicesServerMock($edmxPath, $kind, $sourceControl, $netVersion, $option)
+function WAQSServerMock($edmxPath, $kind, $sourceControl, $netVersion, $option)
 {
 	$version = ((Get-Project).Properties | ?{$_.Name -eq "TargetFrameworkMoniker"}).Value
 	if (-not $version.StartsWith('.NETFramework,'))
@@ -375,20 +375,20 @@ function WCFAsyncQueryableServicesServerMock($edmxPath, $kind, $sourceControl, $
 	}
 	
 	$edmxPath = [System.Text.RegularExpressions.Regex]::Match($edmxPath, '^\"?(.*?)\"?$').Groups[1].Value
-	WCFAsyncQueryableServicesServerMockInternal $edmxPath $kind $sourceControl $netVersion $option
+	WAQSServerMockInternal $edmxPath $kind $sourceControl $netVersion $option
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesServerMock' @{ 
+Register-TabExpansion 'WAQSServerMock' @{ 
 'edmxPath' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{($_.Name.EndsWith(".edmx")) -and (-not (Test-Path (Join-Path ([System.IO.Path]::GetDirectoryName((Get-Project).FullName)) ("WAQS." + [System.IO.Path]::GetFileNameWithoutExtension($_.Name)))))} | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} }
 'kind' = { "All", "WithoutFramework", "FrameworkOnly" }
 'sourceControl' = { "WithSourceControl", "WithoutSourceControl" }
 'netVersion' = { GetAvailableVersions }
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesServerMock
+Export-ModuleMember WAQSServerMock
 
 
-function UpdateWCFAsyncQueryableServicesServerMockT4Templates()
+function UpdateWAQSServerMockT4Templates()
 {
     foreach ($file in GetProjects | foreach {(GetAllT4RootItems $_)} | foreach {$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value | ?{$_.EndsWith(".Server.Mock.tt")})
     {
@@ -397,7 +397,7 @@ function UpdateWCFAsyncQueryableServicesServerMockT4Templates()
 }
 
 
-Export-ModuleMember UpdateWCFAsyncQueryableServicesServerMockT4Templates
+Export-ModuleMember UpdateWAQSServerMockT4Templates
 
 
 function MergeServerMockTTIncludes()

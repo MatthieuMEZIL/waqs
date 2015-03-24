@@ -1,4 +1,4 @@
-<#@ include file="WCFAsyncQueryableServices.$VSVersion$.$NetVersion$.Client.WPF.Global.ttinclude"#>
+<#@ include file="WAQS.$VSVersion$.$NetVersion$.Client.WPF.Global.ttinclude"#>
 <#WriteClient("Global.Client.WPF.waqs", "$ClientContextNamespace$");#>
 
 

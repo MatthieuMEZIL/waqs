@@ -1,4 +1,4 @@
-<#@ include file="WCFAsyncQueryableServices.$VSVersion$.$NetVersion$.Server.Global.WCFService.Contract.ttinclude"#>
+<#@ include file="WAQS.$VSVersion$.$NetVersion$.Server.Global.WCFService.Contract.ttinclude"#>
 <#
 WriteServerGlobalWCFServiceContract("http://Global.net", "$RootNamespace$");
 #>

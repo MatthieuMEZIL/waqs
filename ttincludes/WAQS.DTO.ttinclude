@@ -1,0 +1,247 @@
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteDTOs(SpecificationPath[] dtoPathes, string wcfNamespace, string namespaceName, Dictionary<string, string> namespacesReplacement = null)
+{
+	CodeGenerationTools code = new CodeGenerationTools(this);
+	
+	if (namespaceName == null)
+		namespaceName = code.VsNamespaceSuggestion();
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	var types = new List<TypeSymbol>();
+	foreach (var dtoPath in dtoPathes)
+	{
+		var dtoSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
+		var dtoProject = dtoSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
+		if (dtoProject == null)
+			return;
+		var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
+		foreach (var document in dtoProject.Documents.Where(d => Path.GetFullPath(d.FilePath).StartsWith(dtoFolderPath)))
+		{
+			var documentTree = GetSyntaxTree(document);
+			var compilation = GetCompilation(dtoProject);
+			var compilationUnit = (CompilationUnitSyntax)documentTree.GetRoot();
+			var semanticModel = compilation.GetSemanticModel(documentTree);
+			types.AddRange(new GetTypeSymbols(semanticModel).Visit(compilationUnit));
+		}
+	}
+	var inheritedTypes = new Dictionary<string, List<TypeSymbol>>();
+	foreach (var type in types)
+		inheritedTypes.Add(type.ToString(), new List<TypeSymbol>());
+	foreach (var type in types)
+	{
+		var baseType = type.BaseType;
+		while (baseType != null)
+		{
+			List<TypeSymbol> inheritedTypeList;
+			if (!inheritedTypes.TryGetValue(baseType.ToString(), out inheritedTypeList))
+				break;
+			inheritedTypeList.Add(type);
+			baseType = baseType.BaseType;
+		}
+	}
+	foreach (var dtoPath in dtoPathes)
+	{
+		var dtoSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
+		var dtoProject = dtoSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
+		var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
+		foreach (var document in dtoProject.Documents.Where(d => Path.GetFullPath(d.FilePath).StartsWith(dtoFolderPath)))
+		{
+			var documentTree = GetSyntaxTree(document);
+			var compilation = GetCompilation(dtoProject);
+			var compilationUnit = (CompilationUnitSyntax)documentTree.GetRoot();
+			var semanticModel = compilation.GetSemanticModel(documentTree);
+			fileManager.StartNewFile(Path.GetFileName(document.FilePath));
+#>
+<#=new AddDataContractAttribute(semanticModel, inheritedTypes, namespaceName, wcfNamespace, types, namespacesReplacement).Visit(compilationUnit).NormalizeWhitespace().ToString()#>
+<#+
+		}
+	}
+
+	fileManager.Process();
+}
+
+IEnumerable<TypeSymbol> GetClasses(SpecificationPath[] dtoPathes)
+{
+	if (dtoPathes != null)
+		foreach (var dtoPath in dtoPathes)
+		{
+			var dtoSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
+			string dtoProjectFullPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj));
+			var dtoProject = dtoSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == dtoProjectFullPath);
+			if (dtoProject == null)
+				yield break;
+			var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
+			foreach (var document in dtoProject.Documents)
+			{
+				if (Path.GetFullPath(document.FilePath).StartsWith(dtoFolderPath))
+				{
+					var documentTree = GetSyntaxTree(document);
+					var compilation = GetCompilation(dtoProject);
+					var semanticModel = compilation.GetSemanticModel(documentTree);
+					var compilationUnit = (CompilationUnitSyntax)documentTree.GetRoot();
+					foreach (var @class in new GetTypeSymbols(semanticModel).Visit(compilationUnit))
+						yield return @class;
+				}
+			}
+		}
+}
+
+IEnumerable<TypeSymbol> GetClassesOrderByDepthDescending(SpecificationPath[] dtoPathes)
+{
+	return GetClasses(dtoPathes).Select(dto => 
+		{
+			int depth = 0;
+			var dtoLoop = dto.BaseType;
+			while (dtoLoop != null)
+			{
+				dtoLoop = dtoLoop.BaseType;
+				depth ++;
+			}
+			return new { DTO = dto, Depth = depth };
+		}).OrderByDescending(dto => dto.Depth).Select(dto => dto.DTO);
+}
+
+IEnumerable<NamespaceSymbol> GetNamespaces(SpecificationPath[] dtoPathes)
+{
+	if (dtoPathes != null)
+		foreach (var dtoPath in dtoPathes)
+		{
+			var entitiesSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
+			var entitiesProject = entitiesSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
+			var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
+			foreach (var document in entitiesProject.Documents)
+			{
+				if (Path.GetFullPath(document.FilePath).StartsWith(dtoFolderPath))
+				{
+					var documentTree = GetSyntaxTree(document);
+					var compilation = GetCompilation(entitiesProject);
+					var semanticModel = compilation.GetSemanticModel(documentTree);
+					var compilationUnit = (CompilationUnitSyntax)documentTree.GetRoot();
+					foreach (var @class in new GetNamespaceSymbols(semanticModel).Visit(compilationUnit))
+						yield return @class;
+				}
+			}
+		}
+}
+
+class AddDataContractAttribute : DTOAndInterfacesTypesRewriter
+{
+	private Dictionary<string, List<TypeSymbol>> _inheritedTypes;
+	private string _namespaceName;
+	private string _dataContractNamespace;
+
+	public AddDataContractAttribute(ISemanticModel semanticModel, Dictionary<string, List<TypeSymbol>> inheritedTypes, string namespaceName, string dataContractNamespace, IEnumerable<TypeSymbol> dtoTypes, Dictionary<string, string> namespacesReplacement)
+		: base(semanticModel, null, dtoTypes, namespacesReplacement)
+	{
+		_inheritedTypes = inheritedTypes;
+		_namespaceName = namespaceName;
+		_dataContractNamespace = dataContractNamespace;
+	}
+
+	public override SyntaxNode VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
+	{
+		node = (NamespaceDeclarationSyntax)base.VisitNamespaceDeclaration(node);
+		return SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(_namespaceName), node.Externs, node.Usings, node.Members);
+	}
+
+	public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
+	{
+		var originalNode = node;
+		var type = (TypeSymbol)SemanticModel.GetDeclaredSymbol(node);
+		var baseType = type.BaseType;
+		var baseTypeString = baseType.ToString();
+		node = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
+		var attributes = node.AttributeLists.ToList();
+		if (!attributes.Any(@as => @as.Attributes.Any(a => Regex.IsMatch(a.Name.ToString(), "(^|.)DataContract(?:Attribute)?$"))))
+			attributes.Add(
+				SyntaxFactory.AttributeList(
+					SyntaxFactory.SeparatedList(
+						new [] 
+						{ 
+							SyntaxFactory.Attribute(
+								SyntaxFactory.ParseName("System.Runtime.Serialization.DataContractAttribute"), 
+								SyntaxFactory.AttributeArgumentList(
+									SyntaxFactory.SeparatedList(
+										new AttributeArgumentSyntax[] 
+										{ 
+											SyntaxFactory.AttributeArgument(
+												SyntaxFactory.ParseExpression("IsReference = true")), 
+											SyntaxFactory.AttributeArgument(
+												SyntaxFactory.ParseExpression(
+													string.Concat("Namespace = \"", _dataContractNamespace, "\"")))
+										}, 
+										new SyntaxToken[] { SyntaxFactory.Token(SyntaxKind.CommaToken) }))) 
+						},
+						new SyntaxToken[0])));
+		if (!attributes.Any(@as => @as.Attributes.Any(a => Regex.IsMatch(a.Name.ToString(), "(^|.)KnownType(?:Attribute)?$"))))
+			foreach (var inheritedType in _inheritedTypes[type.ToString()])
+				attributes.Add(
+					SyntaxFactory.AttributeList(
+						SyntaxFactory.SeparatedList(
+							new [] 
+							{ 
+								SyntaxFactory.Attribute(
+									SyntaxFactory.ParseName("System.Runtime.Serialization.KnownTypeAttribute"), 
+									SyntaxFactory.AttributeArgumentList(
+										SyntaxFactory.SeparatedList(
+											new [] 
+											{ 
+												SyntaxFactory.AttributeArgument(
+													SyntaxFactory.ParseExpression(string.Concat("typeof(", inheritedType.Name, ")"))) 
+											},
+											new SyntaxToken[0]))) 
+							},
+							new SyntaxToken[0])));
+		SyntaxKind modifierKind;
+		var modifiers = node.Modifiers.Where(m => (modifierKind = GetKind(m)) != SyntaxKind.PrivateKeyword && modifierKind != SyntaxKind.InternalKeyword && modifierKind != SyntaxKind.ProtectedKeyword).ToList();
+		if (!modifiers.Any(m => GetKind(m) == SyntaxKind.PublicKeyword))
+			modifiers.Add(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
+		if (!modifiers.Any(m => GetKind(m) == SyntaxKind.PartialKeyword))
+			modifiers.Add(SyntaxFactory.Token(SyntaxKind.PartialKeyword));
+		var baseList = node.BaseList == null ? Enumerable.Empty<BaseTypeSyntax>() : originalNode.BaseList.Types.Select(t =>
+			{
+				if (baseType == null || !_inheritedTypes.ContainsKey(baseTypeString))
+					return t;
+				if ((SemanticModel.GetSymbolInfo(t).Symbol).ToString() == baseTypeString)
+					return GetBaseType(SyntaxFactory.ParseTypeName(baseType.Name));
+				return t;
+			}).ToList();
+		return node
+			.WithAttributeLists(
+				SyntaxFactory.List<AttributeListSyntax>(attributes))
+			.WithModifiers(
+				SyntaxFactory.TokenList(modifiers))
+			.WithBaseList(
+				node.BaseList == null ? 
+					null : 
+					SyntaxFactory.BaseList(
+						SyntaxFactory.SeparatedList(
+							baseList, 
+							baseList.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
+	}
+
+	public override SyntaxNode VisitPropertyDeclaration(PropertyDeclarationSyntax node)
+	{
+		node = (PropertyDeclarationSyntax)base.VisitPropertyDeclaration(node);
+		if (! node.Modifiers.Any(m => GetKind(m) == SyntaxKind.PublicKeyword))
+			return node;
+		var attributes = node.AttributeLists.ToList();
+		if (!attributes.Any(@as => @as.Attributes.Any(a => Regex.IsMatch(a.Name.ToString(), "(^|.)DataMember(?:Attribute)?$"))))
+			attributes.Add(
+				SyntaxFactory.AttributeList(
+					SyntaxFactory.SeparatedList(
+						new[] 
+						{ 
+							SyntaxFactory.Attribute(
+								SyntaxFactory.ParseName("System.Runtime.Serialization.DataMemberAttribute")) 
+						},
+						new SyntaxToken[0])));
+		return node.WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>(attributes));
+	}
+}
+
+#>

@@ -1,5 +1,0 @@
-<#@ include file="WCFAsyncQueryableServices.VS12.Server.DAL.emdx.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-string NetVersion = "NET46";
-#>

@@ -1,0 +1,5 @@
+<#@ include file="WAQS.VS12.Edmx.Utility.ttinclude"#>
+<#@ include file="WAQS.Client.WPF.Fx.Controls.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

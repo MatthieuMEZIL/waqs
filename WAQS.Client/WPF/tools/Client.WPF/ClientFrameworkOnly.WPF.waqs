@@ -1,11 +1,11 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
-<WCFAsyncQueryableServices.Client>
+<?xml version="1.0" encoding="utf-8" ?>
+<WAQS.Client>
   <Framework>
-    <ComponentModel NamespaceName="WCFAsyncQueryableServices.ComponentModel" Generate="true" />
-    <EntitiesTracking NamespaceName="WCFAsyncQueryableServices.EntitiesTracking" Generate="true"/>
-    <ClientContext NamespaceName="WCFAsyncQueryableServices.ClientContext" Generate="true" />
-    <ClientContextInterfaces NamespaceName="WCFAsyncQueryableServices.ClientContext.Interfaces" Generate="true" />
-    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="true" />
-    <Controls NamespaceName="WCFAsyncQueryableServices.Controls" Generate="true" />
+    <ComponentModel NamespaceName="WAQS.ComponentModel" Generate="true" />
+    <EntitiesTracking NamespaceName="WAQS.EntitiesTracking" Generate="true"/>
+    <ClientContext NamespaceName="WAQS.ClientContext" Generate="true" />
+    <ClientContextInterfaces NamespaceName="WAQS.ClientContext.Interfaces" Generate="true" />
+    <Entities NamespaceName="WAQS.Entities" Generate="true" />
+    <Controls NamespaceName="WAQS.Controls" Generate="true" />
   </Framework>
-</WCFAsyncQueryableServices.Client>
+</WAQS.Client>

@@ -1,0 +1,5 @@
+<#@ include file="WAQS.VS12.Server.DAL.ttinclude"#>
+<#@ include file="WAQS.NET45.Server.DAL.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

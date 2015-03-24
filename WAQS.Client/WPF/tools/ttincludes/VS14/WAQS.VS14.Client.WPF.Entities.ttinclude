@@ -1,0 +1,5 @@
+<#@ include file="WAQS.VS14.Client.Entities.ttinclude"#>
+<#@ include file="WAQS.Client.WPF.Entities.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

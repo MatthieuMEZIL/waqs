@@ -1,0 +1,971 @@
+<#@ include file="WAQS.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerDALMock(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath entitiesPath, string serverFxCommonNamespace, string serverFxSpecificationsNamespace, string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxDALNamespace, string serverEntitiesNamespace, string serverDALInterfacesNamespace, string serverDALNamespace, string namespaceName = null)
+{
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+    var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+    var code = edmxElements.Code;
+    var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.UnitTest, dal: true);
+    CodeRegion region = new CodeRegion(this);
+    var container = edmxElements.Container;
+    bool hasNonExtensionMethods = specificationsElements.NonExtensionMethods.Count != 0;
+
+    if (edmxElements.Container == null)
+        return ;
+
+    string contextName = code.Escape(container);
+    string icontextName = "I" + contextName;
+    
+    fileManager.StartNewFile(contextName + "Mock.cs");
+    var contextMockUsings = new List<string>() { "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", serverFxEntitiesNamespace, serverFxDALNamespace, serverFxDALInterfacesNamespace, serverFxDALInterfacesNamespace + ".L2E", serverDALNamespace, serverDALInterfacesNamespace };
+    CompleteContextMockUsings(contextMockUsings);
+    WriteHeader(namespaceName, code, contextMockUsings.ToArray());
+#>
+<#=Accessibility.ForType(container)#> partial class <#=contextName#>Mock : <#=icontextName#>
+{
+    private I<#=contextName#> _context = new <#=contextName#>();
+
+<#+
+        region.Begin("ObjectSet Properties", 2);
+
+        foreach (EntitySet entitySet in container.BaseEntitySets.OfType<EntitySet>())
+        {
+            string fieldName = code.FieldName(entitySet);
+            string entitySetElementTypeFullName = string.Format("{0}.{1}", serverEntitiesNamespace, code.Escape(entitySet.ElementType));
+#>
+
+    public IEntitySet<<#=entitySetElementTypeFullName#>> <#=code.Escape(entitySet)#>
+    {
+        get { return ((<#=icontextName#>)this).<#=code.Escape(entitySet)#>; }
+    }
+    IEntitySet<<#=entitySetElementTypeFullName#>> <#=icontextName#>.<#=code.Escape(entitySet)#>
+    {
+        get { return <#=fieldName#>EntitySet ?? (<#=fieldName#>EntitySet = new EntitySetMock<<#=entitySetElementTypeFullName#>>(_context, _context.<#=code.Escape(entitySet)#>));}
+    }
+    public Expression<Func<System.Linq.IQueryable<<#=entitySetElementTypeFullName#>>>> <#=code.Escape(entitySet)#>Expression
+    {
+        get { throw new NotImplementedException(); }
+    }
+    private EntitySetMock<<#=entitySetElementTypeFullName#>> <#=fieldName#>EntitySet;
+<#+
+        }
+
+        region.End();
+#>
+    public MergeOption DefaultMergeOption { get; set; }
+    public bool UseWAQSProvider { get; set; }
+
+<#+
+        region.Begin("Function Imports");
+#>
+
+<#+
+
+        foreach (EdmFunction edmFunction in container.FunctionImports)
+        {
+            TypeUsage returnType;
+            var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+            if (returnType == null)
+                continue;
+            FunctionImportParameter[] parameters;
+            var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+            WriteEdmFunction(code, container, icontextName, parameters, returnType, returnTypeName, edmFunction, parametersAsString);
+        }
+        region.End();
+
+#>
+    #region CSDL Functions
+    public static DateTime GetDbCurrentDateTime()
+    {
+        return new <#=contextName#>Mock().GetDbDateTime();
+    }
+    Expression IObjectContext.GetDbDateTimeExpression()
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("GetDbCurrentDateTime"));
+    }
+    public DateTime GetDbDateTime()
+    {
+        return DateTime.Now;
+    }
+
+    public static DateTime GetDate(DateTime dateTime)
+    {
+        return dateTime.Date;
+    }
+    Expression IObjectContext.GetDateExpression(Expression dateTimeExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("GetDate"), dateTimeExpresion);
+    }
+
+    public static DateTime AddYears(DateTime dateTime, int years)
+    {
+        return dateTime.AddYears(years);
+    }
+    Expression IObjectContext.AddYearsExpression(Expression dateTimeExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddYears"), dateTimeExpresion, yearsExpresion);
+    }
+
+    public static DateTimeOffset AddYearsOffset(DateTimeOffset dateTime, int years)
+    {
+        return dateTime.AddYears(years);
+    }
+    Expression IObjectContext.AddYearsOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddYearsOffset"), dateTimeOffsetExpresion, yearsExpresion);
+    }
+
+    public static DateTime AddMonths(DateTime dateTime, int months)
+    {
+        return dateTime.AddMonths(months);
+    }
+    Expression IObjectContext.AddMonthsExpression(Expression dateTimeExpresion, Expression monthsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddMonths"), dateTimeExpresion, monthsExpresion);
+    }
+
+    public static DateTimeOffset AddMonthsOffset(DateTimeOffset dateTime, int years)
+    {
+        return dateTime.AddMonths(years);
+    }
+    Expression IObjectContext.AddMonthsOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddMonthsOffset"), dateTimeOffsetExpresion, yearsExpresion);
+    }
+
+    public static DateTime AddDays(DateTime dateTime, int days)
+    {
+        return dateTime.AddDays(days);
+    }
+    Expression IObjectContext.AddDaysExpression(Expression dateTimeExpresion, Expression daysExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddDays"), dateTimeExpresion, daysExpresion);
+    }
+
+    public static DateTimeOffset AddDaysOffset(DateTimeOffset dateTime, int years)
+    {
+        return dateTime.AddDays(years);
+    }
+    Expression IObjectContext.AddDaysOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddDaysOffset"), dateTimeOffsetExpresion, yearsExpresion);
+    }
+
+    public static int DiffDays(DateTime dateTime1, DateTime dateTime2)
+    {
+        return (dateTime1 - dateTime2).Days;
+    }
+    Expression IObjectContext.DiffDaysExpression(Expression dateTime1Expresion, Expression dateTime2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffDays"), dateTime1Expresion, dateTime2Expresion);
+    }
+
+    public static int DiffDaysOffset(DateTimeOffset dateTime1, DateTimeOffset dateTime2)
+    {
+        return (dateTime1 - dateTime2).Days;
+    }
+    Expression IObjectContext.DiffDaysOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffDaysOffset"), dateTimeOffset1Expresion, dateTimeOffset2Expresion);
+    }
+
+    public static DateTime AddHours(DateTime dateTime, int hours)
+    {
+        return dateTime.AddHours(hours);
+    }
+    Expression IObjectContext.AddHoursExpression(Expression dateTimeExpresion, Expression hoursExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddHours"), dateTimeExpresion, hoursExpresion);
+    }
+
+    public static DateTimeOffset AddHoursOffset(DateTimeOffset dateTime, int years)
+    {
+        return dateTime.AddHours(years);
+    }
+    Expression IObjectContext.AddHoursOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddHoursOffset"), dateTimeOffsetExpresion, yearsExpresion);
+    }
+
+    public static int DiffHours(DateTime dateTime1, DateTime dateTime2)
+    {
+        return (dateTime1 - dateTime2).Hours;
+    }
+    Expression IObjectContext.DiffHoursExpression(Expression dateTime1Expresion, Expression dateTime2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffHours"), dateTime1Expresion, dateTime2Expresion);
+    }
+
+    public static int DiffHoursOffset(DateTimeOffset dateTime1, DateTimeOffset dateTime2)
+    {
+        return (dateTime1 - dateTime2).Hours;
+    }
+    Expression IObjectContext.DiffHoursOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffHoursOffset"), dateTimeOffset1Expresion, dateTimeOffset2Expresion);
+    }
+
+    public static DateTime AddMinutes(DateTime dateTime, int minutes)
+    {
+        return dateTime.AddMinutes(minutes);
+    }
+    Expression IObjectContext.AddMinutesExpression(Expression dateTimeExpresion, Expression minutesExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddMinutes"), dateTimeExpresion, minutesExpresion);
+    }
+
+    public static DateTimeOffset AddMinutesOffset(DateTimeOffset dateTime, int years)
+    {
+        return dateTime.AddMinutes(years);
+    }
+    Expression IObjectContext.AddMinutesOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddMinutesOffset"), dateTimeOffsetExpresion, yearsExpresion);
+    }
+
+    public static int DiffMinutes(DateTime dateTime1, DateTime dateTime2)
+    {
+        return (dateTime1 - dateTime2).Minutes;
+    }
+    Expression IObjectContext.DiffMinutesExpression(Expression dateTime1Expresion, Expression dateTime2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffMinutes"), dateTime1Expresion, dateTime2Expresion);
+    }
+
+    public static int DiffMinutesOffset(DateTimeOffset dateTime1, DateTimeOffset dateTime2)
+    {
+        return (dateTime1 - dateTime2).Minutes;
+    }
+    Expression IObjectContext.DiffMinutesOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffMinutesOffset"), dateTimeOffset1Expresion, dateTimeOffset2Expresion);
+    }
+
+    public static DateTime AddSeconds(DateTime dateTime, int seconds)
+    {
+        return dateTime.AddSeconds(seconds);
+    }
+    Expression IObjectContext.AddSecondsExpression(Expression dateTimeExpresion, Expression secondsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddSeconds"), dateTimeExpresion, secondsExpresion);
+    }
+
+    public static DateTimeOffset AddSecondsOffset(DateTimeOffset dateTime, int years)
+    {
+        return dateTime.AddSeconds(years);
+    }
+    Expression IObjectContext.AddSecondsOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddSecondsOffset"), dateTimeOffsetExpresion, yearsExpresion);
+    }
+
+    public static int DiffSeconds(DateTime dateTime1, DateTime dateTime2)
+    {
+        return (dateTime1 - dateTime2).Seconds;
+    }
+    Expression IObjectContext.DiffSecondsExpression(Expression dateTime1Expresion, Expression dateTime2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffSeconds"), dateTime1Expresion, dateTime2Expresion);
+    }
+
+    public static int DiffSecondsOffset(DateTimeOffset dateTime1, DateTimeOffset dateTime2)
+    {
+        return (dateTime1 - dateTime2).Seconds;
+    }
+    Expression IObjectContext.DiffSecondsOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffSecondsOffset"), dateTimeOffset1Expresion, dateTimeOffset2Expresion);
+    }
+
+    public static DateTime AddMilliseconds(DateTime dateTime, int milliseconds)
+    {
+        return dateTime.AddMilliseconds(milliseconds);
+    }
+    Expression IObjectContext.AddMillisecondsExpression(Expression dateTimeExpresion, Expression millisecondsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddMilliseconds"), dateTimeExpresion, millisecondsExpresion);
+    }
+
+    public static DateTimeOffset AddMillisecondsOffset(DateTimeOffset dateTime, int years)
+    {
+        return dateTime.AddMilliseconds(years);
+    }
+    Expression IObjectContext.AddMillisecondsOffsetExpression(Expression dateTimeOffsetExpresion, Expression yearsExpresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("AddMillisecondsOffset"), dateTimeOffsetExpresion, yearsExpresion);
+    }
+
+    public static int DiffMilliseconds(DateTime dateTime1, DateTime dateTime2)
+    {
+        return (dateTime1 - dateTime2).Milliseconds;
+    }
+    Expression IObjectContext.DiffMillisecondsExpression(Expression dateTime1Expresion, Expression dateTime2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffMilliseconds"), dateTime1Expresion, dateTime2Expresion);
+    }
+
+    public static int DiffMillisecondsOffset(DateTimeOffset dateTime1, DateTimeOffset dateTime2)
+    {
+        return (dateTime1 - dateTime2).Milliseconds;
+    }
+    Expression IObjectContext.DiffMillisecondsOffsetExpression(Expression dateTimeOffset1Expresion, Expression dateTimeOffset2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("DiffMillisecondsOffset"), dateTimeOffset1Expresion, dateTimeOffset2Expresion);
+    }
+
+    public static short AbsInt16(short value)
+    {
+        return Math.Abs(value);
+    }
+    Expression IObjectContext.AbsInt16Expression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("AbsInt16"), value);
+    }
+
+    public static int AbsInt32(int value)
+    {
+        return Math.Abs(value);
+    }
+    Expression IObjectContext.AbsInt32Expression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("AbsInt32"), value);
+    }
+
+    public static long AbsInt64(long value)
+    {
+        return Math.Abs(value);
+    }
+    Expression IObjectContext.AbsInt64Expression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("AbsInt64"), value);
+    }
+
+    public static float AbsSingle(float value)
+    {
+        return Math.Abs(value);
+    }
+    Expression IObjectContext.AbsSingleExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("AbsIntSingle"), value);
+    }
+
+    public static double AbsDouble(double value)
+    {
+        return Math.Abs(value);
+    }
+    Expression IObjectContext.AbsDoubleExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("AbsDouble"), value);
+    }
+
+    public static decimal AbsDecimal(decimal value)
+    {
+        return Math.Abs(value);
+    }
+    Expression IObjectContext.AbsDecimalExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("AbsDecimal"), value);
+    }
+
+    public static double CeilingDouble(double value)
+    {
+        return Math.Ceiling(value);
+    }
+    Expression IObjectContext.CeilingDoubleExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("CeilingDouble"), value);
+    }
+
+    public static decimal CeilingDecimal(decimal value)
+    {
+        return Math.Ceiling(value);
+    }
+    Expression IObjectContext.CeilingDecimalExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("CeilingDecimal"), value);
+    }
+
+    public static double FloorDouble(double value)
+    {
+        return Math.Floor(value);
+    }
+    Expression IObjectContext.FloorDoubleExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("FloorDouble"), value);
+    }
+
+    public static decimal FloorDecimal(decimal value)
+    {
+        return Math.Floor(value);
+    }
+    Expression IObjectContext.FloorDecimalExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("FloorDecimal"), value);
+    }
+
+    public static double PowDouble(double value, double exponent)
+    {
+        return Math.Pow(value, exponent);
+    }
+    Expression IObjectContext.PowDoubleExpression(Expression value, Expression exponent)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("PowDouble"), value, exponent);
+    }
+
+    public static double RoundAwayFromZeroDouble(double value)
+    {
+        return Math.Round(value);
+    }
+    Expression IObjectContext.RoundToEvenDoubleExpression(Expression value)
+    {
+        return Expression.Condition(
+            Expression.AndAlso(
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("AbsDouble"),
+                                Expression.Multiply(
+                                    value,
+                                    Expression.Constant(10.0))),
+                            typeof(int)),
+                        Expression.Constant(10)),
+                    Expression.Constant(5)),
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("TruncateDouble"),
+                                value,
+                                Expression.Constant(0)),
+                            typeof(int)),
+                        Expression.Constant(2)),
+                    Expression.Constant(0))),
+            Expression.Add(
+                Expression.Call(
+                    typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDouble", new Type[] { typeof(double) } ),
+                    value),
+                Expression.Condition(
+                    Expression.GreaterThanOrEqual(
+                        value,
+                        Expression.Constant(0.0)),
+                    Expression.Constant(-1.0),
+                    Expression.Constant(1.0))),
+            Expression.Call(
+                typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDouble", new Type[] { typeof(double) } ),
+                value));
+    }
+    Expression IObjectContext.RoundAwayFromZeroDoubleExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDouble", new Type[] { typeof(double) } ), value);
+    }
+
+    public static decimal RoundAwayFromZeroDecimal(decimal value)
+    {
+        return Math.Round(value);
+    }
+    Expression IObjectContext.RoundToEvenDecimalExpression(Expression value)
+    {
+        return Expression.Condition(
+            Expression.AndAlso(
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("AbsDecimal"),
+                                Expression.Multiply(
+                                    value,
+                                    Expression.Constant(10.0))),
+                            typeof(int)),
+                        Expression.Constant(10)),
+                    Expression.Constant(5)),
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("TruncateDecimal"),
+                                value,
+                                Expression.Constant(0)),
+                            typeof(int)),
+                        Expression.Constant(2)),
+                    Expression.Constant(0))),
+            Expression.Add(
+                Expression.Call(
+                    typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDecimal", new Type[] { typeof(double) } ),
+                    value),
+                Expression.Condition(
+                    Expression.GreaterThanOrEqual(
+                        value,
+                        Expression.Constant(0M)),
+                    Expression.Constant(-1M),
+                    Expression.Constant(1M))),
+            Expression.Call(
+                typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDecimal", new Type[] { typeof(double) } ),
+                value));
+    }
+    Expression IObjectContext.RoundAwayFromZeroDecimalExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDecimal", new Type[] { typeof(decimal) }), value);
+    }
+
+    public static double RoundAwayFromZeroDouble(double value, int digits)
+    {
+        return Math.Round(value, digits);
+    }
+    Expression IObjectContext.RoundToEvenDoubleExpression(Expression value, Expression digits)
+    {
+        return Expression.Condition(
+            Expression.AndAlso(
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("AbsDouble"),
+                                Expression.Multiply(
+                                    value,
+                                    Expression.Call(
+                                        typeof(<#=contextName#>).GetMethod("PowDouble"),
+                                        Expression.Constant(10.0),
+                                        Expression.Add(
+                                            Expression.Convert(digits, typeof(double)),
+                                            Expression.Constant(1.0))))),
+                            typeof(int)),
+                        Expression.Constant(10)),
+                    Expression.Constant(5)),
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("TruncateDouble"),
+                                Expression.Multiply(
+                                    value,
+                                    Expression.Call(
+                                        typeof(<#=contextName#>).GetMethod("PowDouble"),
+                                        Expression.Constant(10.0),
+                                        Expression.Convert(digits, typeof(double)))),
+                                Expression.Constant(0)),
+                            typeof(int)),
+                        Expression.Constant(2)),
+                    Expression.Constant(0))),
+            Expression.Add(
+                Expression.Call(
+                    typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDouble", new Type[] { typeof(double), typeof(int) }),
+                    value,
+                    digits),
+                Expression.Divide(
+                    Expression.Condition(
+                        Expression.GreaterThanOrEqual(
+                            value,
+                            Expression.Constant(0.0)),
+                        Expression.Constant(-1.0),
+                        Expression.Constant(1.0)),
+                    Expression.Call(
+                        typeof(<#=contextName#>).GetMethod("PowDouble"),
+                        Expression.Constant(10.0),
+                        Expression.Convert(digits, typeof(double))))),
+            Expression.Call(
+                typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDouble", new Type[] { typeof(double), typeof(int) }),
+                value,
+                digits));
+    }
+    Expression IObjectContext.RoundAwayFromZeroDoubleExpression(Expression value, Expression digits)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDouble", new Type[] { typeof(double), typeof(int) }), value, digits);
+    }
+
+    public static decimal RoundAwayFromZeroDecimal(decimal value, int digits)
+    {
+        return Math.Round(value, digits);
+    }
+    Expression IObjectContext.RoundToEvenDecimalExpression(Expression value, Expression digits)
+    {
+        return Expression.Condition(
+            Expression.AndAlso(
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("AbsDecimal"),
+                                Expression.Multiply(
+                                    value,
+                                    Expression.Call(
+                                        typeof(<#=contextName#>).GetMethod("PowDecimal"),
+                                        Expression.Constant(10.0),
+                                        Expression.Add(
+                                            Expression.Convert(digits, typeof(decimal)),
+                                            Expression.Constant(1.0))))),
+                            typeof(int)),
+                        Expression.Constant(10)),
+                    Expression.Constant(5)),
+                Expression.Equal(
+                    Expression.Modulo(
+                        Expression.Convert(
+                            Expression.Call(
+                                typeof(<#=contextName#>).GetMethod("TruncateDecimal"),
+                                Expression.Multiply(
+                                    value,
+                                    Expression.Call(
+                                        typeof(<#=contextName#>).GetMethod("PowDecimal"),
+                                        Expression.Constant(10M),
+                                        Expression.Convert(digits, typeof(decimal)))),
+                                Expression.Constant(0)),
+                            typeof(int)),
+                        Expression.Constant(2)),
+                    Expression.Constant(0))),
+            Expression.Add(
+                Expression.Call(
+                    typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDecimal", new Type[] { typeof(decimal), typeof(int) }),
+                    value,
+                    digits),
+                Expression.Divide(
+                    Expression.Condition(
+                        Expression.GreaterThanOrEqual(
+                            value,
+                            Expression.Constant(0M)),
+                        Expression.Constant(-1M),
+                        Expression.Constant(1M)),
+                    Expression.Call(
+                        typeof(<#=contextName#>).GetMethod("PowDecimal"),
+                        Expression.Constant(10M),
+                        Expression.Convert(digits, typeof(decimal))))),
+            Expression.Call(
+                typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDecimal", new Type[] { typeof(decimal), typeof(int) }),
+                value,
+                digits));
+    }
+    Expression IObjectContext.RoundAwayFromZeroDecimalExpression(Expression value, Expression digits)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("RoundAwayFromZeroDecimal", new Type[] { typeof(decimal), typeof(int) }), value, digits);
+    }
+
+    public static double TruncateDouble(double value, int digits)
+    {
+        if (digits != 0)
+            throw new InvalidOperationException();
+        return Math.Truncate(value);
+    }
+    Expression IObjectContext.TruncateDoubleExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("TruncateDouble"), value, Expression.Constant(0, typeof(int)));
+    }
+
+    public static decimal TruncateDecimal(decimal value, int digits)
+    {
+        if (digits != 0)
+            throw new InvalidOperationException();
+        return Math.Truncate(value);
+    }
+    Expression IObjectContext.TruncateDecimalExpression(Expression value)
+    {
+        return Expression.Call(typeof(<#=contextName#>).GetMethod("TruncateDecimal"), value, Expression.Constant(0, typeof(int)));
+    }
+
+    public static bool LessThanString(string s1, string s2)
+    {
+        throw new NotImplementedException();
+    }
+    Expression IObjectContext.LessThanString(Expression s1Expresion, Expression s2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("LessThanString"), s1Expresion, s2Expresion);
+    }
+
+    public static bool GreaterThanString(string s1, string s2)
+    {
+        throw new NotImplementedException();
+    }
+    Expression IObjectContext.GreaterThanString(Expression s1Expresion, Expression s2Expresion)
+    {
+        return Expression.Call(typeof(<#=contextName#>Mock).GetMethod("GreaterThanString"), s1Expresion, s2Expresion);
+    }
+    #endregion
+
+    #region AdditionalProperties
+    public DateTime DbDateTime
+    {
+        get { return DateTime.Now; }
+    }
+    #endregion AdditionalProperties
+
+<#+
+        region.Begin("Specifications", 1);
+        foreach (var edmType in edmxElements.EdmTypes)
+        {
+            var className = code.Escape(edmType);
+            if (! GetExtensionMethodsPerClass(className, specificationsElements, serverEntitiesNamespace).Any())
+                continue;
+#>
+    I<#=className#>DALSpecifications I<#=contextName#>.<#=className#>DALSpecifications
+    {
+        get { return new <#=className#>DALSpecificationsMock(this); }
+    }
+<#+
+        }
+        region.End();
+#>
+    public Action<bool> SaveChanges { get; set; }
+    void IDataContext.SaveChanges(bool acceptChanges)
+    {		
+        SaveChanges(acceptChanges);
+    }
+
+    void IDataContext.ApplyChanges<TEntity>(IEntitySet<TEntity> entitySet, TEntity entity)
+    {	
+        ApplyChanges(entitySet, entity);
+    }
+
+    public void ApplyChanges<TEntity>(IEntitySet<TEntity> entitySet, TEntity entity) where TEntity : class, IEntity
+    {
+        ApplyChanges(entity);
+    }
+
+<#+
+        foreach (var entityType in edmxElements.EntityTypes)
+        {
+            var entityTypeEntitySet = GetEntitySet(edmxElements.Container, entityType);
+            var entityTypeEntitySetName = code.Escape(entityTypeEntitySet);
+#>
+    private void ApplyChanges(<#=serverEntitiesNamespace#>.<#=code.Escape(entityType)#> entity)
+    {
+        if (entity == null)
+            return;
+        switch (entity.ChangeTracker.State)
+        {
+            case ObjectState.Added:
+                if (! <#=entityTypeEntitySetName#>.Contains(entity))
+                    <#=entityTypeEntitySetName#>.Add(entity);
+                break;
+            case ObjectState.Unchanged:
+            case ObjectState.Modified:
+                if (!<#=entityTypeEntitySetName#>.Contains(entity)) 
+                    <#=entityTypeEntitySetName#>.Attach(entity);
+                break;
+            case ObjectState.Deleted:
+                if (<#=entityTypeEntitySetName#>.Contains(entity))
+                    <#=entityTypeEntitySetName#>.Delete(entity);
+                break;
+            case ObjectState.Detached:
+                if (<#=entityTypeEntitySetName#>.Contains(entity))
+                    <#=entityTypeEntitySetName#>.Detach(entity);
+                break;
+            default:
+                if ((entity.ChangeTracker.State & ObjectState.Deleted) != 0)
+                {
+                    if (<#=entityTypeEntitySetName#>.Contains(entity))
+                        <#=entityTypeEntitySetName#>.Delete(entity);
+                    break;
+                }
+                else
+                    throw new NotImplementedException();
+        }
+        foreach (var originalValue in entity.ChangeTracker.OriginalValues.Select(ov => ov.Value).OfType<IEntity>())
+            ApplyChanges(originalValue);
+        foreach (IEntity removedValue in entity.ChangeTracker.ObjectsRemovedFromCollectionProperties.SelectMany(ov => ov.Value))
+            ApplyChanges(removedValue);
+<#+
+        foreach (var np in entityType.NavigationProperties)
+        {
+            if (np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+#>
+        foreach (var subEntity in entity.<#=code.Escape(np)#>)
+            ApplyChanges(subEntity);
+<#+
+            }
+            else
+            {
+#>
+        if (entity.<#=code.Escape(np)#> != null)
+            ApplyChanges(entity.<#=code.Escape(np)#>);
+<#+
+            }
+        }
+#>
+    }
+
+<#+
+        }
+#>
+
+    private void ApplyChanges(IEntity entity)
+    {
+<#+
+        foreach (var entitySet in container.BaseEntitySets.OfType<EntitySet>())
+        {
+            var entityType = entitySet.ElementType;
+            foreach (var subEntityType in GetSubEntityTypes(edmxElements.ItemCollection, entityType, null))
+            {
+                string subEntityTypeName = code.Escape(subEntityType);
+#>
+        var entityAs<#=subEntityTypeName#> = entity as <#=serverEntitiesNamespace#>.<#=subEntityTypeName#>;
+        if (entityAs<#=subEntityTypeName#> != null)
+            ApplyChanges(entityAs<#=subEntityTypeName#>);
+<#+
+            }
+            string entityTypeName = code.Escape(entityType);
+#>
+        var entityAs<#=entityTypeName#> = entity as <#=serverEntitiesNamespace#>.<#=entityTypeName#>;
+        if (entityAs<#=entityTypeName#> != null)
+            ApplyChanges(entityAs<#=entityTypeName#>);
+<#+
+        }
+#>
+    }
+
+    Expression IDataContext.GetExpression(Type type, string propertyName, ParameterExpression parameterExpression)
+    {
+        throw new NotImplementedException();
+    }
+
+    Expression IDataContext.GetExpression(Type type, string methodName, List<Expression> arguments, ParameterExpression parameterExpression)
+    {
+        throw new NotImplementedException();
+    }
+
+    void IDataContext.AttachRelationship<TEntity1, TEntity2>(TEntity1 entity1, TEntity2 entity2, string collectionName)
+    {
+    }
+
+    public void Dispose()
+    {    
+    }
+
+    void IDataContext.LoadMetadata()
+    {
+    }
+<#+ CompleteContextMock(); #>
+}
+<#+
+    WriteFooter(namespaceName);
+
+    foreach (var edmType in edmxElements.EdmTypes)
+    {
+        var className = code.Escape(edmType);
+        var methods = GetExtensionMethodsPerClass(className, specificationsElements, serverEntitiesNamespace).ToList();
+        if (methods.Count == 0)
+            continue;
+        IEnumerable<string> usings = new string[] { "System", "System.Linq", "System.Linq.Expressions", serverFxCommonNamespace, serverEntitiesNamespace, serverDALInterfacesNamespace };
+        List<string> specificationMethodsUsings;
+        if (specificationsElements.Usings.TryGetValue(className, out specificationMethodsUsings))
+            usings = usings.Union(specificationMethodsUsings);
+        fileManager.StartNewFile(className + "DALSpecificationsMock.cs");
+        WriteHeader(namespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
+
+        var baseType = edmxElements.EdmTypes.OrderBy(e => e.Name).First(et => code.Escape(et) == className).BaseType;
+        string classInheritance = null;
+        while (baseType != null)
+            if (GetExtensionMethodsPerClass(code.Escape(baseType), specificationsElements, serverEntitiesNamespace).Any())
+            {
+                classInheritance = string.Format(" : {0}DALSpecificationsMock", code.Escape(baseType));
+                break;
+            }
+            else
+                baseType = baseType.BaseType;
+
+#>
+public partial class <#=className#>DALSpecificationsMock <#=classInheritance == null ?  " : " : classInheritance + ", "#>I<#=className#>DALSpecifications
+{
+    private <#=contextName#>Mock _context;
+
+    public <#=className#>DALSpecificationsMock(<#=contextName#>Mock context)
+<#+
+        if (classInheritance != null)
+        {
+#>
+        : base(context)
+<#+
+        }
+#>
+    {
+        _context = context;
+    }
+
+<#+
+        WriteSpecifications(className, methods, specificationsElements, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace);
+#>
+}
+<#+
+        WriteFooter(namespaceName);
+    }
+
+    fileManager.Process();
+}
+
+void WriteSpecifications(string className, IEnumerable<MethodDeclarationSyntax> methods, SpecificationsElements specificationsElements, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace)
+{
+    foreach (var method in methods)
+    {
+        var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+        var methodSymbol = specificationsElements.MethodSymbolPerMethods[method];
+        if (methodSymbol.ReturnsVoid)
+            continue;
+        string methodName = method.Identifier.ValueText.Trim();
+        List<MethodDeclarationSyntax> getMethods;
+        string propertyName = specificationsElements.GetMethods.TryGetValue(className, out getMethods) && getMethods.Contains(method) ? GetPropertyNameFromMethodName(methodName) : methodName;
+        StringBuilder parameterTypes, parameterNames;
+        bool hasContext;
+        string contextParameterName;
+        specificationsElements.GetParametersWithoutContextTransformInterfaces(method, out parameterTypes, out parameterNames, out hasContext, out contextParameterName, serverEntitiesNamespace, className);
+        bool changed = false;
+        var returnType = (TypeSyntax)new TypeRewriter(semanticModel, n => 
+            {
+                TypeSyntax t = n;
+                if (specificationsElements.ReplaceInterface(ref t, semanticModel))
+                {
+                    changed = true;
+                    return (NameSyntax)t;
+                }
+                return n;
+            }).Visit(method.ReturnType);
+        string methodReturnTypeName;
+        if (changed)
+            methodReturnTypeName = returnType.ToString();
+        else
+            methodReturnTypeName = methodSymbol.ReturnType.ToString();
+        if (methodSymbol.ReturnType.Name == "Error" && methodSymbol.ReturnType.ContainingNamespace.ToString() == serverFxServiceInterfacesNamespace)
+        {
+#>
+    <#=method.AttributeLists.SelectMany(a => a.Attributes).Any(a => semanticModel.GetSymbolInfo(a).Symbol.ContainingType.Name == "OverrideAttribute") ? "new " : ""#>Expression<Func<<#=parameterTypes.ToString()#><#=parameterTypes.Length == 0 ? "" : ", "#>bool>> I<#=className#>DALSpecifications.<#=propertyName#>ExpressionCondition 
+    { 
+        get { return null; }
+    }
+<#+
+        }
+        else
+        {
+#>
+    Expression<Func<<#=parameterTypes.ToString()#><#=parameterTypes.Length == 0 ? "" : ", "#><#=methodReturnTypeName#>>> I<#=className#>DALSpecifications.<#=propertyName#>Expression
+    {
+        get { return null; }
+    }
+    
+<#+		    
+        }
+    }
+}
+
+private void WriteFunctionParameters(IEnumerable<FunctionImportParameter> parameters)
+{
+    foreach (FunctionImportParameter parameter in parameters)
+    {
+        if (!parameter.NeedsLocalVariable)
+        {
+            continue;
+        }
+#>
+        ObjectParameter <#=parameter.LocalVariableName#>;
+        if (<#=parameter.IsNullableOfT ? parameter.FunctionParameterName + ".HasValue" : parameter.FunctionParameterName + " != null"#>)
+        {
+            <#=parameter.LocalVariableName#> = new ObjectParameter("<#=parameter.EsqlParameterName#>", <#=parameter.FunctionParameterName#>);
+        }
+        else
+        {
+            <#=parameter.LocalVariableName#> = new ObjectParameter("<#=parameter.EsqlParameterName#>", typeof(<#=parameter.RawClrTypeName#>));
+        }
+
+<#+
+    }
+}
+#>

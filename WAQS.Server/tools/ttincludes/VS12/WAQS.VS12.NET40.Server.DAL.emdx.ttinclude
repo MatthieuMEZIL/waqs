@@ -1,0 +1,5 @@
+<#@ include file="WAQS.VS12.Server.DAL.emdx.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+string NetVersion = "NET40";
+#>

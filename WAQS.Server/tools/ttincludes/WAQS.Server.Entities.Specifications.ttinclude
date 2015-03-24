@@ -1,0 +1,712 @@
+<#@ include file="WAQS.Specifications.Entities.ttinclude"#>
+<#@ include file="WAQS.DTO.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+    private void WriteServerEntitiesSpecifications(string edmxPath, SpecificationPath[] specificationPathes,
+        SpecificationPath[] dtoPathes, string dtoNamespace, SpecificationPath entitiesPath,
+        string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace,
+        string serverFxServiceInterfacesNamespace, string serverFxEntitiesNamespace, string namespaceName = null,
+        string propertyAttributes = null)
+    {
+        DefineMetadata();
+        var edmxElements = EdmxElements.Get(Host, ref edmxPath, namespaceName);
+        var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath,
+            serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace,
+            edmxElements.NamespaceName, edmxElements, SpecificationsElements.Type.Server);
+        var dtoTypes = GetClasses(dtoPathes).ToList();
+        var dtoNamespaces = GetNamespaces(dtoPathes).Select(n => n.ToString()).Distinct().ToList();
+        var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+        new ServerEntitiesSpecifications(Write, Host, () => GenerationEnvironment).WriteServerEntitiesSpecifications(edmxPath, specificationsElements, edmxElements, fileManager, dtoTypes, dtoNamespaces, dtoNamespace, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverFxEntitiesNamespace, namespaceName, propertyAttributes);
+    }
+
+    partial class ServerEntitiesSpecifications : T4CustomGenerator
+    {
+        public ServerEntitiesSpecifications(Action<string> write, ITextTemplatingEngineHost host,
+            Func<StringBuilder> getGenerationEnvironment)
+            : base(write, host, getGenerationEnvironment)
+        {
+        }
+
+        public void WriteServerEntitiesSpecifications(string edmxPath, SpecificationsElements specificationsElements,
+            EdmxElements edmxElements, EntityFrameworkTemplateFileManager fileManager, List<TypeSymbol> dtoTypes, List<string> dtoNamespaces, string dtoNamespace,
+            string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace,
+            string serverFxServiceInterfacesNamespace, string serverFxEntitiesNamespace, string namespaceName = null,
+            string propertyAttributes = null)
+        {
+            var classesCode = new ConcurrentDictionary<string, StringBuilder>();
+            
+            Action<StructuralType, Dictionary<string, bool>, Dictionary<string, List<MemberDeclarationSyntax>>> defineSpecifications = (edmType, classesHasSpecifications, classesMembers) =>
+            {
+                    var className = edmxElements.Code.Escape(edmType);
+                    string specificationsClassName = className + "Specifications";
+                    var members = new ConcurrentDictionary<string, List<MemberDeclarationSyntax>>();
+                    var specificationsMembers = new List<MemberDeclarationSyntax>();
+                    var baseType = GetBaseTypeWithExtensionMethods(edmType, specificationsElements, edmxElements.Code,
+                        namespaceName);
+                    string classInheritance;
+                    if (baseType == null)
+                        classInheritance = null;
+                    else
+                        classInheritance = string.Format(" : {0}.{0}Specifications", edmxElements.Code.Escape(baseType));
+                    List<MethodDeclarationSyntax> getMethods;
+                    if (specificationsElements.GetMethods.TryGetValue(className, out getMethods))
+                        foreach (var method in getMethods)
+                        {
+                            var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+                            string methodName = method.Identifier.ValueText;
+                            string propertyName = GetPropertyNameFromMethodName(methodName);
+
+                            var customAttributes = new List<AttributeListSyntax>()
+                            {
+                                SyntaxFactory.AttributeList(
+                                    SyntaxFactory.SeparatedList(
+                                        new []
+                                        {
+                                            SyntaxFactory.Attribute(
+                                                SyntaxFactory.ParseName("Specifications"))
+                                        },
+                                        new SyntaxToken[0]))
+                            };
+                            if (propertyAttributes != null)
+                                customAttributes.AddRange(
+                                    ((PropertyDeclarationSyntax)
+                                        SyntaxFactory.ParseCompilationUnit(
+                                            propertyAttributes.Replace("$PropertyName$", propertyName)
+                                                .Replace("$ClassName$", className) + "public int Foo { get; set; }").Members[0])
+                                        .AttributeLists);
+
+                            bool isOverride = specificationsElements.OverrideMethods.Contains(method);
+                            var returnType =
+                                (TypeSyntax)
+                                    new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes).Visit
+                                        (
+                                            method.ReturnType);
+                            if (! isOverride)
+                            {
+                                members.TryAdd(propertyName, new List<MemberDeclarationSyntax>()
+                                {
+                                    SyntaxFactory.PropertyDeclaration(returnType, propertyName)
+                                        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                                        .WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>(
+                                            customAttributes))
+                                        .WithAccessorList(
+                                            SyntaxFactory.AccessorList(
+                                                SyntaxFactory.List(
+                                                    new []
+                                                    {
+                                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration,
+                                                            SyntaxFactory.Block(
+                                                                SyntaxFactory.ParseStatement(
+                                                                    string.Format(
+                                                                        "return GetSpecifications().Has{0} ? GetSpecifications().{0} : Get{0}();",
+                                                                        propertyName)))),
+                                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration,
+                                                            SyntaxFactory.Block(
+                                                                SyntaxFactory.ParseStatement(
+                                                                    string.Concat("GetSpecifications().", propertyName,
+                                                                        " = value;")),
+                                                                SyntaxFactory.ParseStatement(
+                                                                    string.Concat("GetSpecifications().Has", propertyName,
+                                                                        " = true;"))))
+                                                    })))
+                                });
+                            }
+
+                            AddEntityMethod(members, className, method, semanticModel, serverFxSpecificationsNamespace,
+                                serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName,
+                                specificationsElements, edmxElements, dtoTypes, dtoNamespace, true, null);
+
+                            if (! isOverride)
+                            {
+                                specificationsMembers.Add(
+                                    SyntaxFactory.PropertyDeclaration(returnType, propertyName)
+                                        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                                        .WithAttributeLists(
+                                            SyntaxFactory.List(
+                                                new []
+                                                {
+                                                    SyntaxFactory.AttributeList(
+                                                        SyntaxFactory.SeparatedList(
+                                                            new []
+                                                            {
+                                                                SyntaxFactory.Attribute(
+                                                                    SyntaxFactory.ParseName("DataMember"))
+                                                            },
+                                                            new SyntaxToken[0]))
+                                                }))
+                                        .WithAccessorList(
+                                            SyntaxFactory.AccessorList(
+                                                SyntaxFactory.List(
+                                                    new []
+                                                    {
+                                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration,
+                                                            default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList),
+                                                            SyntaxFactory.Token(SyntaxKind.GetKeyword), null,
+                                                            SyntaxFactory.Token(SyntaxKind.SemicolonToken)),
+                                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration,
+                                                            default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList),
+                                                            SyntaxFactory.Token(SyntaxKind.SetKeyword), null,
+                                                            SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                                                    }))));
+                                specificationsMembers.Add(
+                                    SyntaxFactory.PropertyDeclaration(SyntaxFactory.ParseTypeName("bool"), "Has" + propertyName)
+                                        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                                        .WithAttributeLists(
+                                            SyntaxFactory.List(
+                                                new []
+                                                {
+                                                    SyntaxFactory.AttributeList(
+                                                        SyntaxFactory.SeparatedList(
+                                                            new []
+                                                            {
+                                                                SyntaxFactory.Attribute(
+                                                                    SyntaxFactory.ParseName("DataMember"))
+                                                            },
+                                                            new SyntaxToken[0]))
+                                            }))
+                                        .WithAccessorList(
+                                            SyntaxFactory.AccessorList(
+                                                SyntaxFactory.List(
+                                                    new []
+                                                    {
+                                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration,
+                                                            default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList),
+                                                            SyntaxFactory.Token(SyntaxKind.GetKeyword), null,
+                                                            SyntaxFactory.Token(SyntaxKind.SemicolonToken)),
+                                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration,
+                                                            default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList),
+                                                            SyntaxFactory.Token(SyntaxKind.SetKeyword), null,
+                                                            SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                                                    }))));
+                            }
+                        }
+
+                    AddServiceAndSubMethods(specificationsElements, edmxElements, className, serverFxSpecificationsNamespace,
+                        serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName, members, dtoTypes,
+                        dtoNamespace, true);
+
+                    var allValidateMethods = new List<MethodDeclarationSyntax>();
+                    bool hasSpecificValidationMethod = false;
+                    EdmType edmTypeLoop = edmType;
+                    while (edmTypeLoop != null)
+                    {
+                        List<MethodDeclarationSyntax> validateMethods;
+                        if (specificationsElements.ValidateMethods.TryGetValue(edmxElements.Code.Escape(edmTypeLoop),
+                            out validateMethods))
+                        {
+                            allValidateMethods.AddRange(validateMethods);
+                            if (edmTypeLoop == edmType)
+                                hasSpecificValidationMethod = true;
+                        }
+                        edmTypeLoop = edmTypeLoop.BaseType;
+                    }
+                    string edmTypeName = edmxElements.Code.Escape(edmType);
+                    List<WAQSMetadata> metadataSpecifications;
+                    hasSpecificValidationMethod |= specificationsElements.Metadata.TryGetValue(edmTypeName,
+                        out metadataSpecifications);
+                    if (hasSpecificValidationMethod)
+                    {
+                        var globalValidateMethodStatements = new List<StatementSyntax>()
+                        {
+                            SyntaxFactory.ParseStatement("Error error;")
+                        };
+                        var globalTransactionalValidateMethodStatements = new List<StatementSyntax>()
+                        {
+                            SyntaxFactory.ParseStatement("Func<Error> error;")
+                        };
+                        bool validateOutTransactionOverride = false;
+                        bool validateInTranscationOverride = false;
+                        List<MethodDeclarationSyntax> validateMethods;
+                        if (specificationsElements.ValidateMethods.TryGetValue(edmTypeName, out validateMethods))
+                        {
+                            validateOutTransactionOverride =
+                                allValidateMethods.Except(validateMethods)
+                                    .Any(m => specificationsElements.IsValidatableOnInsertOutsideTransaction(m, edmType, edmxElements));
+                            validateInTranscationOverride =
+                                allValidateMethods.Except(validateMethods)
+                                    .Any(m => specificationsElements.IsValidateFunc(m));
+                            AddValidateMethods(validateMethods, specificationsElements, edmxElements, members, className,
+                                serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace,
+                                serverFxServiceInterfacesNamespace, namespaceName, (method, statement) =>
+                                {
+                                    var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+                                    if (specificationsElements.OverrideMethods.Contains(method))
+                                        return;
+                                    if (! specificationsElements.IsCriticityError(method, semanticModel))
+                                        statement = SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression("! onlyError"), statement);
+                                    if (specificationsElements.IsValidateFunc(method))
+                                        globalTransactionalValidateMethodStatements.Add(statement);
+                                    else if (specificationsElements.IsValidatableOnInsertOutsideTransaction(method, edmType, edmxElements))
+                                        globalValidateMethodStatements.Add(statement);
+                                }, dtoTypes, dtoNamespace, true,
+                                insert:
+                                    m =>
+                                        specificationsElements.IsValidatableOnInsertOutsideTransaction(m, edmType, edmxElements, false));
+                        }
+                        bool hasValidateGlobalValidateMethodStatements = globalValidateMethodStatements.Count > 1;
+
+                        if (specificationsElements.Metadata.TryGetValue(edmTypeName, out metadataSpecifications))
+                        {
+                            if (metadataSpecifications.Count != 0)
+                                hasValidateGlobalValidateMethodStatements = true;
+                            foreach (var metadata in metadataSpecifications)
+                            {
+                                var propSyntaxNode = SyntaxFactory.IdentifierName(metadata.Property);
+                                SyntaxNode metadataSyntaxNode = null;
+                                bool metadataIsNullable = false;
+                                string metadataTypeName = null;
+                                if (metadata.ConstantExpression == null)
+                                {
+                                    metadataSyntaxNode = new SpecificationsRewriter((n, _) =>
+                                    {
+                                        var identifier = n as IdentifierNameSyntax;
+                                        if (identifier != null &&
+                                            identifier.Identifier.ValueText ==
+                                            metadata.LambdaExpression.Parameter.Identifier.ValueText)
+                                            return SyntaxFactory.ThisExpression();
+                                        return n;
+                                    }).Visit(metadata.LambdaExpression.Body);
+                                    metadataTypeName =
+                                        ((MethodSymbol)
+                                            specificationsElements.SemanticModelPerMetadata[metadata].GetSymbolInfo(
+                                                metadata.LambdaExpression).Symbol).ReturnType.ToString();
+                                    metadataIsNullable = metadataTypeName.EndsWith("?");
+                                }
+                                ExpressionSyntax metadataSyntaxExpression;
+                                switch (metadata.MethodName)
+                                {
+                                    case "DefineMinValue":
+                                        metadataSyntaxExpression = SyntaxFactory.BinaryExpression(SyntaxKind.LessThanExpression,
+                                            propSyntaxNode,
+                                            (ExpressionSyntax) metadata.ConstantExpression ??
+                                            SyntaxFactory.IdentifierName("metadata"));
+                                        break;
+                                    case "DefineMaxValue":
+                                        metadataSyntaxExpression = SyntaxFactory.BinaryExpression(SyntaxKind.GreaterThanExpression,
+                                            propSyntaxNode,
+                                            (ExpressionSyntax) metadata.ConstantExpression ??
+                                            SyntaxFactory.IdentifierName("metadata"));
+                                        break;
+                                    case "DefineMinLength":
+                                        metadataSyntaxExpression = SyntaxFactory.BinaryExpression(SyntaxKind.LessThanExpression,
+                                            SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, propSyntaxNode,
+                                                SyntaxFactory.IdentifierName("Length")),
+                                            (ExpressionSyntax) metadata.ConstantExpression ??
+                                            SyntaxFactory.IdentifierName("metadata"));
+                                        break;
+                                    case "DefineMaxLength":
+                                        metadataSyntaxExpression = SyntaxFactory.BinaryExpression(SyntaxKind.GreaterThanExpression,
+                                            SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, propSyntaxNode,
+                                                SyntaxFactory.IdentifierName("Length")),
+                                            (ExpressionSyntax) metadata.ConstantExpression ??
+                                            SyntaxFactory.IdentifierName("metadata"));
+                                        break;
+                                    case "DefinePattern":
+                                        metadataSyntaxExpression = SyntaxFactory.PrefixUnaryExpression(
+                                            SyntaxKind.LogicalNotExpression,
+                                            SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.MemberAccessExpression(
+                                                    SyntaxKindMemberAccessExpression,
+                                                    SyntaxFactory.IdentifierName("System.Text.RegularExpressions.Regex"),
+                                                    SyntaxFactory.IdentifierName("IsMatch")),
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SeparatedList(
+                                                        new []
+                                                        {
+                                                            SyntaxFactory.Argument(
+                                                                propSyntaxNode),
+                                                            SyntaxFactory.Argument(
+                                                                (ExpressionSyntax) metadata.ConstantExpression ?? SyntaxFactory.IdentifierName("metadata"))
+                                                        },
+                                                        new [] { SyntaxFactory.Token(SyntaxKind.CommaToken) }))));
+                                        break;
+                                    case "IsNullable":
+                                        if (metadata.ConstantExpression == null)
+                                            metadataSyntaxExpression = SyntaxFactory.BinaryExpression(
+                                                SyntaxKind.LogicalAndExpression,
+                                                SyntaxFactory.BinaryExpression(
+                                                    SyntaxKind.EqualsExpression,
+                                                    propSyntaxNode,
+                                                    SyntaxFactory.LiteralExpression(
+                                                        SyntaxKind.NullLiteralExpression)),
+                                                SyntaxFactory.PrefixUnaryExpression(
+                                                    SyntaxKind.LogicalNotExpression,
+                                                    SyntaxFactory.IdentifierName("metadata")));
+                                        else
+                                        {
+                                            if (bool.Parse(metadata.ConstantExpression.ToString()))
+                                                metadataSyntaxExpression = null;
+                                            else
+                                                metadataSyntaxExpression =
+                                                    SyntaxFactory.BinaryExpression(
+                                                        SyntaxKind.EqualsExpression,
+                                                        propSyntaxNode,
+                                                        SyntaxFactory.LiteralExpression(
+                                                            SyntaxKind.NullLiteralExpression));
+                                        }
+                                        break;
+                                    default:
+                                        throw new NotImplementedException();
+                                }
+                                if (metadataSyntaxExpression != null)
+                                {
+                                    var statements = new List<StatementSyntax>();
+                                    if (metadata.ConstantExpression == null)
+                                    {
+                                        statements.Add(
+                                            SyntaxFactory.LocalDeclarationStatement(
+                                                SyntaxFactory.VariableDeclaration(
+                                                    SyntaxFactory.IdentifierName(metadataTypeName),
+                                                    SyntaxFactory.SeparatedList(
+                                                        new []
+                                                        {
+                                                            SyntaxFactory.VariableDeclarator("metadata")
+                                                                .WithInitializer(
+                                                                    SyntaxFactory.EqualsValueClause(
+                                                                        (ExpressionSyntax) metadataSyntaxNode)) 
+                                                        },
+                                                        new SyntaxToken[0]))));
+                                        if (metadataTypeName == "string" || metadataTypeName.EndsWith("?") ||
+                                            metadataTypeName.EndsWith("]"))
+                                            metadataSyntaxExpression =
+                                                SyntaxFactory.BinaryExpression(
+                                                    SyntaxKind.LogicalAndExpression,
+                                                    SyntaxFactory.BinaryExpression(
+                                                        SyntaxKind.NotEqualsExpression,
+                                                        SyntaxFactory.IdentifierName("metadata"),
+                                                        SyntaxFactory.LiteralExpression(
+                                                            SyntaxKind.NullLiteralExpression)),
+                                                    metadataSyntaxExpression);
+                                    }
+                                    statements.Add(
+                                        SyntaxFactory.IfStatement(
+                                            metadataSyntaxExpression,
+                                            SyntaxFactory.ParseStatement(
+                                                string.Format(
+                                                    "return new Error {{ Criticity = Criticity.{0}, Key = \"{1}{2}\", Message = Error.Get{2}ErrorMessage(\"{1}\"{3}), ErrorDetails = new ErrorDetail[] {{ new ErrorDetail {{ EntityKey = DataTransferEntityKey, PropertyName = \"{1}\" }} }} }};",
+                                                    metadata.MethodName == "IsNullable" ? "Mandatory" : "Error",
+                                                    metadata.Property, metadata.MethodName,
+                                                    metadata.MethodName == "IsNullable"
+                                                        ? ""
+                                                        : ", " +
+                                                          (metadata.ConstantExpression == null
+                                                              ? "metadata" + (metadataIsNullable ? ".Value" : "")
+                                                              : metadata.ConstantExpression.ToString())))));
+                                    string methodName = string.Concat("Validate", metadata.Property, metadata.MethodName);
+                                    members.TryAdd(methodName, new List<MemberDeclarationSyntax>()
+                                    {
+                                        SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName("Error"), methodName)
+                                            .WithModifiers(
+                                                SyntaxFactory.TokenList(
+                                                    SyntaxFactory.Token(SyntaxKind.ProtectedKeyword),
+                                                    SyntaxFactory.Token(metadata.IsOverriden
+                                                        ? SyntaxKind.OverrideKeyword
+                                                        : SyntaxKind.VirtualKeyword)))
+                                            .WithBody(
+                                                SyntaxFactory.Block(
+                                                    SyntaxFactory.IfStatement(
+                                                        SyntaxFactory.ParseExpression(
+                                                            string.Concat(
+                                                                "ChangeTracker.State == ObjectState.Added || ChangeTracker.State == ObjectState.Modified && ChangeTracker.ModifiedProperties.Contains(\"",
+                                                                metadata.Property, "\")")),
+                                                        SyntaxFactory.Block(
+                                                            statements)),
+                                                    SyntaxFactory.ParseStatement("return null;")))
+                                    });
+
+                                    if (! metadata.IsOverriden)
+                                        globalValidateMethodStatements.Add(
+                                            SyntaxFactory.ParseStatement(string.Concat("if ((error = ", methodName,
+                                                "()) != null) yield return error;")));
+                                }
+                            }
+                        }
+                        var edmTypeAsEntityType = edmType as EntityType;
+                        if (edmTypeAsEntityType != null)
+                        {
+                            while ((edmTypeAsEntityType = (EntityType) edmTypeAsEntityType.BaseType) != null)
+                            {
+                                List<WAQSMetadata> edmTypeBaseMetadata;
+                                if (
+                                    specificationsElements.Metadata.TryGetValue(
+                                        edmxElements.Code.Escape(edmTypeAsEntityType),
+                                        out edmTypeBaseMetadata))
+                                {
+                                    validateOutTransactionOverride = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (globalValidateMethodStatements.Count > 1)
+                        {
+                            if (! hasValidateGlobalValidateMethodStatements)
+                                globalValidateMethodStatements.RemoveAt(0);
+                            if (validateOutTransactionOverride)
+                                globalValidateMethodStatements.Insert(0,
+                                    SyntaxFactory.ParseStatement(
+                                        "foreach (var er in base.ValidateOutTransaction()) yield return er;"));
+                            members.TryAdd("ValidateOutTransaction", new List<MemberDeclarationSyntax>()
+                            {
+                                SyntaxFactory.MethodDeclaration(
+                                    SyntaxFactory.ParseTypeName("IEnumerable<Error>"),
+                                    "ValidateOutTransaction")
+                                    .WithParameterList(
+                                        SyntaxFactory.ParameterList(
+                                            SyntaxFactory.SeparatedList(
+                                                new []
+                                                {
+                                                    SyntaxFactory.Parameter(
+                                                        SyntaxFactory.Identifier("onlyError"))
+                                                        .WithType(
+                                                            SyntaxFactory.ParseTypeName("bool"))
+                                                        .WithDefault(
+                                                            SyntaxFactory.EqualsValueClause(
+                                                                SyntaxFactory.ParseExpression("true")))
+                                                },
+                                                new SyntaxToken[0])))
+                                    .WithModifiers(
+                                        SyntaxFactory.TokenList(
+                                            SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                                            SyntaxFactory.Token(validateOutTransactionOverride
+                                                ? SyntaxKind.OverrideKeyword
+                                                : SyntaxKind.VirtualKeyword)))
+                                    .WithBody(
+                                        SyntaxFactory.Block(globalValidateMethodStatements))
+                            });
+                        }
+                        if (globalTransactionalValidateMethodStatements.Count > 1)
+                        {
+                            if (validateInTranscationOverride)
+                                globalTransactionalValidateMethodStatements.Insert(0,
+                                    SyntaxFactory.ParseStatement(
+                                        "foreach (var er in base.ValidateInTransaction()) yield return er;"));
+                            members.TryAdd("ValidateInTransaction", new List<MemberDeclarationSyntax>()
+                            {
+                                SyntaxFactory.MethodDeclaration(
+                                    SyntaxFactory.ParseTypeName("IEnumerable<Func<Error>>"),
+                                    "ValidateInTransaction")
+                                    .WithParameterList(
+                                        SyntaxFactory.ParameterList(
+                                            SyntaxFactory.SeparatedList(
+                                                new []
+                                                {
+                                                    SyntaxFactory.Parameter(
+                                                        SyntaxFactory.Identifier("onlyError"))
+                                                        .WithType(
+                                                            SyntaxFactory.ParseTypeName("bool"))
+                                                        .WithDefault(
+                                                            SyntaxFactory.EqualsValueClause(
+                                                                SyntaxFactory.ParseExpression("true")))
+                                                },
+                                                new SyntaxToken[0])))
+                                    .WithModifiers(
+                                        SyntaxFactory.TokenList(
+                                            SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                                            SyntaxFactory.Token(validateInTranscationOverride
+                                                ? SyntaxKind.OverrideKeyword
+                                                : SyntaxKind.VirtualKeyword)))
+                                    .WithBody(SyntaxFactory.Block(globalTransactionalValidateMethodStatements))
+                            });
+                        }
+                    }
+
+                    classesMembers.Add(className, members.SelectMany(m => m.Value).ToList());
+
+                    bool hasSpecification = specificationsMembers.Any();
+                    classesHasSpecifications.Add(className, hasSpecification);
+                    if (hasSpecification || members.Any())
+                    {
+                        classesCode.TryAdd(className + ".specifications.cs", CurrentFileStringBuilder = new StringBuilder());
+                        if (specificationsMembers.Any())
+                        {
+                            var subTypesSB = new StringBuilder();
+                            foreach (EntityType subType in GetSubEntityTypes(edmxElements.ItemCollection, className))
+                            {
+                                var subTypeName = edmxElements.Code.Escape(subType);
+                                List<MethodDeclarationSyntax> subMethods;
+                                if (specificationsElements.GetMethods.TryGetValue(subTypeName, out subMethods) &&
+                                    subMethods.Where(m => ! specificationsElements.OverrideMethods.Contains(m)).Any())
+                                {
+                                    subTypesSB.Append("[KnownType(typeof(");
+                                    subTypesSB.Append(subTypeName);
+                                    subTypesSB.Append(".");
+                                    subTypesSB.Append(subTypeName);
+                                    subTypesSB.Append("Specifications))]");
+                                }
+                            }
+                            string specBaseTypeName = GetSpecificationsBaseTypeName(edmxElements.Code,
+                                specificationsElements,
+                                edmType as EntityType);
+                            var membersSpecifications = new List<MemberDeclarationSyntax>();
+                            members.TryAdd("Specifications", membersSpecifications);
+                            membersSpecifications.Add(((ClassDeclarationSyntax)
+                                SyntaxFactory.ParseCompilationUnit(string.Concat("[DataContract(Namespace = \"http://", edmxElements.EdmxName, "/Entities\")]", subTypesSB.ToString(), " public partial class ", specificationsClassName, specBaseTypeName == null ? null : string.Concat(" : ", specBaseTypeName, "Specifications"), "{}")).Members[0]).WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(specificationsMembers)));
+                            membersSpecifications.Add( SyntaxFactory.ParseCompilationUnit(string.Concat("[DataMember", classInheritance == null ? "" : string.Concat("(Name = \"", className, "Specifications\")"), "]public ", classInheritance == null ? "" : "new ", specificationsClassName, " Specifications { get; set; }")).Members[0]);
+                            membersSpecifications.Add( SyntaxFactory.ParseCompilationUnit(string.Concat("protected ", classInheritance == null ? "" : "new ", specificationsClassName, " GetSpecifications() { return Specifications ?? (Specifications = GetSpecifications", className, "()); }")).Members[0]);
+                            membersSpecifications.Add( SyntaxFactory.ParseCompilationUnit(string.Concat("protected virtual ", specificationsClassName, " GetSpecifications", className, "() { return new ", specificationsClassName, "(); }")).Members[0]);
+                            EdmType baseTypeLoop = edmType.BaseType;
+                            while (baseTypeLoop != null)
+                            {
+                                string baseTypeName = edmxElements.Code.Escape(baseTypeLoop);
+                                List<MethodDeclarationSyntax> baseGetMethods;
+                                if (specificationsElements.GetMethods.TryGetValue(baseTypeName, out baseGetMethods) && baseGetMethods.Any())
+                                    membersSpecifications.Add( SyntaxFactory.ParseCompilationUnit(string.Concat("protected override ", baseTypeName, "Specifications GetSpecifications", baseTypeName, "() { return GetSpecifications(); }")).Members[0]);
+                                baseTypeLoop = baseTypeLoop.BaseType;
+                            }
+                        }
+
+                        List<string> usings;
+                        if (specificationsElements.Usings.TryGetValue(className, out usings))
+                            usings = usings.Where(u => ! dtoNamespaces.Contains(u)).ToList();
+                        else
+                            usings = new List<string>();
+                        if (! usings.Contains("System"))
+                            usings.Add("System");
+                        if (! usings.Contains("System.Collections.Generic"))
+                            usings.Add("System.Collections.Generic");
+                        if (! usings.Contains("System.Linq"))
+                            usings.Add("System.Linq");
+                        if (! usings.Contains("System.Runtime.Serialization"))
+                            usings.Add("System.Runtime.Serialization");
+                        if (! usings.Contains(serverFxEntitiesNamespace))
+                            usings.Add(serverFxEntitiesNamespace);
+                        if (! usings.Contains(serverFxSpecificationsNamespace))
+                            usings.Add(serverFxSpecificationsNamespace);
+                        if (! usings.Contains(serverFxServiceInterfacesNamespace))
+                            usings.Add(serverFxServiceInterfacesNamespace);
+                        if (specificationsElements.ValidateMethods.ContainsKey(className))
+                        {
+                            if (! usings.Contains("System.Collections.Generic"))
+                                usings.Add("System.Collections.Generic");
+                            if (! usings.Contains(serverFxServiceInterfacesNamespace))
+                                usings.Add(serverFxServiceInterfacesNamespace);
+                            if (! usings.Contains(serverFxEntitiesNamespace))
+                                usings.Add(serverFxEntitiesNamespace);
+                        }
+
+                        var @class = SyntaxFactory.ClassDeclaration(className)
+                            .WithModifiers(
+                                SyntaxFactory.TokenList(
+                                    SyntaxFactory.Token(
+                                        SyntaxKind.PartialKeyword)))
+                            .WithMembers(
+                                SyntaxFactory.List(members.Values.SelectMany(m => m)));
+                        List<NamedTypeSymbol> interfaces;
+                        if (specificationsElements.InterfacesPerClasses.TryGetValue(className, out interfaces))
+                        {
+                            var interfaceTypes =
+                                interfaces.Where(i => specificationsElements.InterfaceSpecifications.Any(i2 => i2.Equals(i)))
+                                    .Select(i => GetBaseType(SyntaxFactory.ParseTypeName(i.Name + "Specifications")))
+                                    .ToList();
+                            if (interfaceTypes.Count != 0)
+                                @class =
+                                    @class.WithBaseList(
+                                        SyntaxFactory.BaseList(SyntaxFactory.SeparatedList(interfaceTypes,
+                                            interfaceTypes.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
+                        }
+
+                        var compilationUnit = SyntaxFactory.CompilationUnit()
+                            .WithUsings(
+                                SyntaxFactory.List<UsingDirectiveSyntax>(
+                                    usings.OrderBy(u => u).Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u)))))
+                            .WithMembers(SyntaxFactory.List(
+                                new MemberDeclarationSyntax []
+                                {
+                                    SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(edmxElements.NamespaceName))
+                                        .WithMembers(
+                                            SyntaxFactory.List(
+                                                new MemberDeclarationSyntax[] { @class })) }));
+
+                        List<CompilationUnitSyntax> compilationUnits;
+                        if (specificationsElements.CompilationUnitPerClass.TryGetValue(className, out compilationUnits))
+                            compilationUnit =
+                                compilationUnit.WithExterns(
+                                    SyntaxFactory.List<ExternAliasDirectiveSyntax>(compilationUnits.SelectMany(cu => cu.Externs)));
+
+                        string codeValue = compilationUnit
+                            .NormalizeWhitespace()
+                            .ToString();
+#>
+<#=codeValue #>			
+<#+
+                    }
+            };
+            Parallel.ForEach(edmxElements.EntitySets, entitySet =>
+            {
+                var hasSpecifications = new Dictionary<string, bool>();
+                var members = new Dictionary<string, List<MemberDeclarationSyntax>>();
+                var entityTypes = GetSubEntityTypes(edmxElements.ItemCollection, entitySet.ElementType).ToList();
+                entityTypes.Add(entitySet.ElementType);
+                foreach (var entityType in entityTypes)
+                    defineSpecifications(entityType, hasSpecifications, members);
+            });
+    if (
+        ! (specificationsElements.NonExtensionMethods.Count == 0 &&
+           specificationsElements.NonEntitiesExtensionMethods.Count == 0))
+    {
+        classesCode.TryAdd("EntitiesOtherSpecifications.cs", CurrentFileStringBuilder = new StringBuilder());
+        List<string> usings;
+        if (specificationsElements.Usings.TryGetValue("@Other", out usings))
+            usings = usings.Where(u => ! dtoNamespaces.Contains(u)).ToList();
+        else
+            usings = new List<string>();
+        if (! usings.Contains("System"))
+            usings.Insert(0, "System");
+        if (! usings.Contains("WAQS.Specifications"))
+            usings.Add("WAQS.Specifications");
+        new WritingFunctions(Write).WriteHeader(PushIndent, edmxElements.NamespaceName, edmxElements.Code,
+            usings.OrderBy(u => u).ToArray());
+        PushIndent(CodeRegion.GetIndent(1));
+        var members = new ConcurrentDictionary<string, List<MemberDeclarationSyntax>>();
+        foreach (
+            var method in
+                specificationsElements.NonExtensionMethods.Union(specificationsElements.NonEntitiesExtensionMethods))
+            AddEntityMethod(members, null, method, specificationsElements.SemanticModelPerMethods[method], serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName, specificationsElements, edmxElements, dtoTypes, dtoNamespace, true, null);
+        PopIndent();
+#>
+<#=
+    SyntaxFactory.ClassDeclaration("EntitiesOtherSpecifications")
+        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+        .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(members.Values.SelectMany(m => m)))
+        .NormalizeWhitespace()
+        .ToString() #>
+<#+
+        new WritingFunctions(Write).WriteFooter(PopIndent, edmxElements.NamespaceName);
+    }
+
+            new WritingFunctions(Write).WriteInterfaceSpecifications(
+                (ns, c, us) => new WritingFunctions(Write).WriteHeader(PushIndent, ns, c, us), n =>
+                {
+                    new WritingFunctions(Write).WriteFooter(PopIndent, n);
+                }, specificationsElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace,
+                serverFxServiceInterfacesNamespace, namespaceName, f =>
+                {
+                    CurrentFileStringBuilder = new StringBuilder();
+                }, edmxElements, dtoTypes, dtoNamespace);
+
+            Process(fileManager, classesCode, edmxElements, (newDocument, documentIdCode) => new ServerTestNull(GetSemanticModel(newDocument), documentIdCode, specificationsElements));
+        }
+    }
+
+    private class ServerTestNull : SpecificationsTestNull
+    {
+        public ServerTestNull(ISemanticModel semanticModel, string classPath, SpecificationsElements specificationsElements)
+            : base(semanticModel, classPath, specificationsElements)
+        {
+        }
+
+        protected override void Init()
+        {
+            base.Init();
+            AddAlreadyTestedNullableExpressions("GetSpecifications()");
+        }
+
+        public override SyntaxNode VisitPropertyDeclaration(PropertyDeclarationSyntax node)
+        {
+            return node;
+        }
+    }
+#>

@@ -1,0 +1,217 @@
+<#+
+private void CompleteEntitySet()
+    {
+#>
+
+    public Task ForeachAsync(Action<T> action, CancellationToken cancellationToken = default(CancellationToken))
+    {
+        return ObjectSet.ForEachAsync(action, cancellationToken);
+    }
+
+    Task IWAQSQuery.ForeachAsync(Action<object> action, CancellationToken cancellationToken)
+    {
+        return ObjectSet.ForEachAsync<T>(action, cancellationToken);
+    }
+<#+
+    }
+
+    private void EFAsyncQueryProviderFactory()
+    {
+#>
+    public Task<object> ExecuteAsync(IQueryProvider queryProvider, Expression expression, CancellationToken cancellationToken)
+    {
+        var dbAsyncQueryProvider = queryProvider as IDbAsyncQueryProvider;
+        if (dbAsyncQueryProvider == null)
+            throw new InvalidOperationException();
+        return dbAsyncQueryProvider.ExecuteAsync(expression, cancellationToken);
+    }
+
+    public Task<T> ExecuteAsync<T>(IQueryProvider queryProvider, Expression expression, CancellationToken cancellationToken)
+    {
+        var dbAsyncQueryProvider = queryProvider as IDbAsyncQueryProvider;
+        if (dbAsyncQueryProvider == null)
+            throw new InvalidOperationException();
+        return dbAsyncQueryProvider.ExecuteAsync<T>(expression, cancellationToken);
+    }
+
+    private IAsyncEnumerableFactory _asyncEnumerableFactory;
+    public IAsyncEnumerableFactory AsyncEnumerableFactory
+    {
+        get { return _asyncEnumerableFactory ?? (_asyncEnumerableFactory = new EFAsyncEnumerableFactory()); }
+    }
+<#+
+    }
+
+    private void CompleteEFAsyncEnumerableFactory()
+    {
+#>
+    public IAsyncEnumerable GetAsyncEnumerable(IQueryable query)
+    {
+        var dbAsyncEnumerable = query as IDbAsyncEnumerable;
+        if (dbAsyncEnumerable == null)
+            throw new InvalidOperationException();
+        return new AsyncEnumerable(new EFAsyncEnumerator(dbAsyncEnumerable.GetAsyncEnumerator()));
+    }
+
+    public IAsyncEnumerable<T> GetAsyncEnumerable<T>(IQueryable<T> query)
+    {
+        var dbAsyncEnumerable = query as IDbAsyncEnumerable<T>;
+        if (dbAsyncEnumerable == null)
+            throw new InvalidOperationException();
+        return new AsyncEnumerable<T>(new EFAsyncEnumerator<T>(dbAsyncEnumerable.GetAsyncEnumerator()));
+    }	
+<#+
+    }
+
+    private void Complete(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string namespaceName, string serverFxDALInterfacesNamespace)
+    {
+        fileManager.StartNewFile("EFAsyncEnumerator.cs");
+        WriteHeader(namespaceName, code, "System.Data.Entity.Infrastructure", "System.Threading", "System.Threading.Tasks", serverFxDALInterfacesNamespace);
+#>
+public class EFAsyncEnumerator : IAsyncEnumerator
+{
+    private IDbAsyncEnumerator _asyncEnumerator;
+
+    public EFAsyncEnumerator(IDbAsyncEnumerator asyncEnumerator)
+    {
+        _asyncEnumerator = asyncEnumerator;
+    }
+
+    public Task<bool> MoveNextAsync(CancellationToken cancellationToken)
+    {
+        return _asyncEnumerator.MoveNextAsync(cancellationToken);
+    }
+
+    public object Current
+    {
+        get { return _asyncEnumerator.Current; }
+    }
+
+    public void Dispose()
+    {
+        _asyncEnumerator.Dispose();
+    }
+}
+
+public class EFAsyncEnumerator<T> : EFAsyncEnumerator, IAsyncEnumerator<T>
+{
+    private IDbAsyncEnumerator<T> _asyncEnumerator;
+
+    public EFAsyncEnumerator(IDbAsyncEnumerator<T> asyncEnumerator)
+        : base(asyncEnumerator)
+    {
+        _asyncEnumerator = asyncEnumerator;
+    }
+
+    public new T Current
+    {
+        get { return _asyncEnumerator.Current; }
+    }
+}
+<#+
+        WriteFooter(namespaceName);
+    }
+
+    private void CompleteExceptionHandlerObjectContextUsings(List<string> exceptionHandlerObjectContextUsings)
+    {
+        exceptionHandlerObjectContextUsings.Add("System.Threading.Tasks");
+    }
+
+    private void CompleteExceptionHandlerObjectContext()
+    {
+#>
+
+    protected async override Task<int> SaveChangesAsync(ObjectContext context, SaveOptions options, Func<SaveOptions, Task<int>> baseSaveChangesAsync)
+    {
+        _entities.Clear();
+        return await SaveChangesAsyncInternal(context, options, baseSaveChangesAsync);
+    }
+    private async Task<int> SaveChangesAsyncInternal(ObjectContext context, SaveOptions options, Func<SaveOptions, Task<int>> baseSaveChangesAsync)
+    {
+        int value = 0;
+        OptimisticConcurrencyException optimisticConcurrencyException = null;
+        try
+        {
+            value = await baseSaveChangesAsync(options);
+        }
+        catch (OptimisticConcurrencyException e)
+        {
+            optimisticConcurrencyException = e;
+        }
+        catch (Exception e)
+        {
+            HandleOrReThrow(e);
+        }
+        if (optimisticConcurrencyException != null)
+        {
+            using (var contextTmp = new T())
+            {
+                contextTmp.MetadataWorkspace.LoadFromAssembly(context.GetType().Assembly);
+                if (DetachAlreadyDeletedEntities(optimisticConcurrencyException, contextTmp))
+                    try
+                    {
+                        value = await SaveChangesAsync(context, options, baseSaveChangesAsync);
+                    }
+                    catch (Exception e2)
+                    {
+                        HandleOrReThrow(e2);
+                    }
+                else
+                    HandleOrReThrow(optimisticConcurrencyException);
+            }
+        }
+        return value;
+    }
+<#+
+    }
+
+    private void CompleteObjectContextCustomizerCreateObjectContext()
+    {
+#>
+        objectContext.AddSaveAsyncAction(new T { ObjectContext = objectContext }.SaveChangesAsync);
+<#+
+    }
+
+    private void CompleteObjectContextCustomizerBaseUsings(List<string> objectContextCustomizerBaseUsings)
+    {
+        objectContextCustomizerBaseUsings.Add("System.Threading.Tasks");
+    }
+
+    private void CompleteObjectContextCustomizerBase()
+    {
+#>
+ 
+    protected abstract Task<int> SaveChangesAsync(ObjectContext context, SaveOptions options, Func<SaveOptions, Task<int>> baseSaveChanges);
+<#+
+    }
+
+    private void CompleteCustomizableObjectContextUsings(List<string> customizableObjectContextUsings)
+    {
+        customizableObjectContextUsings.Add("System.Threading");
+        customizableObjectContextUsings.Add("System.Threading.Tasks");
+    }
+
+    private void CompleteCustomizableObjectContext()
+    {
+#>
+    private List<Func<ObjectContext, SaveOptions, Func<SaveOptions, Task<int>>, Task<int>>> _saveAsyncActions = new List<Func<ObjectContext, SaveOptions, Func<SaveOptions, Task<int>>, Task<int>>>();
+
+    public void AddSaveAsyncAction(Func<ObjectContext, SaveOptions, Func<SaveOptions, Task<int>>, Task<int>> saveAsyncAction)
+    {
+        _saveAsyncActions.Add(saveAsyncAction);
+    }
+
+    public override async Task<int> SaveChangesAsync(SaveOptions options, CancellationToken cancellationToken)
+    {
+        Func<int, SaveOptions, Task<int>> saveActionAsync = null;
+        saveActionAsync = async (index, saveOptions) =>
+            {
+                if (index == -1)
+                    return await base.SaveChangesAsync(saveOptions);
+                return await _saveAsyncActions[index](this, saveOptions, so => saveActionAsync(index - 1, so));
+            };
+        return await saveActionAsync(_saveAsyncActions.Count - 1, options);
+    }
+<#+
+    }
+#>

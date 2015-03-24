@@ -1,0 +1,6 @@
+<#@ include file="WAQS.VS12.Specifications.ttinclude"#>
+<#@ include file="WAQS.VS12.Edmx.Utility.ttinclude"#>
+<#@ include file="WAQS.Server.Entities.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

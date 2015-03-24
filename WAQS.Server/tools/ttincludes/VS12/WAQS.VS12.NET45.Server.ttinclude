@@ -1,0 +1,6 @@
+<#@ include file="WAQS.VS12.Server.ttinclude"#>
+<#+ 
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+string netVersion = "NET45";
+#>

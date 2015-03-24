@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x86'">
+    <StartArguments>"C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11\Northwind.edmx" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11\WebApplication11.csproj" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\packages\WAQS.Server.1.9.2.10\tools\Server" "WebApplication11" "WebApplication11" "1.0.0.0" "NET46" "VS14" "All" "Web" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11\WAQS.Northwind" "" "WithoutSourceControl" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11.sln" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11\WebApplication11.csproj" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11\Specifications" "C:\Users\mamezil\Documents\Visual Studio 2015\Projects\WebApplication11\WebApplication11\DTO"</StartArguments>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ProjectView>ProjectFiles</ProjectView>
+  </PropertyGroup>
+</Project>

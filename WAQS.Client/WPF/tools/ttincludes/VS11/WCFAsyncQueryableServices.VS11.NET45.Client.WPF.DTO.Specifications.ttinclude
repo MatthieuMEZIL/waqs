@@ -1,4 +1,0 @@
-<#@ include file="WCFAsyncQueryableServices.VS11.NET45.Client.DTO.Specifications.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

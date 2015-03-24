@@ -1,0 +1,3075 @@
+<#@ include file="WAQS.Service.Base.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+    private void WriteServerService(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, string dtoWCFNamespace, SpecificationPath entitiesPath, string serverFxCommonNamespace, string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxServiceNamespace, string serverFxSerializableExpressionsNamespace, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, string serverServiceInterfacesNamespace, string serverDALInterfacesNamespace, bool isParallel, string namespaceName, string relativePath)
+    {
+        var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+        var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+        var code = edmxElements.Code;
+        var dtoTypes = GetClasses(dtoPathes).ToList();
+        ITypeSymbol dtoType;
+        var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Server, getNamespaceFromTypeSymbol: t =>
+        {
+            if ((dtoType = dtoTypes.FirstOrDefault(dtoT => dtoT.ToString() == t.ToString())) != null)
+                return dtoNamespace;
+            return null;
+        }, service: true);
+        var containerName = code.Escape(edmxElements.Container);
+        var edmxName = edmxElements.EdmxName;
+        var entityTypesWithEntitySet = edmxElements.EntityTypes.Where(e => GetEntitySet(edmxElements.Container, e) != null).ToList();
+
+        IEnumerable<string> usings = new string[] {"System", "System.Collections", "System.Collections.Concurrent", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Threading.Tasks", "System.Transactions", serverFxDALInterfacesNamespace, serverDALInterfacesNamespace, serverFxCommonNamespace, serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxServiceNamespace, serverFxEntitiesNamespace, serverEntitiesNamespace, serverServiceInterfacesNamespace};
+        List<string> specificationMethodsUsings;
+        if (specificationsElements.Usings.TryGetValue("@Service", out specificationMethodsUsings))
+            usings = usings.Union(specificationMethodsUsings);
+        if (specificationsElements.Usings.TryGetValue("@Other", out specificationMethodsUsings))
+            usings = usings.Union(specificationMethodsUsings);
+        fileManager.StartNewFile(edmxName + "Service.cs");
+        WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
+
+        var methodsWithContextOrServicePropertyPerClasses = new Dictionary<string, List<MethodDeclarationSyntax>>();
+        foreach (var edmType in edmxElements.EdmTypes)
+        {
+            var className = edmxElements.Code.Escape(edmType);
+            var methodsWithContextOrServiceProperty = new List<MethodDeclarationSyntax>();
+            methodsWithContextOrServicePropertyPerClasses.Add(className, methodsWithContextOrServiceProperty);
+            foreach (var method in specificationsElements.ExtensionMethods.Where(m =>
+            {
+                var methodSymbol = specificationsElements.MethodSymbolPerMethods[m];
+                if (methodSymbol.Parameters[0].Type.Name == className)
+                    return true;
+                List<string> classes;
+                return specificationsElements.ClassesPerInterfaces.TryGetValue(methodSymbol.Parameters[0].Type.ToString(), out classes) && classes.Contains(className);
+            }))
+            {
+                if (specificationsElements.HasContextOrServiceAsParameter(method) || specificationsElements.UseServiceProperty(method))
+                    methodsWithContextOrServiceProperty.Add(method);
+            }
+        }
+        methodsWithContextOrServicePropertyPerClasses.Add("EntitiesOtherSpecifications", new List<MethodDeclarationSyntax>());
+        foreach (var method in specificationsElements.NonExtensionMethods.Union(specificationsElements.NonEntitiesExtensionMethods.Union(specificationsElements.ExtensionMethods.Where(m => ! edmxElements.EdmTypes.Select(t => string.Concat(serverEntitiesNamespace, ".", code.Escape(t))).Union(specificationsElements.ClassesPerInterfaces.Keys).Contains(((MethodSymbol) specificationsElements.MethodSymbolPerMethods[m]).Parameters[0].Type.ToString())))))
+        {
+            var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+            if (specificationsElements.HasContextOrServiceAsParameter(method) || specificationsElements.UseServiceProperty(method))
+            {
+                var methodSymbol = (MethodSymbol) semanticModel.GetDeclaredSymbol(method);
+                List<MethodDeclarationSyntax> methodsWithContexts;
+                if (methodSymbol.IsExtensionMethod && methodsWithContextOrServicePropertyPerClasses.TryGetValue(methodSymbol.Parameters[0].Type.Name, out methodsWithContexts))
+                    methodsWithContexts.Add(method);
+                else
+                    methodsWithContextOrServicePropertyPerClasses["EntitiesOtherSpecifications"].Add(method);
+            }
+        }
+#>
+public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName #>Service, IDisposable
+{
+    private Func<<#=edmxName#>Service> _serviceFactory;
+    private Func<I<#=containerName#>> _contextFactory;
+
+    static <#=edmxName #>Service()
+    {
+<#+
+    foreach (var edmType in edmxElements.EdmTypes)
+    {
+        var edmTypeName = code.Escape(edmType);
+#>
+        WAQSQuery.WithTypes.Add(typeof(<#=edmTypeName #>), new WithType
+            {
+                Type = typeof(With<#=edmTypeName #>),
+                TransformToOriginalType = e =>
+                {
+                    var with<#=edmTypeName #> = e as With<#=edmTypeName #>;
+                    if (with<#=edmTypeName #> == null)
+                        return e;
+                    var value = with<#=edmTypeName #>.<#=edmTypeName #>;
+<#+
+        bool hasSpecifications = false;
+        List<MethodDeclarationSyntax> getMethods;
+        var edmTypeLoop = edmType;
+        while (edmTypeLoop != null && (hasSpecifications = specificationsElements.GetMethods.TryGetValue(code.Escape(edmTypeLoop), out getMethods)) && getMethods.Count == 0)
+            edmTypeLoop = (StructuralType)edmTypeLoop.BaseType;
+        if (hasSpecifications)
+        {
+#>
+                    value.Specifications = with<#=edmTypeName #>.Specifications;
+<#+
+        }
+        var subEntities = GetSubEntityTypes(edmxElements.ItemCollection, edmTypeName).ToList();
+        foreach (var subEntityType in subEntities)
+        {
+            var subEntityTypeName = code.Escape(subEntityType);
+            if (specificationsElements.GetMethods.TryGetValue(subEntityTypeName, out getMethods) && getMethods.Count != 0)
+            {
+#>
+                    var valueAs<#=subEntityTypeName #> = value as <#=serverEntitiesNamespace #>.<#=subEntityTypeName #>;
+                    if (valueAs<#=subEntityTypeName #> != null)
+                    {
+<#+
+                foreach (var getMethod in getMethods)
+                {
+                    var propertyName = GetPropertyNameFromMethod(getMethod);
+#>
+                        if (with<#=edmTypeName #>.Has<#=subEntityTypeName#>_<#=propertyName #>)
+                            valueAs<#=subEntityTypeName #>.<#=propertyName #> = with<#=edmTypeName #>.<#=subEntityTypeName #>_<#=propertyName #>;
+<#+
+                }
+#>
+                    }
+<#+
+            }
+        }
+#>
+                    return value;
+                }
+            });
+<#+
+    }
+#>
+    }
+
+    public static void Init()
+    {
+        InitPartial();
+    }
+
+    static partial void InitPartial();
+
+    public <#=edmxName #>Service(Func<I<#=containerName #>> contextFactory, Func<I<#=containerName #>, ISerializableExpressionProvider> serializableExpressionProviderFactory, Func<<#=edmxName #>Service> serviceFactory<#+
+    foreach (var p in specificationsElements.ServiceProperties)
+    {
+#>, Func<<#=p.Type.ToString() #>> <#=code.CamelCase(p.Name) #>Factory<#+
+    }
+#>)
+        : this(contextFactory(), serviceFactory)
+    {
+        _serializableExpressionProviderFactory = serializableExpressionProviderFactory;
+<#+
+    foreach (var p in specificationsElements.ServiceProperties)
+    {
+#>
+        <#=p.Name #> = <#=code.CamelCase(p.Name) #>Factory();
+<#+
+    }
+#>
+    }
+
+    public <#=edmxName#>Service(Func<I<#=containerName#>> contextFactory, Func<<#=edmxName#>Service> serviceFactory)
+        : this(contextFactory())
+    {
+        _contextFactory = contextFactory;
+        _serviceFactory = serviceFactory;
+    }
+
+    public <#=edmxName#>Service(I<#=containerName#> context, Func<<#=edmxName#>Service> serviceFactory)
+        : this(() => context, serviceFactory)
+    {
+    }
+
+    public <#=edmxName#>Service(I<#=containerName#> context)
+    {
+        _context = context;
+        TrackableCollectionExtensions.AttachAction = (e1, e2, name) => _context.AttachRelationship(e1, e2, name);
+<#+
+        var funcActionMethods = new List<MethodDeclarationSyntax>();
+        var addedMethod = new List<MethodDeclarationSyntax>();
+        foreach (var methodsWithContextPerClass in methodsWithContextOrServicePropertyPerClasses)
+            foreach (var methodWithContext in methodsWithContextPerClass.Value)
+            {
+                var semanticModel = specificationsElements.SemanticModelPerMethods[methodWithContext];
+                var methodWithContextSymbol = specificationsElements.MethodSymbolPerMethods[methodWithContext];
+                string funcAction = methodWithContextSymbol.ReturnsVoid ? "Action" : "Func";
+                bool isServiceMethod = specificationsElements.AllServiceMethods.Contains(methodWithContext) && methodWithContextSymbol.IsStatic && ! methodWithContextSymbol.IsExtensionMethod;
+                string methodSuffix = ! isServiceMethod && (specificationsElements.VirtualMethods.Contains(methodWithContext) || specificationsElements.OverrideMethods.Contains(methodWithContext)) ? methodWithContextSymbol.Parameters[0].Type.Name : "";
+#>
+        <#=serverEntitiesNamespace #>.<#=methodsWithContextPerClass.Key #>.<#=methodWithContext.Identifier.ValueText #><#=funcAction #> = <#=methodWithContext.Identifier.ValueText #><#=methodSuffix #><#=isServiceMethod ? "" : funcAction #>;
+<#+
+                if (! (isServiceMethod || addedMethod.Contains(methodWithContext)))
+                {
+                    var method = ((MethodDeclarationSyntax) new SpecificationMethodWithContextOrServiceRewriter(specificationsElements, semanticModel, dtoTypes, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverFxSpecificationsNamespace, serverEntitiesNamespace).Visit(methodWithContext));
+                    funcActionMethods.Add(method.WithIdentifier(SyntaxFactory.Identifier(string.Concat(methodWithContext.Identifier.ValueText, methodSuffix, funcAction))).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword))).WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>()));
+                    addedMethod.Add(methodWithContext);
+                }
+            }
+#>
+    }
+
+    private readonly I<#=containerName #> _context;
+    protected I<#=containerName #> Context
+    {
+        get { return _context; }
+    }
+
+<#+
+    foreach (var p in specificationsElements.ServiceProperties)
+    {
+#>
+    protected <#=p.Type.ToString() #> <#=p.Name #> { get; private set; }
+<#+
+    }
+#>
+
+    private readonly Func<I<#=containerName #>, ISerializableExpressionProvider> _serializableExpressionProviderFactory;
+    protected Func<I<#=containerName #>, ISerializableExpressionProvider> SerializableExpressionProvider
+    {
+        get { return _serializableExpressionProviderFactory; }
+    }
+
+    protected override Func<ISerializableExpressionProvider> SerializableExpressionProviderFactory
+    {
+        get { return () => _serializableExpressionProviderFactory(_context); }
+    }
+
+    internal static object GetWithBaseObject(object obj)
+    {
+        var type = obj.GetType().BaseType;
+        if (type == null)
+            return obj;
+        WithType withType;
+        if (WAQSQuery.WithTypes.TryGetValue(type, out withType))
+            return withType.TransformToOriginalType(obj);
+        return obj;
+    }
+
+<#+
+    foreach (EntityType entityType in edmxElements.EntityTypes)
+    {
+        var entityTypeName = code.Escape(entityType);
+        var entityTypeFullName = string.Format("{0}.{1}", serverEntitiesNamespace, entityTypeName);
+        var entitySet = GetEntitySet(edmxElements.Container, entityType);
+        if (entitySet == null)
+            continue;
+        var entitySetName = code.Escape(entitySet);
+        var entityTypeNamePlurial = GetPlurial(code, edmxElements.Container, entityType);
+        if (entitySet.ElementType == entityType)
+        {
+#>
+    public IEntitySet<<#=entityTypeFullName #>> <#=code.Escape(entitySet) #> 
+    { 
+        get 
+        {
+            _context.UseWAQSProvider = true; 
+            return _context.<#=code.Escape(entitySet) #>; 
+        } 
+    }
+
+    public void ApplyChanges(<#=entityTypeFullName #> entity)
+    {
+        ApplyingChanges(ref entity);
+<#+
+            var identitiesProperties = GetIdentityProperties(edmxPath, entityType).ToList();
+            var csdlIdentitiesProperties = GetCSDLIdentityProperties(entityType).Where(p => ! identitiesProperties.Contains(code.Escape(p))).ToList();
+            var computedProperties = GetComputedProperties(edmxPath, entityType).ToList();
+            var csdlComputedProperties = GetCSDLComputedProperties(entityType).Where(p => ! computedProperties.Contains(code.Escape(p))).ToList();
+            if (csdlIdentitiesProperties.Count != 0)
+            {
+#>
+        if (entity.ChangeTracker.State == ObjectState.Added)
+        {
+<#+
+            foreach (var identityProperty in csdlIdentitiesProperties)
+            {
+#>
+            Set<#=entityTypeName #><#=code.Escape(identityProperty) #>(entity);
+<#+
+            }
+            foreach (var computedProperty in csdlComputedProperties)
+            {
+#>
+            Set<#=entityTypeName #><#=code.Escape(computedProperty) #>(entity);
+<#+
+            }
+#>
+        }
+<#+
+            }
+        if (csdlComputedProperties.Count != 0)
+        {
+#>
+        if (<#=csdlIdentitiesProperties.Count == 0 ? "entity.ChangeTracker.State == ObjectState.Added || " : "" #>entity.ChangeTracker.State == ObjectState.Modified)
+        {
+<#+
+            foreach (var computedProperty in csdlComputedProperties)
+            {
+#>
+            Set<#=entityTypeName #><#=code.Escape(computedProperty) #>(entity);
+<#+
+            }
+#>
+        }
+<#+
+        }
+#>
+        _context.ApplyChanges(_context.<#=entitySetName #>, entity);
+    }
+
+    partial void ApplyingChanges(ref <#=entityTypeFullName #> entity);
+
+<#+
+        }
+    }
+
+    foreach (EdmFunction edmFunction in edmxElements.FunctionImports.Where(fi => IsPublicOrInternal(fi)))
+    {
+        TypeUsage returnType;
+        var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+        if (returnType == null)
+            continue;
+        FunctionImportParameter[] parameters;
+        var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements, out parameters);
+#>
+    public List<<#=returnTypeName #>> <#=code.Escape(edmFunction) #>(<#=parametersAsString #>)
+    {
+        return _context.<#=code.Escape(edmFunction) #>(<#=String.Join(", ", parameters.Select(p => p.FunctionParameterName).ToArray()) #>).ToList();
+    }
+
+<#+
+    }
+#>
+
+    public <#=edmxName #>QueryResult Execute(QuerySerialization query)
+    {
+<#+
+        var firstEntitySet = edmxElements.Container.BaseEntitySets.OfType<EntitySet>().FirstOrDefault();
+        if (firstEntitySet == null)
+        {
+#>
+        throw new InvalidOperationException("The edmx is empty")
+<#+
+        }
+        else
+        {
+#>
+        var expression = _serializableExpressionProviderFactory(_context).ToExpression(query.Expression, query.WithSpecificationsProperties);
+        object result;
+        try
+        {
+            result = Expression.Lambda(expression).Compile().DynamicInvoke();
+        }
+        catch (Exception e)
+        {
+            if (e.InnerException != null)
+                throw e.InnerException;
+            else
+                throw e;
+        }
+        <#=edmxName #>QueryResult queryResult = new <#=edmxName #>QueryResult();
+        bool onlyOne = false;
+        var methodCallExpression = expression as MethodCallExpression;
+        if (methodCallExpression != null)
+            switch (methodCallExpression.Method.Name)
+            {
+                case "First":
+                case "FirstOrDefault":
+                case "Single":
+                case "SingleOrDefault":
+                case "Last":
+                case "LastOrDefault":
+                    onlyOne = true;
+                    break;
+            }
+        bool manyResult = HasManyResult(expression.Type) && ! onlyOne;
+        Type queryType = manyResult ? GetGenericType(expression.Type) : expression.Type;
+        Type queryTypeLoop = queryType;
+        int genericIndex = 0;
+        while (queryTypeLoop.IsGenericType && queryTypeLoop.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+        {
+            genericIndex++;
+            queryTypeLoop = queryTypeLoop.GetGenericArguments()[0];
+        }
+        if (manyResult)
+        {
+            if (query.SerializableType.IsKnownByServer && genericIndex == 0)
+                queryResult.Values = typeof(<#=edmxName #>Service).GetMethod("GetBaseTypeToArray", BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(<#=edmxName #>SerializableExpressionConverter.Get<#=edmxName #>BaseType(queryType) ?? queryType).Invoke(null, new object[] { result });
+            else
+                queryResult.Records = ((IEnumerable)result).Cast<object>().Select(o => GetQueryResult(queryType, o)).ToList();
+        }
+        else
+        {
+            if (query.SerializableType.IsKnownByServer && genericIndex < 2)
+            {
+                object value = result;
+                switch (genericIndex)
+                {
+                    case 0:
+                        queryResult.Value = <#=edmxName #>SerializableExpressionConverter.Get<#=edmxName #>BaseObject(value);
+                        break;
+                    case 1:
+                        queryResult.Value = typeof(<#=edmxName #>Service).GetMethod("GetBaseTypeToArray", BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(<#=edmxName #>SerializableExpressionConverter.Get<#=edmxName #>BaseType(queryTypeLoop) ?? queryTypeLoop).Invoke(null, new object[] { value });
+                        break;
+                }
+            }
+            else
+                queryResult.Record = GetQueryResult(queryType, result);
+        }
+        return queryResult;
+<#+
+        }
+#>
+    }
+
+    private static T[] GetBaseTypeToArray<T>(IEnumerable values)
+    {
+        if (values == null)
+            return new T[0];
+        return values.Cast<object>().Select(o => <#=edmxName #>SerializableExpressionConverter.Get<#=edmxName #>BaseObject(o)).Cast<T>().ToArray();
+    }
+
+    public <#=edmxName #>QueriesResult ExecuteMany(QueriesSerialization queries)
+    {
+<#+
+        if (isParallel)
+        {
+#>
+        List<Task> tasks = new List<Task>();
+        var result = ExecuteMany(queries, tasks);
+        foreach (var task in tasks)
+        {
+            task.Wait();
+            if (task.Exception != null)
+                throw task.Exception;
+        }
+        return result;
+    }
+    private <#=edmxName #>QueriesResult ExecuteMany(QueriesSerialization queries, List<Task> tasks)
+    {
+<#+
+        }
+#>
+        var result = new <#=edmxName #>QueriesResult { QueryResults = new <#=edmxName #>QueryResult[queries.QuerySerializations.Length] };
+        for (int queryIndex = 0 ; queryIndex < queries.QuerySerializations.Length ; queryIndex ++)
+        {
+            var query = queries.QuerySerializations[queryIndex];
+<#+
+        if (isParallel)
+        {
+#>
+            var indexLoop = queryIndex;
+            tasks.Add(Task.Factory.StartNew(() =>
+                {
+                    using (var service = _serviceFactory())
+                    {
+                        result.QueryResults[indexLoop] = service.Execute(query);
+                    }
+                }));
+<#+
+        }
+        else
+        {
+#>
+            using (var service = _serviceFactory())
+            {
+                result.QueryResults[queryIndex] = service.Execute(query);
+            }
+<#+
+        }
+#>
+        }
+        return result;
+    }
+
+    public abstract <#=edmxName #>QueryResultPage LoadPage(int pageSize, SerializableExpression queryExpression, IEnumerable<string> withSpecificationsProperties, LoadPageParameter[] identifiers);
+        
+    private static ConcurrentDictionary<Type, Lazy<WeakReference>> _queryResultRecordFactories = new ConcurrentDictionary<Type, Lazy<WeakReference>>(); 
+    protected QueryResultRecord GetQueryResult(Type type, object o)
+    {
+        if (o == null)
+            return null;
+        for (;;)
+        {
+            WeakReference weakReference = _queryResultRecordFactories.GetOrAdd(type, new Lazy<WeakReference>(() => new WeakReference(CreateQueryResultExpression(type, _serializableExpressionProviderFactory(_context).GetOriginalType(type)).Compile()))).Value;
+            var queryResultRecordFactory = (Func<object, QueryResultRecord>)weakReference.Target;
+            if (queryResultRecordFactory != null)
+                return queryResultRecordFactory(o);
+            Lazy<WeakReference> dummy;
+            _queryResultRecordFactories.TryRemove(type, out dummy);
+        }
+    }
+
+    public DateTime GetDbDateTime()
+    {
+        return _context.GetDbDateTime();
+    }
+
+    public void SaveChanges()
+    {
+        bool saved = false;
+<#+
+    foreach (var entityType in edmxElements.ItemCollection.GetItems<EntityType>())
+    {
+        var oneToOneNullableNavigationProperties = entityType.NavigationProperties.Where(np =>
+        {
+            EntityType toType;
+            return np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.One && np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.One && (toType = np.ToEndMember.GetEntityType()).Properties.Except(toType.KeyMembers).OfType<EdmProperty>().All(p => p.Nullable);
+        }).ToList();
+        if (oneToOneNullableNavigationProperties.Count > 0)
+        {
+            string entitySetName = GetPlurial(code, edmxElements.Container, entityType);
+#>
+        foreach (var entity in _context.<#=entitySetName #>.Local.Where(e => e.ChangeTracker.State == ObjectState.Added))
+        {
+<#+
+            foreach (var navigationProperty in oneToOneNullableNavigationProperties)
+            {
+                var toEntityType = navigationProperty.ToEndMember.GetEntityType();
+#>
+            if (entity.<#=code.Escape(navigationProperty) #> == null)
+            {
+                var subEntity = new <#=code.Escape(toEntityType) #>();
+                entity.<#=code.Escape(navigationProperty) #> = subEntity;
+                _context.<#=GetPlurial(code, edmxElements.Container, toEntityType) #>.Add(subEntity);
+            }
+<#+
+            }
+#>
+        }
+<#+
+        }
+    }
+#>
+        SaveChanges(ref saved);
+        if (! saved)
+        {
+<#+
+        var validateInTransactionClasses = new List<string>();
+        if (specificationsElements.ValidateMethods.Any())
+        {
+#>
+            var errors = new List<Error>();
+<#+
+        }
+        var transactionalValidationMethods = new Dictionary<EntityType, List<MethodDeclarationSyntax>>();
+        var transactionalValidationMethodsNavigationPropertiesDependences = new Dictionary<EntityType, List<NavigationProperty>>();
+        var toEntityTypesMethods = new Dictionary<EntityType, List<MethodDeclarationSyntax>>();
+        bool hasServerErrors = false;
+        foreach (var validatesKVP in specificationsElements.ValidateMethods)
+        {
+            var entityType = GetEntityType(edmxElements.ItemCollection, validatesKVP.Key);
+            if (validatesKVP.Value.Any(m => specificationsElements.IsValidatableOnInsertOutsideTransaction(m, GetEntityType(edmxElements.ItemCollection, validatesKVP.Key), edmxElements)))
+            {
+                hasServerErrors = true;
+                var entitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, validatesKVP.Key);
+#>
+            foreach (var e in _context.<#=code.Escape(entitySet) #>.Local<#=code.Escape(entitySet.ElementType) == validatesKVP.Key ? "" : string.Concat(".OfType<", validatesKVP.Key, ">()") #>)
+                foreach (var error in e.ValidateOutTransaction(true).Where(er => er != null && (er.Criticity & Criticity.Error) != 0))
+                    errors.Add(error); 
+<#+
+            }
+            if (validatesKVP.Value.Any(m => specificationsElements.IsValidateFunc(m)))
+                validateInTransactionClasses.Add(validatesKVP.Key);
+            List<MethodDeclarationSyntax> transactionalValidationMethodsForEntityType = validatesKVP.Value.Where(m => specificationsElements.IsValidatedInTransaction(m, entityType, edmxElements) && ! specificationsElements.IsValidateFunc(m) && (! specificationsElements.IsModeOnInsert(m, specificationsElements.SemanticModelPerMethods[m]) || specificationsElements.IsModeOnUpdate(m, specificationsElements.SemanticModelPerMethods[m]) || specificationsElements.IsModeOnDelete(m, specificationsElements.SemanticModelPerMethods[m]))).ToList();
+            transactionalValidationMethods.Add(entityType, transactionalValidationMethodsForEntityType);
+            var transactionalValidationMethodsNavigationPropertiesDependencesForEntityType = new List<NavigationProperty>();
+            transactionalValidationMethodsNavigationPropertiesDependencesForEntityType.AddRange(transactionalValidationMethodsForEntityType.SelectMany(m => specificationsElements.GetDependentNavigationProperties(m, entityType, edmxElements)).Where(np => ! transactionalValidationMethodsNavigationPropertiesDependencesForEntityType.Contains(np)));
+            transactionalValidationMethodsNavigationPropertiesDependences.Add(entityType, transactionalValidationMethodsNavigationPropertiesDependencesForEntityType);
+            foreach (var transactionalValidationMethodForEntityType in transactionalValidationMethodsForEntityType)
+            {
+                foreach (var np in specificationsElements.GetDependentNavigationProperties(transactionalValidationMethodForEntityType, entityType, edmxElements))
+                {
+                    var toEntityType = np.ToEndMember.GetEntityType();
+                    List<MethodDeclarationSyntax> toEntityTypesMethodsForNP;
+                    if (! toEntityTypesMethods.TryGetValue(toEntityType, out toEntityTypesMethodsForNP))
+                        toEntityTypesMethods.Add(toEntityType, toEntityTypesMethodsForNP = new List<MethodDeclarationSyntax>());
+                    toEntityTypesMethodsForNP.Add(transactionalValidationMethodForEntityType);
+                }
+            }
+        }
+    if (hasServerErrors)
+    {
+#>
+            if (errors.Count != 0)
+                throw new ValidationException(errors);
+<#+
+    }
+        bool useTransaction = validateInTransactionClasses.Count != 0 || transactionalValidationMethods.Count != 0;
+        var toEntityTypesNavigationProperties = new Dictionary<EntityType, List<NavigationProperty>>();
+        if (useTransaction)
+        {
+#>
+            using (var transaction = new TransactionScope())
+            {
+<#+
+            bool getErrorInTransactionDeclared = false;
+            foreach (var fromEntityType in transactionalValidationMethods.Where(kvp => kvp.Value.Count != 0).Select(kvp => kvp.Key))
+            {
+                foreach (var np in transactionalValidationMethodsNavigationPropertiesDependences[fromEntityType])
+                {
+                    if (np.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
+                        continue;
+                    var toEntityType = np.ToEndMember.GetEntityType();
+                    List<NavigationProperty> toEntityTypeNavigationProperties;
+                    if (toEntityTypesNavigationProperties.TryGetValue(toEntityType, out toEntityTypeNavigationProperties))
+                    {
+                        if (toEntityTypeNavigationProperties.Contains(np))
+                            continue;
+                    }
+                    else
+                        toEntityTypesNavigationProperties.Add(toEntityType, toEntityTypeNavigationProperties = new List<NavigationProperty>());
+                    toEntityTypeNavigationProperties.Add(GetOtherNavigationProperty(np));
+                }
+            }
+            if (toEntityTypesNavigationProperties.Count != 0)
+            {
+#>
+                var getErrorsInTransaction = new List<Func<IEnumerable<Error>>>();	
+<#+
+            }
+        foreach (var toEntityTypeNavigationProperties in toEntityTypesNavigationProperties)
+        {
+            var toEntityType = toEntityTypeNavigationProperties.Key;
+            var toEntityTypeName = code.Escape(toEntityType);
+#>
+                <#+ 
+            if (! getErrorInTransactionDeclared)
+            {
+                getErrorInTransactionDeclared = true;
+#>var <#+
+            }
+#>getErrorInTransaction = <#=toEntityTypeName #>DependencesErrors();
+                if (getErrorInTransaction != null)
+                    getErrorsInTransaction.Add(getErrorInTransaction);
+<#+
+        }
+        if (validateInTransactionClasses.Count != 0)
+        {
+#>
+                var getSpecificErrorsInTransaction = new List<Func<Error>>();
+<#+
+        }
+        foreach (var className in validateInTransactionClasses)
+        {
+            var entitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, className);
+#>
+                foreach (var e in _context.<#=code.Escape(entitySet) #>.Local<#=code.Escape(entitySet.ElementType) == className ? "" : string.Concat(".OfType<", className, ">()") #>)
+                    foreach (var entityGetErrorsInTransaction in e.ValidateInTransaction(true))
+                        getSpecificErrorsInTransaction.Add(entityGetErrorsInTransaction);
+<#+
+        }
+            PushIndent(CodeRegion.GetIndent(1));
+        }
+#>
+            _context.SaveChanges();
+<#+
+    if (useTransaction)
+    {
+        PopIndent();
+        if (validateInTransactionClasses.Count != 0)
+        {
+#>
+                foreach (var getTransactionalError in getSpecificErrorsInTransaction)
+                {
+                    var error = getTransactionalError();
+                    if (error != null && (error.Criticity & Criticity.Error) != 0)
+                        errors.Add(error);
+                }
+<#+
+        }
+        if (toEntityTypesNavigationProperties.Count != 0)
+        {
+#>
+                foreach (var er in getErrorsInTransaction.SelectMany(getErrors => getErrors()).Where(e => e != null))
+                    errors.Add(er);
+<#+
+        }
+#>
+                if (errors.Count == 0)
+                    transaction.Complete();
+            }
+            if (errors.Count != 0)
+                throw new ValidationException(errors);
+<#+
+    }
+#>
+        }
+    }
+
+    partial void SaveChanges(ref bool saved);
+
+<#+
+    foreach (var toEntityTypeNavigationProperties in toEntityTypesNavigationProperties)
+    {
+        //TODO : Si FK dans Key alors inutile de faire la requête en base
+        var toEntityType = toEntityTypeNavigationProperties.Key;
+        var toEntityTypeName = code.Escape(toEntityType);
+        var toEntityNameVariableName = code.CamelCase(toEntityTypeName);
+        var withAdded = ! toEntityTypesMethods[toEntityType].All(m => specificationsElements.IsValidatableOnInsertOutsideTransaction(m, toEntityType, edmxElements));
+        var toEntitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, toEntityTypeName);
+        string toEntitySetName = code.Escape(toEntitySet);
+        var toEntityTypeNamePlurial = GetPlurial(code.Escape(toEntityTypeName));
+        var variableName = code.CamelCase(toEntityTypeNamePlurial);
+        var fks = toEntityTypeNavigationProperties.Value.SelectMany(np => np.GetDependentProperties()).Distinct();
+        var fksWithoutKeys = fks.Except(toEntityType.KeyMembers.Cast<EdmProperty>()).ToList();
+        var ofType = toEntitySet.ElementType == toEntityTypeNavigationProperties.Key ? "" : string.Concat(".OfType<", code.Escape(toEntityType), ">()");
+        var entitySetCollection = "_context." + toEntitySetName;
+        var fkWithoutKeysAggregationItems = fksWithoutKeys.Select(p => string.Concat("e.ChangeTracker.ModifiedProperties.Contains(\"", code.Escape(p), "\")")).ToList();
+        string fkWithoutKeysAggregation;
+        if (fkWithoutKeysAggregationItems.Count == 0)
+            fkWithoutKeysAggregation = "";
+        else
+            fkWithoutKeysAggregation = string.Concat(" && (", fkWithoutKeysAggregationItems.Aggregate((p1, p2) => string.Concat(p1, " || ", p2)), ")");
+        var manyToManySelects = toEntityTypeNavigationProperties.Value.Where(np => np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many && np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many).Select(np => string.Concat(code.Escape(np), " = e.", code.Escape(np), ".Select(e2 => new { ", np.ToEndMember.GetEntityType().KeyMembers.Select(km => "e2." + code.Escape(km)).Aggregate((km1, km2) => string.Concat(km1, ", ", km2)), "})")).ToList();
+        var manyToManySelect = manyToManySelects.Count == 0 ? "" : ", " + manyToManySelects.Aggregate((s1, s2) => string.Concat(s1, ", ", s2));
+        var keysSelect = toEntityType.KeyMembers.Select(km => "e." + code.Escape(km)).Aggregate((km1, km2) => string.Concat(km1, ", ", km2));
+        var fksSelect = fksWithoutKeys.Count == 0 ? "" : fksWithoutKeys.Select(fk => ", e." + code.Escape(fk)).Aggregate((fk1, fk2) => fk1 + fk2);
+#>
+    private Func<IEnumerable<Error>> <#=toEntityTypeName #>DependencesErrors()
+    {
+<#+
+        if (withAdded)
+        {
+#>
+var <#=variableName #> = <#=entitySetCollection #>.Local<#=ofType #>.ToList();
+<#+
+        }
+        else
+        {
+#>
+        var <#=variableName #>Modified = <#=entitySetCollection #>.Local<#=ofType #><#=withAdded ? "" : string.Concat(".Where(e => e.ChangeTracker.State == ObjectState.Modified", fkWithoutKeysAggregation, ")") #>.ToList();
+        var <#=variableName #> = <#=variableName #>Modified.Union(<#=entitySetCollection #>.Local<#=ofType #><#=withAdded ? "" : string.Concat(".Where(e => e.ChangeTracker.State == ObjectState.Deleted)") #>).ToList();
+<#+
+        }
+#>
+        var added<#=toEntityTypeNamePlurial #> = <#=entitySetCollection #>.Local<#=ofType #>.Where(e => e.ChangeTracker.State == ObjectState.Added).ToList();
+        var <#=variableName #>Ids = new <#=toEntityTypeName #>[0].Select(e => new { <#=keysSelect #><#=fksSelect #><#=manyToManySelect #> });
+        if (<#=variableName #>.Count == 0)
+        {
+            if (added<#=toEntityTypeNamePlurial #>.Count == 0)
+                return null;
+        }
+        else
+        {
+            var <#=variableName #>PredicateBeforeTransactionParameter = Expression.Parameter(typeof(<#=toEntityTypeName #>));
+            var <#=variableName #>PredicateBeforeTransaction = Expression.Lambda<Func<<#=toEntityTypeName #>, bool>>(<#=variableName #>.Select(e =>
+            {
+<#+
+        var kmExpressions = new List<string>();
+        foreach (var km in toEntityType.KeyMembers)
+        {
+            string kmName = code.Escape(km);
+            string kmVariableName = code.CamelCase(kmName);
+            string kmTypeName = code.Escape(km.TypeUsage);
+            kmExpressions.Add(string.Concat("Expression.Equal(Expression.MakeMemberAccess(", variableName, "PredicateBeforeTransactionParameter, typeof(", toEntityTypeName, ").GetProperty(\"", kmName, "\")), get", kmName, "Exp.Body)"));
+#>
+                <#=kmTypeName #> <#=kmVariableName #> = e.<#=kmName #>;
+                Expression<Func<<#=kmTypeName #>>> get<#=kmName #>Exp = () => <#=kmVariableName #>;
+<#+
+        }
+#>
+                return <#=kmExpressions.Aggregate((e1, e2) => string.Concat("Expression.And(", e1, ", ", e2, ")")) #>;
+            }).Aggregate((e1, e2) => Expression.Or(e1, e2)), <#=variableName #>PredicateBeforeTransactionParameter);
+            <#=variableName #>Ids = <#=entitySetCollection #><#=ofType #>.Where(<#=variableName #>PredicateBeforeTransaction).Select(e => new { <#=keysSelect #><#=fksSelect #><#=manyToManySelect #> }).ToList(); 
+<#+
+        if (validateInTransactionClasses.Any(c => GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, c) == toEntitySet))
+        {
+#>
+            foreach (var <#=variableName #>Id in <#=variableName #>Ids)
+            {
+                var dbValues = <#=entitySetCollection #>.Local<#=ofType #>.First(e => <#=toEntityType.KeyMembers.Select(km => string.Concat("e.", code.Escape(km), " == ", variableName, "Id.", code.Escape(km))).Aggregate((km1, km2) => string.Concat(km1, " && ", km2)) #>).ChangeTracker.DbValues;
+<#+
+            foreach (var fk in fksWithoutKeys)
+            {
+                var fkName = code.Escape(fk);
+#>
+                dbValues.Add("<#=fkName #>", () => <#=variableName #>Id.<#=fkName #>);
+<#+
+            }
+#>
+            }
+<#+
+        }
+#>
+        }
+        return () => 
+        {
+            var errors = new List<Error>();
+<#+
+        var classes = new List<ClassDeclarationSyntax>();
+        foreach (var np in toEntityTypeNavigationProperties.Value)
+        {
+            string npName = code.Escape(np);
+            var npFks = np.GetDependentProperties().ToList();
+            string npFksSelect;
+            bool anonymousType;
+            var npKeyMembers = np.ToEndMember.GetEntityType().KeyMembers;
+            string many;
+            if (npFks.Count == 0)
+            {
+                anonymousType = npKeyMembers.Count > 1;
+                many = "Many";
+                npFksSelect = string.Concat("e.", code.Escape(np), ".Select(e2 => ", anonymousType ? "new { " : "", npKeyMembers.Select(km => "e2." + code.Escape(km)).Aggregate((km1, km2) => string.Concat(km1, ", ", km2)), anonymousType ? "}" : "", ")");
+            }
+            else
+            {
+                anonymousType = npFks.Count > 1;
+                many = "";
+                npFksSelect = string.Concat(anonymousType ? "new {" : "", npFks.Select(fk => "e." + code.Escape(fk)).Aggregate((fk1, fk2) => string.Concat(fk1, ", ", fk2)), anonymousType ? "}" : "");
+            }
+#> 
+            var <#=toEntityNameVariableName #><#=npName #>Ids = <#=variableName #>Ids.Select<#=many #>(e => <#=npFksSelect #>).Union(added<#=toEntityTypeNamePlurial #>.Select<#=many #>(e => <#=npFksSelect #>)); 
+            var include<#=npName #>New<#=toEntityTypeName #> = <#=variableName #>.Where(e => e.ChangeTracker.<#+
+            if (npFks.Count == 0)
+            {
+#>ObjectsAddedToCollectionProperties.ContainsKey("<#=code.Escape(np) #>") || e.ChangeTracker.ObjectsRemovedFromCollectionProperties.ContainsKey("<#=code.Escape(np) #>")<#+
+            }
+            else
+            {
+#>State == ObjectState.Modified && (<#=npFks.Select(fk => string.Concat("e.ChangeTracker.ModifiedProperties.Contains(\"", fk, "\")")).Aggregate((fk1, fk2) => string.Concat(fk1, " || ", fk2)) #> )<#+
+            }
+#>);
+            UseModified<#=code.Escape(np) #>(ref include<#=npName #>New<#=toEntityTypeName #>);
+            if (include<#=npName #>New<#=toEntityTypeName #> != null)
+                <#=toEntityNameVariableName #><#=npName #>Ids = <#=toEntityNameVariableName #><#=npName #>Ids.Union(include<#=npName #>New<#=toEntityTypeName #>.Select<#=many #>(e => <#=npFksSelect #>)).Distinct();
+            <#=toEntityNameVariableName #><#=npName #>Ids = <#=toEntityNameVariableName #><#=npName #>Ids.Distinct();
+<#+
+            var fromEntityType = np.ToEndMember.GetEntityType();
+            var fromEntityTypeName = code.Escape(fromEntityType);
+            var fromEntityTypeNameCamelCase = code.CamelCase(fromEntityTypeName);
+            var fromEntityTypePlurial = code.CamelCase(GetPlurial(code, edmxElements.Container, fromEntityType));
+            var fromEntitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, fromEntityTypeName);
+            var fromEntitySetName = code.Escape(fromEntitySet);
+            var fromOfType = fromEntitySet.ElementType == fromEntityType ? "" : string.Concat(".OfType<", fromEntityTypeName, ">()");
+            var fromQueryable = string.Concat("_context.", code.Escape(fromEntitySet), fromOfType);
+#>
+            var <#=fromEntityTypePlurial #>PredicateAfterTransactionParameter = Expression.Parameter(typeof(<#=fromEntityTypeName #>));
+            var <#=fromEntityTypePlurial #>PredicateAfterTransaction = Expression.Lambda<Func<<#=fromEntityTypeName #>, bool>>(<#=toEntityNameVariableName #><#=npName #>Ids.Select(idValue => 
+            {
+<#+
+            var fksExpressions = new List<string>();
+
+            if (npFks.Count == 0)
+                foreach (var npKey in npKeyMembers)
+                {
+                    string npKeyName = code.Escape(npKey);
+                    string npKeyVariableName = code.CamelCase(npKeyName);
+                    string npKeyTypeName = code.Escape(npKey.TypeUsage);
+                    fksExpressions.Add(string.Concat("Expression.Equal(Expression.MakeMemberAccess(", fromEntityTypePlurial, "PredicateAfterTransactionParameter, typeof(", fromEntityTypeName, ").GetProperty(\"", npKeyName, "\")), get", npKeyName, "Exp.Body)"));
+#>
+                <#=npKeyTypeName #> <#=npKeyVariableName #> = <#=anonymousType ? "idValue." + npKeyName : "idValue" #>;
+                Expression<Func<<#=npKeyTypeName #>>> get<#=npKeyName #>Exp = () => <#=npKeyVariableName #>;
+<#+
+                }
+            else
+                foreach (var fk in npFks)
+                {
+                    string fkName = code.Escape(fk);
+                    string fkVariableName = code.CamelCase(fkName);
+                    string fkTypeName = code.Escape(fk.TypeUsage);
+                    var association = (AssociationType) np.RelationshipType;
+                    var referentialConstraint = association.ReferentialConstraints.FirstOrDefault();
+                    if (referentialConstraint == null)
+                        throw new NotImplementedException();
+                    EdmProperty km;
+                    int index = referentialConstraint.ToProperties.IndexOf(fk);
+                    if (index == -1)
+                        km = referentialConstraint.ToProperties[referentialConstraint.FromProperties.IndexOf(fk)];
+                    else
+                        km = referentialConstraint.FromProperties[index];
+                    var kmName = code.Escape(km);
+                    fksExpressions.Add(string.Concat("Expression.Equal(Expression.MakeMemberAccess(", fromEntityTypePlurial, "PredicateAfterTransactionParameter, typeof(", fromEntityTypeName, ").GetProperty(\"", kmName, "\")), get", fkName, "Exp.Body)"));
+#>
+                <#=fkTypeName #> <#=fkVariableName #> = <#=anonymousType ? "idValue." + fkName : "idValue" #>;
+                Expression<Func<<#=fkTypeName #>>> get<#=fkName #>Exp = () => <#=fkVariableName #>;
+<#+
+                }
+#>
+                return <#=fksExpressions.Aggregate((e1, e2) => string.Concat("Expression.And(", e1, ", ", e2, ")")) #>;
+            }).Aggregate((e1, e2) => Expression.Or(e1, e2)), <#=fromEntityTypePlurial #>PredicateAfterTransactionParameter);
+
+            var <#=fromEntityTypePlurial #>SelectParameter = Expression.Parameter(typeof(<#=fromEntityTypeName #>));
+            var <#=fromEntityTypePlurial #>MemberBindings = new List<MemberBinding>();
+<#+
+            var properties = new List<PropertyDeclarationSyntax>();
+            var validationClassName = string.Concat(toEntityTypeName, "_", fromEntityTypeName, "_Validations");
+            foreach (var km in fromEntityType.KeyMembers)
+            {
+                var kmName = code.Escape(km);
+#>
+            <#=fromEntityTypePlurial #>MemberBindings.Add(Expression.Bind(typeof(<#=validationClassName #>).GetProperty("<#=kmName #>"), Expression.MakeMemberAccess(<#=fromEntityTypePlurial #>SelectParameter, typeof(<#=fromEntityTypeName #>).GetProperty("<#=kmName #>"))));
+<#+
+                properties.Add(
+                    SyntaxFactory.PropertyDeclaration(
+                        SyntaxFactory.ParseTypeName(code.Escape(km.TypeUsage)),
+                        kmName)
+                        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                        .WithAccessorList(
+                            SyntaxFactory.AccessorList(
+                                SyntaxFactory.List(
+                                    new []
+                                    {
+                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration, default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList), SyntaxFactory.Token(SyntaxKind.GetKeyword), null, SyntaxFactory.Token(SyntaxKind.SemicolonToken)),
+                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration, default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList), SyntaxFactory.Token(SyntaxKind.SetKeyword), null, SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                                    }))));
+            }
+            var validationMethods = transactionalValidationMethods.Values.SelectMany(ms => ms.Where(m => specificationsElements.GetDependentNavigationProperties(m, fromEntityType, edmxElements).Contains(GetOtherNavigationProperty(np)))).ToList();
+            foreach (var validationMethod in validationMethods)
+            {
+                string validationMethodName = validationMethod.Identifier.ValueText;
+                properties.Add(
+                    SyntaxFactory.PropertyDeclaration(
+                        SyntaxFactory.ParseTypeName("bool"),
+                        validationMethodName)
+                        .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                        .WithAccessorList(
+                            SyntaxFactory.AccessorList(
+                                SyntaxFactory.List(
+                                    new []
+                                    {
+                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration, default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList), SyntaxFactory.Token(SyntaxKind.GetKeyword), null, SyntaxFactory.Token(SyntaxKind.SemicolonToken)),
+                                        SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration, default(SyntaxList<AttributeListSyntax>), default(SyntaxTokenList), SyntaxFactory.Token(SyntaxKind.SetKeyword), null, SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                                    }))));
+#>
+            var validate<#=validationMethodName #>Expression = _context.<#=fromEntityTypeName #>DALSpecifications.<#=validationMethodName #>ExpressionCondition;
+            <#=fromEntityTypePlurial #>MemberBindings.Add(Expression.Bind(typeof(<#=validationClassName #>).GetProperty("<#=validationMethodName #>"), validate<#=validationMethodName #>Expression.Body.ReplaceParameter(validate<#=validationMethodName #>Expression.Parameters[0], <#=fromEntityTypePlurial #>SelectParameter)));
+<#+
+            }
+            classes.Add(
+                SyntaxFactory.ClassDeclaration(validationClassName)
+                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword)))
+                    .WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(properties)));
+#>
+            var <#=fromEntityTypePlurial #>Select = Expression.Lambda<Func<<#=fromEntityTypeName #>, <#=validationClassName #>>>(Expression.MemberInit(Expression.New(typeof(<#=validationClassName #>).GetConstructor(new Type[0])), <#=fromEntityTypePlurial #>MemberBindings), <#=fromEntityTypePlurial #>SelectParameter);
+            foreach (var <#=fromEntityTypeNameCamelCase #>IdValues in <#=fromQueryable #>.Where(<#=fromEntityTypePlurial #>PredicateAfterTransaction).Select(<#=fromEntityTypePlurial #>Select))
+            {
+                var <#=fromEntityTypeNameCamelCase #> = _context.<#=fromEntitySetName #>.Local<#=fromOfType #>.FirstOrDefault(e => <#=fromEntityType.KeyMembers.Select(km => string.Format("e.{0} == {1}IdValues.{0}", code.Escape(km), fromEntityTypeNameCamelCase)).Aggregate((km1, km2) => string.Concat(km1, " && ", km2)) #>) ?? new <#=fromEntityTypeName #> { <#=fromEntityType.KeyMembers.Select(km => string.Format("{0} = {1}IdValues.{0}", code.Escape(km), fromEntityTypeNameCamelCase)).Aggregate((km1, km2) => string.Concat(km1, ", ", km2)) #> };
+                Error error;
+<#+
+            foreach (var validationMethod in validationMethods)
+            {
+                ExpressionSyntax errorExpression = null;
+                var ifStatement = validationMethod.Body.Statements[0] as IfStatementSyntax;
+                var ifValueStatement = ifStatement.Statement;
+                var returnStatement = ifValueStatement as ReturnStatementSyntax;
+                if (returnStatement != null)
+                    errorExpression = returnStatement.Expression;
+                var block = ifValueStatement as BlockSyntax;
+                if (block != null && block.Statements.Count == 1 && (returnStatement = block.Statements[0] as ReturnStatementSyntax) != null)
+                    errorExpression = returnStatement.Expression;
+                if (errorExpression == null)
+                    continue;
+#>
+                if (<#=fromEntityTypeNameCamelCase #>IdValues.<#=validationMethod.Identifier.ValueText #>)
+                {
+                    error = <#=errorExpression #>;
+                    error.Key = "<#=validationMethod.Identifier.ValueText.Substring(8) #>";
+                    errors.Add(error);
+                }
+<#+
+            }
+#>
+            }
+<#+
+        }
+#> 
+            return errors;
+        };
+    }
+<#+
+        foreach (var np in toEntityTypeNavigationProperties.Value)
+        {
+            string npName = code.Escape(np);
+#>
+    partial void UseModified<#=npName #>(ref IEnumerable<<#=toEntityTypeName #>> include<#=npName #>New<#=toEntityTypeName #>);
+
+<#+
+        }
+        foreach (var @class in classes)
+        {
+            PushIndent(CodeRegion.GetIndent(1));
+#>
+<#=@class.NormalizeWhitespace().ToString() #>
+
+<#+
+            PopIndent();
+        }
+    }
+
+
+    foreach (var edmType in edmxElements.EdmTypes)
+    {
+        string typeName = edmxElements.Code.Escape(edmType);
+#>
+
+    public IEnumerable<Error> Validate(<#=typeName #> entity)
+    {
+<#+
+        List<MethodDeclarationSyntax> validateMethods;
+        if (specificationsElements.ValidateMethods.TryGetValue(typeName, out validateMethods) && validateMethods.Any(m => ! specificationsElements.IsValidatedInTransaction(m, edmType, edmxElements)))
+        {
+#>
+        return entity.ValidateOutTransaction();
+<#+
+        }
+        else
+        {
+#>
+        yield break;
+<#+
+        }
+#>
+    }
+<#+
+    }
+        PushIndent(CodeRegion.GetIndent(1));
+        foreach (var funcActionMethod in funcActionMethods)
+        {
+#>
+<#=funcActionMethod.NormalizeWhitespace().ToString() #>
+<#+
+        }
+        PopIndent();
+#>
+ 
+<#+
+        PushIndent(CodeRegion.GetIndent(1));
+        var methods = specificationsElements.AllServiceMethods.ToList();
+        methods.AddRange(specificationsElements.SubMethods);
+        var addedSubMethods = new List<MethodSymbol>();
+        for (int methodIndex = 0 ; methodIndex < methods.Count ; methodIndex ++)
+        {
+            var specificationServiceMethod = methods[methodIndex];
+            WriteServiceMethod(specificationServiceMethod, specificationsElements, edmxElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, WriteServiceMethod, addedSubMethods, methods, dtoTypes: dtoTypes);
+        }
+        PopIndent();
+#>
+
+    void IDisposable.Dispose()
+    {
+        _context.Dispose();
+    }
+}
+<#+
+        WriteFooter(edmxElements.NamespaceName);
+
+        fileManager.StartNewFile(edmxName + "ServiceL2E.cs");
+        WriteHeader(edmxElements.NamespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", serverDALInterfacesNamespace, serverServiceInterfacesNamespace, serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxServiceNamespace);
+#>
+public class <#=edmxName #>ServiceL2E : <#=edmxName #>Service
+{
+    public <#=edmxName #>ServiceL2E(Func<I<#=containerName #>> contextFactory, Func<I<#=containerName #>, ISerializableExpressionProvider> serializableExpressionProviderFactory, Func<<#=edmxName #>ServiceL2E> serviceFactory<#+
+    foreach (var p in specificationsElements.ServiceProperties)
+    {
+#>, Func<<#=p.Type.ToString() #>> <#=code.CamelCase(p.Name) #>Factory<#+
+    }
+#>)
+        : base(contextFactory, serializableExpressionProviderFactory, serviceFactory<#+
+    foreach (var p in specificationsElements.ServiceProperties)
+    {
+#>, <#=code.CamelCase(p.Name) #>Factory<#+
+    }
+#>)
+    {
+    }
+
+    public <#=edmxName#>ServiceL2E(I<#=containerName#> context)
+        : base(context, () => new <#=edmxName#>ServiceL2E(context))
+    {
+    }
+
+    public <#=edmxName#>ServiceL2E(Func<I<#=containerName#>> contextFactory)
+        : this(contextFactory, () => new <#=edmxName#>ServiceL2E(contextFactory))
+    {
+    }
+
+    protected <#=edmxName#>ServiceL2E(Func<I<#=containerName#>> contexFactory, Func<<#=edmxName#>ServiceL2E> serviceFactory)
+        : base (contexFactory, serviceFactory)
+    {
+    }
+
+    public static <#=edmxName#>ServiceL2E Create<DataContextT>()
+        where DataContextT : I<#=containerName#>, new()
+    {
+        return new <#=edmxName#>ServiceL2E(() => new DataContextT { UseWAQSProvider = true });
+    }
+
+    public override <#=edmxName #>QueryResultPage LoadPage(int pageSize, SerializableExpression querySerializableExpression, IEnumerable<string> withSpecificationsProperties, LoadPageParameter[] identifiersSerializableExpression)
+    {
+<#+
+if (firstEntitySet == null)
+{
+    throw new InvalidOperationException();
+}
+else
+{
+#>
+        if (identifiersSerializableExpression.Length == 0)
+            throw new InvalidOperationException();
+
+        var queryExpression = SerializableExpressionProvider(Context).ToExpression(querySerializableExpression, withSpecificationsProperties);
+        Expression exp = Expression.Constant(1);
+        var queryType = GetGenericType(queryExpression.Type);
+        var parameterExp = Expression.Parameter(queryType);
+        foreach (var identifierSerializableExpression in identifiersSerializableExpression.Reverse())
+            exp = Expression.Condition(GetLogicalBinaryExpression(parameterExp, queryType, identifierSerializableExpression.Descending ? ExpressionType.GreaterThan : ExpressionType.LessThan, identifierSerializableExpression), Expression.Constant(1), Expression.Condition(GetLogicalBinaryExpression(parameterExp, queryType, identifierSerializableExpression.Descending ? ExpressionType.LessThan : ExpressionType.GreaterThan, identifierSerializableExpression), Expression.Constant(0), exp));
+        var provider = ((IQueryable)Context.<#=code.Escape(firstEntitySet) #>).Provider;
+        int rowIndex = (int)provider.Execute(Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == "Sum" && m.GetParameters().Length == 2 && m.GetParameters()[1].ParameterType.GetGenericArguments()[0].GetGenericArguments()[1] == typeof(int)).MakeGenericMethod(new Type[] { queryType }), queryExpression, Expression.Lambda(exp, parameterExp)));
+        int pageIndex = rowIndex / pageSize;
+        if (rowIndex % pageSize != 0)
+            pageIndex++;
+        return new <#=edmxName #>QueryResultPage { PageIndex = pageIndex - 1, Result = new <#=edmxName #>QueryResult { Records = ((IEnumerable)provider.CreateQuery(Expression.Call(typeof(Queryable).GetMethod("Take").MakeGenericMethod(queryType), Expression.Call(typeof(Queryable).GetMethod("Skip").MakeGenericMethod(queryType), queryExpression, Expression.Constant((pageIndex - 1) * pageSize)), Expression.Constant(pageSize)))).Cast<object>().Select(o => GetQueryResult(queryType, o)).ToList()}};
+    }
+
+    private Expression GetLogicalBinaryExpression(ParameterExpression parameterExp, Type type, ExpressionType expressionType, LoadPageParameter loadPageParameter)
+    {
+        PropertyInfo prop = type.GetProperty(loadPageParameter.PropertyName);
+        Type valueType = prop.PropertyType;
+        Expression valueExpression = SerializableExpressionToLINQExpressionConverter.GetConstantExpression(loadPageParameter.Value, valueType);
+        Expression propExpression = Expression.MakeMemberAccess(parameterExp, prop);
+        bool nullable = false;
+        if (valueType == typeof(string))
+            switch (expressionType)
+            {
+                case ExpressionType.LessThan:
+                    return Context.LessThanString(propExpression, valueExpression);
+                case ExpressionType.GreaterThan:
+                    return Context.GreaterThanString(propExpression, valueExpression);
+                default:
+                    throw new NotImplementedException();
+            }
+        else if (typeof(Enum).IsAssignableFrom(valueType) || (nullable = valueType.IsGenericType && valueType.GetGenericTypeDefinition() == typeof(Nullable<>) && typeof(Enum).IsAssignableFrom(valueType.GetGenericArguments()[0])))
+        {
+            Type intType = nullable ? typeof(int?) : typeof(int);
+            return Expression.MakeBinary(expressionType, Expression.Convert(propExpression, intType), Expression.Convert(valueExpression, intType));
+        }
+        else
+            return Expression.MakeBinary(expressionType, propExpression, valueExpression);
+<#+
+}
+#>
+    }
+
+    private Expression GetExpression<T>(T value)
+    {
+        Expression<Func<T>> exp = () => value;
+        return exp;
+    }
+}
+<#+
+        WriteFooter(edmxElements.NamespaceName);
+
+        var converterUsings = new List<string>() {"System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", serverFxCommonNamespace, serverFxSerializableExpressionsNamespace, serverEntitiesNamespace, serverDALInterfacesNamespace, serverFxServiceNamespace, serverFxDALInterfacesNamespace};
+        foreach (var method in specificationsElements.ExtensionMethods)
+        {
+            var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+            if (! specificationsElements.AbstractMethods.Contains(method))
+                continue;
+            foreach (var @using in UsingVisitor.GetUsings(method.ReturnType, specificationsElements.MethodSymbolPerMethods[method].ReturnType))
+                if (! converterUsings.Contains(@using))
+                    converterUsings.Add(@using);
+        }
+
+        fileManager.StartNewFile(edmxName + "SerializableExpressionConverter.cs");
+        WriteHeader(edmxElements.NamespaceName, code, converterUsings.ToArray());
+#>
+public partial class <#=edmxName #>SerializableExpressionConverter : ISerializableExpressionConverter
+{
+    private I<#=containerName #> _context;
+    private <#=edmxName #>EntitiesFilters _entitiesFilter;
+
+    public <#=edmxName #>SerializableExpressionConverter(I<#=containerName #> context, <#=edmxName #>EntitiesFilters entitiesFilter)
+    {
+        _context = context;
+        _entitiesFilter = entitiesFilter;
+    }
+
+    IDataContext ISerializableExpressionConverter.Context
+    {
+        get { return _context; }
+    }
+
+    Type ISerializableExpressionConverter.DataContextType
+    {
+        get { return typeof(I<#=containerName #>); }
+    }
+
+    public Type GetTypeFromWCFNamespace(SerializableType serializableType, string typeName)
+    {
+        switch (serializableType.WCFNamespaceName)
+        {
+<#+
+    if (edmxElements.EdmTypes.Any())
+    {
+#>
+            case "http://<#=edmxName #>/Entities":
+                switch (typeName)
+                {
+<#+
+        foreach (var edmType in edmxElements.EdmTypes)
+        {
+            string edmTypeName = code.Escape(edmType);
+#>
+                    case "<#=edmTypeName #>":
+                        return typeof(<#=serverEntitiesNamespace #>.<#=edmTypeName #>);
+<#+
+        }
+#>
+                }
+                break;
+<#+
+    }
+        List<TypeSymbol> dtoClasses;
+        if (dtoWCFNamespace != null && (dtoClasses = GetClasses(dtoPathes).ToList()).Count != 0)
+        {
+#>
+            case "<#=dtoWCFNamespace #>":
+                switch (typeName)
+                {
+<#+
+        foreach (var @class in dtoClasses)
+        {
+#>
+                    case "<#=@class.Name #>":
+                        return typeof(<#=dtoNamespace #>.<#=@class.Name #>);
+<#+
+        }
+#>
+                }
+                break;
+<#+
+        }
+        var includeKeysTypes = GetKeysTypes(edmxElements).ToList();
+        if (includeKeysTypes.Count != 0)
+        {
+#>
+            case "http://<#=edmxName #>/QueryInclude":
+                switch (typeName)
+                {
+<#+
+        foreach (var includeKeysType in includeKeysTypes)
+        {
+#>
+                    case "<#=includeKeysType #>":
+                        return typeof(<#=serverServiceInterfacesNamespace #>.Query.Include.<#=includeKeysType #>);
+<#+
+        }
+#>
+                }
+                break;
+<#+
+        }
+#>
+        }
+        Type type = null;
+        GetTypeFromWCFNamespace(serializableType, typeName, ref type);
+        return type;
+    }
+    partial void GetTypeFromWCFNamespace(SerializableType serializableType, string typeName, ref Type type);
+
+    public virtual Type GetTypeInLINQ(Type type)
+    {
+        GetTypeInLINQ(ref type);
+        return type;
+    }
+    partial void GetTypeInLINQ(ref Type type);
+
+    public Expression GetEntitySetExpression(string entitySetName)
+    {
+<#+
+        var entitySets = edmxElements.EntitySets.ToList();
+        if (entitySets.Count != 0)
+        {
+#>
+        switch (entitySetName)
+        {
+<#+
+        foreach (EntitySet entitySet in entitySets)
+        {
+            string entitySetName = code.Escape(entitySet);
+            string entityTypeName = code.Escape(entitySet.ElementType);
+            string entityTypeVariableName = code.CamelCase(entityTypeName);
+#>
+            case "<#=entitySetName #>":
+                return GetObjectSetExpression(_entitiesFilter.<#=entityTypeName #>FilterExpression, _context.<#=entitySetName #>Expression);
+<#+
+        }		
+#>	
+        }
+<#+
+        }
+#>
+        throw new NotImplementedException();
+    }
+
+    private Expression GetObjectSetExpression<T>(Expression<Func<T, bool>> filterExpression, Expression<Func<IQueryable<T>>> query)
+    {
+        if (filterExpression == null)
+            return query.Body;
+        ParameterInfo[] parameters;
+        Type predicateType;
+        return Expression.Call(
+            typeof(Queryable).GetMethods().First(m => m.Name == "Where" && (parameters = m.GetParameters()).Length == 2 && (predicateType = parameters[1].ParameterType).IsGenericType && (predicateType = predicateType.GetGenericArguments()[0]).IsGenericType && predicateType.GetGenericArguments().Length == 2).MakeGenericMethod(typeof(T)),
+            query.Body,
+            filterExpression);
+    }
+
+    public Expression GetCustomPropertyExpression(Expression expression, PropertyInfo property)
+    {
+        if (property == null)
+            return null;
+<#+
+    foreach (EntityType entityType in entityTypesWithEntitySet.Where(et => et.NavigationProperties.Any()))
+    {
+        var entityTypeName = code.Escape(entityType);
+        var entitySet = GetEntitySet(edmxElements.Container, entityType);
+        if (entitySet == null)
+            continue;
+        var entitySetName = code.Escape(entitySet);
+        bool first = true;
+#>
+        <#+if (first) { first = false; }
+else
+{ #>else <#+ } #>if (property.DeclaringType == typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>))
+        {
+            switch (property.Name)
+            {
+<#+
+        foreach (var np in entityType.NavigationProperties)
+        {
+            var subEntityType = np.ToEndMember.GetEntityType();
+            var subEntityTypeName = code.Escape(subEntityType);
+            var subEntitySet = GetEntitySet(edmxElements.Container, subEntityType);
+            if (entitySet == null)
+                continue;
+            var subEntitySetName = code.Escape(subEntitySet);
+#>
+                case "<#=code.Escape(np) #>":
+<#+
+            if (np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+            {
+#>
+                    return FilterPropertyMany(expression, property, _entitiesFilter.<#=subEntityTypeName #>FilterExpression);
+<#+
+            }
+            else
+            {
+#>
+                    return FilterPropertySingle(expression, property, _entitiesFilter.<#=subEntityTypeName #>FilterExpression, _context.<#=subEntitySetName #><#+if (subEntitySet.ElementType != subEntityType)
+{ #>.OfType<<#=serverEntitiesNamespace #>.<#=subEntityTypeName #>>()<#+ } #>, (e1, e2) => <#=subEntityType.KeyMembers.Select(km => string.Format("e1.{0} == e2.{0}", code.Escape(km))).Aggregate((k1, k2) => string.Concat(k1, " && ", k2)) #>);
+<#+
+            }
+#>
+<#+
+        }
+#>
+            }
+        }
+<#+
+    }
+#>
+        return null;
+    }
+
+    private Expression FilterPropertyMany<T>(Expression expression, PropertyInfo property, Expression<Func<T, bool>> filterExpression)
+    {
+        if (filterExpression == null)
+            return Expression.MakeMemberAccess(expression, property);
+        return Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Where" && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2).MakeGenericMethod(typeof(T)), Expression.MakeMemberAccess(expression, property), filterExpression);
+    }
+
+    private Expression FilterPropertySingle<T>(Expression expression, PropertyInfo property, Expression<Func<T, bool>> filterExpression, IQueryable<T> query, Expression<Func<T, T, bool>> equalsExpression)
+    {
+        if (filterExpression == null)
+            return Expression.MakeMemberAccess(expression, property); 
+        var parameter = Expression.Parameter(typeof(T));
+        return Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "FirstOrDefault" && m.GetParameters().Length == 1).MakeGenericMethod(typeof(T)), Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Where" && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2).MakeGenericMethod(typeof(T)), query.Expression, Expression.Lambda(Expression.AndAlso(filterExpression.Body.ReplaceParameter(filterExpression.Parameters[0], parameter), equalsExpression.Body.ReplaceParameter(p => 
+            {
+                if (p == equalsExpression.Parameters[0])
+                    return parameter;
+                else if (p == equalsExpression.Parameters[1])
+                    return Expression.MakeMemberAccess(expression, property);
+                return p;
+            })), parameter)));
+    }
+
+    public Type GetInheritedType(Type type)
+    {
+        return Get<#=edmxName #>InheritedType(type);
+    }
+    public static Type Get<#=edmxName #>InheritedType(Type type)
+    {
+<#+
+        var inheritedTypes = edmxElements.EdmTypes;
+        foreach (var inheritedType in inheritedTypes.Where(it => ! it.Abstract))
+        {
+            string inheritedTypeName = code.Escape(inheritedType);
+#>
+        if (type == typeof(<#=serverEntitiesNamespace #>.<#=inheritedTypeName #>))
+            return typeof(Inherited<#=inheritedTypeName #>);
+<#+
+        }
+#>
+        return null;
+    }
+
+    public Type GetWithType(Type type)
+    {
+        return Get<#=edmxName #>WithType(type);
+    }
+    public static Type Get<#=edmxName #>WithType(Type type)
+    {
+<#+
+    foreach (EntitySet entitySet in edmxElements.EntitySets.Where(es => IsPublic(es.ElementType)))
+    {
+        var entityType = entitySet.ElementType;
+        foreach (var subEntityType in GetSubEntityTypes(edmxElements.ItemCollection, entityType))
+        {
+            string subEntityTypeName = code.Escape(subEntityType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=subEntityTypeName #>).IsAssignableFrom(type))
+            return typeof(With<#=subEntityTypeName #>);
+<#+
+        }
+        string entityTypeName = code.Escape(entityType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).IsAssignableFrom(type))
+            return typeof(With<#=entityTypeName #>);
+<#+ }
+    foreach (var complexType in edmxElements.ComplexTypes)
+    {
+        var complexTypeName = code.Escape(complexType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=complexTypeName #>).IsAssignableFrom(type))
+            return typeof(With<#=complexTypeName #>);
+<#+ }
+#>
+        return null;
+    }
+
+    public Type GetBaseType(Type type)
+    {
+        return Get<#=edmxName #>BaseType(type);
+    }
+    public static Type Get<#=edmxName #>BaseType(Type type)
+    {
+<#+
+    foreach (var inheritedType in inheritedTypes)
+    {
+        string inheritedTypeName = code.Escape(inheritedType);
+#>
+        if (<#=inheritedType.Abstract ? "" : string.Concat("type == typeof(Inherited", inheritedTypeName, ") || ") #>type == typeof(With<#=inheritedTypeName #>))
+            return typeof(<#=serverEntitiesNamespace #>.<#=inheritedTypeName #>);
+<#+
+    }
+#>
+        return null;
+    }
+    
+    public object GetBaseObject(object inheritedObject)
+    {
+        return Get<#=edmxName #>BaseObject(inheritedObject);
+    }
+    public static object Get<#=edmxName #>BaseObject(object inheritedObject)
+    {
+        if (inheritedObject == null)
+            return null;
+<#+
+    foreach (var inheritedType in inheritedTypes)
+    {
+        string inheritedTypeName = code.Escape(inheritedType);
+        if (! inheritedType.Abstract)
+        {
+#>
+        var inheritedObjectAs<#=inheritedTypeName #> = inheritedObject as Inherited<#=inheritedTypeName #>;
+        if (inheritedObjectAs<#=inheritedTypeName #> != null)
+            return new <#=serverEntitiesNamespace #>.<#=inheritedTypeName #> { <#+
+            ReadOnlyMetadataCollection<EdmProperty> props;
+            EntityType entityType;
+            ComplexType complexType;
+            if ((entityType = inheritedType as EntityType) != null)
+                props = entityType.Properties;
+            else if ((complexType = inheritedType as ComplexType) != null)
+                props = complexType.Properties;
+            else
+                throw new NotImplementedException();
+            foreach (var prop in props.Where(p => IsPublic(p)))
+            {
+                string propName = code.Escape(prop);
+#><#=propName #> = inheritedObjectAs<#=inheritedTypeName #>.<#=propName #>, <#+
+            }
+if (specificationsElements.GetMethods.ContainsKey(inheritedTypeName))
+{
+#>Specifications = inheritedObjectAs<#=inheritedTypeName #>.Specifications <#+
+}
+#>};
+<#+
+        }
+    }
+#>
+        return <#=edmxName#>Service.GetWithBaseObject(inheritedObject);
+    }
+    
+    public Expression GetWithBaseExpression(Type parameterType, IEnumerable<string> withSpecificationsProperties)
+    {
+        return Get<#=edmxName #>WithBaseExpression(parameterType, withSpecificationsProperties);
+    }
+    public static Expression Get<#=edmxName #>WithBaseExpression(Type parameterType, IEnumerable<string> withSpecificationsProperties)
+    {
+        var parameter = Expression.Parameter(parameterType);
+        Expression exp = null;
+        Type valueType = null;
+        Expression entityExpression = null;
+<#+
+    if (specificationsElements.GetMethods.Any())
+    {
+#>
+        PropertyInfo prop;
+<#+
+    }
+        bool firstInheritedType = true;
+        foreach (var inheritedType in inheritedTypes)
+        {
+            string inheritedTypeName = code.Escape(inheritedType);
+#>
+        <#+if (firstInheritedType) { firstInheritedType = false; }
+else
+{ #>else <#+ } #>if (typeof(With<#=inheritedTypeName #>) == parameterType)
+        {
+            valueType = typeof(<#=serverEntitiesNamespace #>.<#=inheritedTypeName #>);
+            var valueVariable = Expression.Parameter(valueType);
+            var exps = new List<Expression>() { Expression.Assign(valueVariable, entityExpression = Expression.MakeMemberAccess(parameter, parameterType.GetProperty("<#=inheritedTypeName #>"))) };
+<#+
+            List<MethodDeclarationSyntax> specificationClassMethods;
+            var inheritedTypeLoop = inheritedType;
+            while (inheritedTypeLoop != null)
+            {
+                string inheritedTypeLoopName = code.Escape(inheritedTypeLoop);
+                if (specificationsElements.GetMethods.TryGetValue(inheritedTypeLoopName, out specificationClassMethods))
+                    foreach (var specificationMethod in specificationClassMethods)
+                    {
+                        string specificationPropertyName = GetPropertyNameFromMethodName(specificationMethod.Identifier.ValueText);
+#>
+            if (withSpecificationsProperties.Contains("<#=specificationPropertyName #>"))
+                exps.Add(Expression.Assign(Expression.MakeMemberAccess(valueVariable, prop = typeof(<#=serverEntitiesNamespace #>.<#=inheritedTypeLoopName #>).GetProperty("<#=specificationPropertyName #>")), Expression.MakeMemberAccess(parameter, prop))); 
+<#+
+                    }
+                inheritedTypeLoop = (EntityType) inheritedTypeLoop.BaseType;
+            }
+#>
+            exps.Add(valueVariable);
+            exp = Expression.Block(
+                new[] { valueVariable }, 
+                exps);
+        }
+<#+
+        }
+#>
+        if (exp == null)
+            return null;
+        return Expression.Lambda(
+                    Expression.Condition(
+                        Expression.Equal(entityExpression, Expression.Constant(null, parameterType)), 
+                        Expression.Constant(null, valueType),
+                        exp),
+                    parameter);
+    }
+    
+    public IEnumerable<Type> GetEntityOrComplexTypes()
+    {
+<#+
+    foreach (var edmType in edmxElements.EdmTypes)
+    {
+#>
+        yield return typeof(<#=serverEntitiesNamespace #>.<#=code.Escape(edmType) #>);
+<#+
+    }
+#>
+    }
+ 
+    public IEnumerable<PropertyInfo> GetScalarAndComplexProperties(Type type)
+    {
+        return GetScalarProperties(type).Union(GetComplexProperties(type));
+    }
+ 
+    public IEnumerable<PropertyInfo> GetScalarProperties(Type type)
+    {
+<#+
+    foreach (var entityType in entityTypesWithEntitySet)
+    {
+        var properties = entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && IsPublic(p)).ToList();
+        if (properties.Count == 0)
+            continue;
+        string entityTypeName = code.Escape(entityType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).IsAssignableFrom(type))
+        {
+<#+
+        foreach (var edmProperty in properties)
+        {
+#>
+            yield return typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).GetProperty("<#=code.Escape(edmProperty) #>");
+<#+
+        }
+#>
+        }
+<#+
+    }
+    foreach (var complexType in edmxElements.ComplexTypes)
+    {
+        var properties = complexType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && IsPublic(p)).ToList();
+        if (properties.Count == 0)
+            continue;
+        string complexTypeName = code.Escape(complexType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=complexTypeName #>).IsAssignableFrom(type))
+        {
+<#+
+        foreach (var edmProperty in properties)
+        {
+#>
+            yield return typeof(<#=serverEntitiesNamespace #>.<#=complexTypeName #>).GetProperty("<#=code.Escape(edmProperty) #>");
+<#+
+        }
+#>
+        }
+<#+
+    }
+#>		
+        yield break;
+    }
+ 
+    public IEnumerable<PropertyInfo> GetComplexProperties(Type type)
+    {
+<#+
+    foreach (var entityType in entityTypesWithEntitySet)
+    {
+        var properties = entityType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && IsPublic(p)).ToList();
+        if (properties.Count == 0)
+            continue;
+        string entityTypeName = code.Escape(entityType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).IsAssignableFrom(type))
+        {
+<#+
+        foreach (var edmProperty in properties)
+        {
+#>
+            yield return typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).GetProperty("<#=code.Escape(edmProperty) #>");
+<#+
+        }
+#>
+        }
+<#+
+    }
+    foreach (var complexType in edmxElements.ComplexTypes)
+    {
+        var properties = complexType.Properties.Where(p => p.TypeUsage.EdmType is ComplexType && IsPublic(p)).ToList();
+        if (properties.Count == 0)
+            continue;
+        string entityTypeName = code.Escape(complexType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).IsAssignableFrom(type))
+        {
+<#+
+        foreach (var edmProperty in properties)
+        {
+#>
+            yield return typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).GetProperty("<#=code.Escape(edmProperty) #>");
+<#+
+        }
+#>
+        }
+<#+
+    }
+#>	
+        yield break;	
+    }
+ 
+    public IEnumerable<NavigationProperty> GetNavigationProperties(Type type)
+    {
+<#+
+    foreach (var entityType in entityTypesWithEntitySet)
+    {
+        var navigationProperties = entityType.NavigationProperties.Where(np => IsPublic(np)).ToList();
+        if (navigationProperties.Count == 0)
+            continue;
+        string entityTypeName = code.Escape(entityType);
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).IsAssignableFrom(type))
+        {
+<#+
+        foreach (var navigationProperty in navigationProperties)
+        {
+            string multiplicity;
+            switch (navigationProperty.ToEndMember.RelationshipMultiplicity)
+            {
+                case RelationshipMultiplicity.Many:
+                    multiplicity = "Many";
+                    break;
+                case RelationshipMultiplicity.One:
+                    multiplicity = "One";
+                    break;
+                default:
+                    multiplicity = "ZeroOne";
+                    break;
+            }
+#>
+            yield return new NavigationProperty(typeof(<#=serverEntitiesNamespace #>.<#=entityTypeName #>).GetProperty("<#=code.Escape(navigationProperty) #>"), Multiplicity.<#=multiplicity #>);
+<#+
+        }
+#>
+        }
+<#+
+    }
+#>
+        yield break;
+    }
+
+    public Expression GetSpecificationLINQExpression(PropertyInfo property, Type type = null)
+    {
+        if (type == null)
+            type = property.DeclaringType;
+        var lambdaParamater = Expression.Parameter(type);
+        return Expression.Lambda(_context.GetExpression(type, property.Name, lambdaParamater), lambdaParamater);
+    }
+
+    public Expression GetSpecificationLINQExpression(MethodInfo method, List<Expression> arguments, Type type = null)
+    {
+        if (type == null)
+            type = method.DeclaringType;
+        var lambdaParamater = Expression.Parameter(type);
+        return Expression.Lambda(_context.GetExpression(type, method.Name, arguments, lambdaParamater), lambdaParamater);
+    }
+
+    public IEnumerable<IEnumerable<PropertyInfo>> GetDependentProperties(PropertyInfo property)
+    {
+<#+
+    foreach (var specificationMethodPerClass in specificationsElements.GetMethods)
+    {
+#>
+        if (typeof(<#=serverEntitiesNamespace #>.<#=specificationMethodPerClass.Key #>).IsAssignableFrom(property.DeclaringType))
+        {
+            switch (property.Name)
+            {
+<#+
+        bool first = true;
+        foreach (var specificationMethod in specificationMethodPerClass.Value)
+        {
+            List<List<PropertySymbolInfo>> dependentProperties;
+            if (specificationsElements.MethodsDependentProperties.TryGetValue(specificationMethod, out dependentProperties) && dependentProperties != null)
+            {
+                var propertyNames = new List<string>();
+#>
+                case "<#=GetPropertyNameFromMethodName(specificationMethod.Identifier.ValueText) #>":
+<#+
+                foreach (var dependentPropertyList in dependentProperties)
+                {
+                    var sb = new StringBuilder();
+                    foreach (var dependentProperty in dependentPropertyList)
+                    {
+                        sb.Append(dependentProperty.Name);
+                        sb.Append(".");
+                    }
+                    if (propertyNames.Contains(sb.ToString()))
+                        continue;
+                    propertyNames.Add(sb.ToString());
+#>
+//					<#=first ? "var " : "" #>dependentProperties = new List<IEnumerable<PropertyInfo>>();
+<#+
+                    bool firstLoop = true;
+                    foreach (var dependentProperty in dependentPropertyList)
+                    {
+                        string dependentPropertyContainingTypeName = dependentProperty.ContainingType.Name;
+                        string dependentPropertyContainingTypeFullName = dependentProperty.ContainingType.FullName;
+                        var edmType = edmxElements.EdmTypes.FirstOrDefault(t => t.Name == dependentPropertyContainingTypeName);
+                        if (edmType == null)
+                        {
+                            List<string> dependentPropertyContainingClasses;
+                            if (specificationsElements.ClassesPerInterfaces.TryGetValue(dependentProperty.ContainingType.FullName, out dependentPropertyContainingClasses) && dependentPropertyContainingClasses.Count == 1)
+                            {
+                                dependentPropertyContainingTypeName = dependentPropertyContainingClasses[0];
+                                dependentPropertyContainingTypeFullName = string.Concat(serverEntitiesNamespace, ".", dependentPropertyContainingTypeName);
+                                edmType = edmxElements.EdmTypes.FirstOrDefault(t => t.Name == dependentPropertyContainingTypeName);
+                                if (edmType == null)
+                                    throw new NotImplementedException();
+                            }
+                            else
+                                continue;
+                        }
+                        bool propInEdmx;
+                        var entityType = edmType as EntityType;
+                        if (entityType != null)
+                            propInEdmx = entityType.Properties.Any(p => p.Name == dependentProperty.Name) || entityType.NavigationProperties.Any(p => p.Name == dependentProperty.Name);
+                        else
+                        {
+                            var complexType = edmType as ComplexType;
+                            if (complexType != null)
+                                propInEdmx = complexType.Properties.Any(p => p.Name == dependentProperty.Name);
+                            else
+                                propInEdmx = false;
+                        }
+                        if (firstLoop)
+                        {
+                            if (propInEdmx)
+                            {
+#>
+//					dependentProperties.Add(new PropertyInfo[] { typeof(<#=serverEntitiesNamespace #>.<#=specificationMethodPerClass.Key #>).GetProperty("<#=dependentProperty.Name #>") });
+<#+
+                            }
+                            else
+                            {
+#>
+//					if (_context.<#=specificationMethodPerClass.Key #>DALSpecifications.<#=dependentProperty.Name #>Expression == null)
+//						dependentProperties = GetDependentProperties(typeof(<#=serverEntitiesNamespace #>.<#=specificationMethodPerClass.Key #>).GetProperty("<#=dependentProperty.Name #>")).ToList();
+//					else
+//						dependentProperties.Add(new PropertyInfo[] { typeof(<#=serverEntitiesNamespace #>.<#=specificationMethodPerClass.Key #>).GetProperty("<#=dependentProperty.Name #>") });
+<#+
+                            }
+                        }
+                        else
+                        {
+                            if (propInEdmx)
+                            {
+#>
+//					dependentProperties = dependentProperties.Select(dp => dp.Union(new PropertyInfo[] { typeof(<#=dependentPropertyContainingTypeFullName #>).GetProperty("<#=dependentProperty.Name #>") })).ToList();
+<#+
+                            }
+                            else
+                            {
+#>
+//					if (_context.<#=dependentPropertyContainingTypeName #>DALSpecifications.<#=dependentProperty.Name #>Expression == null) 
+//						dependentProperties = (from dp in dependentProperties
+//											   from dp2 in GetDependentProperties(typeof(<#=dependentPropertyContainingTypeFullName #>).GetProperty("<#=dependentProperty.Name #>"))
+//											   select dp.Union(dp2)).ToList();
+//					else
+//						dependentProperties = dependentProperties.Select(dp => dp.Union(new PropertyInfo[] { typeof(<#=dependentPropertyContainingTypeFullName #>).GetProperty("<#=dependentProperty.Name #>") })).ToList();
+<#+
+                            }
+                        }
+                        firstLoop = false;
+                    }
+#>
+//					foreach (var properties in dependentProperties)
+//						yield return properties;
+<#+
+                    first = false;
+                }
+#>
+                    yield break;
+<#+
+            }
+        }
+#>
+            }
+        }
+<#+
+    }
+#>
+        yield break;
+    }
+
+    public IEnumerable<IEnumerable<PropertyInfo>> GetDependentProperties(MethodInfo method)
+    {
+        if (method.GetParameters().Length == 0)
+            return new IEnumerable<PropertyInfo>[0];
+        Type firstParameterType = method.GetParameters()[0].ParameterType;
+<#+
+    foreach (var specificationMethodPerClass in specificationsElements.GetMethods)
+    {
+#>
+        if (firstParameterType.IsAssignableFrom(typeof(<#=serverEntitiesNamespace #>.<#=specificationMethodPerClass.Key #>)))
+        {
+            switch (method.Name)
+            {
+<#+
+        foreach (var specificationMethod in specificationMethodPerClass.Value)
+        {
+            string methodName = specificationMethod.Identifier.ValueText;
+#>
+                case "<#=methodName #>":
+                    return GetDependentProperties(firstParameterType.GetProperty("<#=GetPropertyNameFromMethodName(methodName) #>"));
+<#+
+        }
+#>
+            }
+        }
+<#+
+    }
+#>
+        return new IEnumerable<PropertyInfo>[0];
+    }
+
+    PropertyInfo ISerializableExpressionConverter.GetProperty(Type type, string propertyName)
+    {
+        var value = type.GetProperty(propertyName);
+        if (value != null)
+            return value;
+<#+
+    foreach (var edmType in edmxElements.EdmTypes)
+    {
+        string typeName = code.Escape(edmType);
+#>
+        if (type == typeof(<#=typeName#>))
+            return typeof (With<#=typeName#>).GetProperty(propertyName);
+<#+
+    }
+#>
+        throw new InvalidOperationException();
+    }
+}
+<#+
+        WriteFooter(edmxElements.NamespaceName);
+
+        fileManager.StartNewFile(edmxName + "SerializableExpressionConverterL2E.cs");
+        WriteHeader(edmxElements.NamespaceName + ".L2E", code, "System", "System.Collections", "System.Collections.Generic", serverDALInterfacesNamespace);
+#>
+public partial class <#=edmxName #>SerializableExpressionConverter : <#=edmxElements.NamespaceName #>.<#=edmxName #>SerializableExpressionConverter
+{
+    public <#=edmxName #>SerializableExpressionConverter(I<#=containerName #> context, <#=edmxName #>EntitiesFilters entitiesFilter)
+        : base(context, entitiesFilter)
+    {
+    }
+
+    public override Type GetTypeInLINQ(Type type)
+    {
+        Type resultType = type;
+        GetTypeInLINQ(ref resultType);
+        if (resultType != type)
+            return resultType;
+        if (type != typeof(string))
+        {
+            if (type.IsGenericType && typeof(IEnumerable).IsAssignableFrom(type) && type.GetGenericArguments().Length == 1)
+                return typeof(IEnumerable<>).MakeGenericType(type.GetGenericArguments()[0]);
+            if (type.IsArray)
+                return typeof(IEnumerable<>).MakeGenericType(type.GetElementType());
+        }
+        return base.GetTypeInLINQ(type);
+    }
+    partial void GetTypeInLINQ(ref Type type);
+}
+<#+
+        WriteFooter(edmxElements.NamespaceName);
+
+        fileManager.StartNewFile(edmxName + "EntitiesFilters.cs");
+        WriteHeader(edmxElements.NamespaceName, code, "System", "System.Linq.Expressions", serverFxServiceNamespace, serverEntitiesNamespace, serverDALInterfacesNamespace);
+#>
+public partial class <#=edmxName #>EntitiesFilters
+{
+    private readonly I<#=containerName #> _context;
+
+    public <#=edmxName #>EntitiesFilters(I<#=containerName #> context)
+    {
+        _context = context;
+    }
+
+<#+
+    foreach (EntityType entityType in entityTypesWithEntitySet)
+    {
+        var entityTypeName = code.Escape(entityType);
+        var entityTypeNamePlurial = GetPlurial(code, edmxElements.Container, entityType);
+        var entitySet = GetEntitySet(edmxElements.Container, entityType);
+        if (entitySet == null)
+            continue;
+#>
+    private Expression<Func<<#=entityTypeName #>, bool>> _<#=code.CamelCase(entityTypeName) #>FilterExpression;
+    private bool _<#=code.CamelCase(entityTypeName) #>FilterExpressionInitialized = false;
+    public Expression<Func<<#=entityTypeName #>, bool>> <#=entityTypeName #>FilterExpression
+    {
+        get 
+        { 
+            if (!_<#=code.CamelCase(entityTypeName) #>FilterExpressionInitialized)
+            {
+                Apply<#=entityTypeNamePlurial #>ServerWhere(ref _<#=code.CamelCase(entityTypeName) #>FilterExpression);
+                _<#=code.CamelCase(entityTypeName) #>FilterExpressionInitialized = true;
+            }
+            return _<#=code.CamelCase(entityTypeName) #>FilterExpression;
+        }
+    }
+    partial void Apply<#=entityTypeNamePlurial #>ServerWhere(ref Expression<Func<<#=entityTypeName #>, bool>> filterExpression);
+
+<#+
+    }
+#>
+}
+<#+
+        WriteFooter(edmxElements.NamespaceName);
+
+        string contextName = code.Escape(edmxElements.Container);
+        fileManager.StartNewFile(edmxName + "QueryableExtension.cs");
+        WriteHeader(edmxElements.NamespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Threading.Tasks", serverFxDALInterfacesNamespace, HasPublicManyToManyRelationship(edmxElements) ? serverServiceInterfacesNamespace + ".Query.Include" : null, serverDALInterfacesNamespace);
+#>
+public static partial class <#=edmxName #>QueryableExtension
+{
+<#+
+foreach (EntityType entityType in edmxElements.EntityTypes)
+{
+    string entityTypeName = code.Escape(entityType);
+    string entityTypeFullName = string.Format("{0}.{1}", serverEntitiesNamespace, entityTypeName);
+    var subEntityTypes = GetSubEntityTypes(edmxElements.ItemCollection, entityType).ToList();
+    if (specificationsElements.GetMethods.TryGetValue(entityTypeName, out methods))
+    {
+        foreach (var method in methods.Where(m => ! specificationsElements.OverrideMethods.Contains(m)))
+        {
+            string propertyName = GetPropertyNameFromMethodName(method.Identifier.ValueText.Trim());
+            foreach (var subEntityType in subEntityTypes)
+            {
+                string subEntityTypeName = code.Escape(subEntityType);
+                string subEntityTypeFullName = string.Format("{0}.{1}", serverEntitiesNamespace, subEntityTypeName);
+#>
+    public static IWAQSQuery<<#=subEntityTypeFullName #>> With<#=propertyName #>(this IWAQSQuery<<#=subEntityTypeFullName #>> source)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.CreateWAQSQuery<<#=subEntityTypeFullName #>>(source, source.QueryableIncludes, source.WithSpecifications == null ? new string[] {"<#=propertyName #>"} : source.WithSpecifications.Union(new string[] {"<#=propertyName #>"}));
+    }	
+
+    public static IWAQSQueryValue<<#=subEntityTypeFullName #>> With<#=propertyName #>(this IWAQSQueryValue<<#=subEntityTypeFullName #>> source)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.CreateWAQSQueryValue<<#=subEntityTypeFullName #>>(source, source.QueryableIncludes, source.WithSpecifications == null ? new string[] {"<#=propertyName #>"} : source.WithSpecifications.Union(new string[] {"<#=propertyName #>"}));
+    }	
+
+    [IncludeMethod]
+    public static IEnumerable<<#=subEntityTypeFullName #>> With<#=propertyName #>(this IEnumerable<<#=subEntityTypeFullName #>> source)
+    {
+        return source;
+    }	
+
+    [IncludeMethod]
+    public static <#=subEntityTypeFullName #> With<#=propertyName #>(this <#=subEntityTypeFullName #> source)
+    {
+        return source;
+    }	
+<#+
+            }
+
+            var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+            var returnType = (TypeSyntax) new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes).Visit(method.ReturnType);
+#>
+    public static IWAQSQuery<<#=entityTypeFullName #>> With<#=propertyName #>(this IWAQSQuery<<#=entityTypeFullName #>> source)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.CreateWAQSQuery<<#=entityTypeFullName #>>(source, source.QueryableIncludes, source.WithSpecifications == null ? new string[] {"<#=propertyName #>"} : source.WithSpecifications.Union(new string[] {"<#=propertyName #>"}));
+    }	
+
+    public static IWAQSQueryValue<<#=entityTypeFullName #>> With<#=propertyName #>(this IWAQSQueryValue<<#=entityTypeFullName #>> source)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.CreateWAQSQueryValue<<#=entityTypeFullName #>>(source, source.QueryableIncludes, source.WithSpecifications == null ? new string[] {"<#=propertyName #>"} : source.WithSpecifications.Union(new string[] {"<#=propertyName #>"}));
+    }	
+
+    [IncludeMethod]
+    public static IEnumerable<<#=entityTypeFullName #>> With<#=propertyName #>(this IEnumerable<<#=entityTypeFullName #>> source)
+    {
+        return source;
+    }	
+
+    [IncludeMethod]
+    public static <#=entityTypeFullName #> With<#=propertyName #>(this <#=entityTypeFullName #> source)
+    {
+        return source;
+    }	
+
+<#+
+        }
+    }
+
+    foreach (var subEntityType in subEntityTypes)
+    {
+        string subEntityTypeName = code.Escape(subEntityType);
+        List<MethodDeclarationSyntax> subEntityTypeGetMethods;
+        if (specificationsElements.GetMethods.TryGetValue(subEntityTypeName, out subEntityTypeGetMethods))
+        {
+            foreach (var method in subEntityTypeGetMethods)
+            {
+                string propertyName = GetPropertyNameFromMethodName(method.Identifier.ValueText.Trim());
+#>
+    public static IWAQSQuery<<#=entityTypeFullName #>> <#=subEntityTypeName #>With<#=propertyName #>(this IWAQSQuery<<#=entityTypeFullName #>> source)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.CreateWAQSQuery<<#=entityTypeFullName #>>(source, source.QueryableIncludes, source.WithSpecifications == null ? new string[] {"<#=subEntityTypeName #>_<#=propertyName #>"} : source.WithSpecifications.Union(new string[] {"<#=subEntityTypeName #>_<#=propertyName #>"}));
+    }	
+
+    public static IWAQSQueryValue<<#=entityTypeFullName #>> <#=subEntityTypeName #>With<#=propertyName #>(this IWAQSQueryValue<<#=entityTypeFullName #>> source)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.CreateWAQSQueryValue<<#=entityTypeFullName #>>(source, source.QueryableIncludes, source.WithSpecifications == null ? new string[] {"<#=subEntityTypeName #>_<#=propertyName #>"} : source.WithSpecifications.Union(new string[] {"<#=subEntityTypeName #>_<#=propertyName #>"}));
+    }	
+
+    [IncludeMethod]
+    public static IEnumerable<<#=entityTypeFullName #>> <#=subEntityTypeName #>With<#=propertyName #>(this IEnumerable<<#=entityTypeFullName #>> source)
+    {
+        return source;
+    }	
+
+    [IncludeMethod]
+    public static <#=entityTypeFullName #> <#=subEntityTypeName #>With<#=propertyName #>(this <#=entityTypeFullName #> source)
+    {
+        return source;
+    }	
+
+<#+
+            }
+        }
+    }
+
+    foreach (var navigationProperty in entityType.NavigationProperties.Where(np => IsPublic(np) && IsPublic(np)))
+        GenerateIncludeNavigationProperty(code, edmxElements.Container, serverFxDALInterfacesNamespace, serverEntitiesNamespace, contextName, entityType, entityTypeFullName, entityTypeName, navigationProperty);
+
+    foreach (var subEntityType in GetSubEntityTypes(edmxElements.ItemCollection, entityType))
+    {
+        string subEntityTypeName = code.Escape(subEntityType);
+        foreach (var navigationProperty in subEntityType.NavigationProperties.Where(np => IsPublic(np) && IsPublic(np) && np.DeclaringType == subEntityType))
+            GenerateIncludeNavigationProperty(code, edmxElements.Container, serverFxDALInterfacesNamespace, serverEntitiesNamespace, contextName, entityType, entityTypeFullName, entityTypeName, navigationProperty, subEntityType, subEntityTypeName, string.Concat(serverEntitiesNamespace, ".", subEntityTypeName));
+    }
+}
+        foreach (var getMethodsPerClass in specificationsElements.GetMethods)
+        {
+            var entityType = edmxElements.EntityTypes.FirstOrDefault(et => et.Name == getMethodsPerClass.Key);
+            List<EntityType> subEntityTypes;
+            if (entityType != null)
+                subEntityTypes = GetSubEntityTypes(edmxElements.ItemCollection, entityType).Reverse().ToList();
+            else
+                subEntityTypes = new List<EntityType>();
+            foreach (var getMethod in getMethodsPerClass.Value)
+            {
+                var propertyName = GetPropertyNameFromMethod(getMethod);
+                GenerateIncludeFor(getMethodsPerClass.Key, propertyName, getMethod, specificationsElements, edmxElements.EntityTypes, code, serverEntitiesNamespace);
+                var excludedSubEntityTypes = new List<EntityType>();
+                foreach (var subEntityType in subEntityTypes)
+                {
+                    if (excludedSubEntityTypes.Contains(subEntityType) || excludedSubEntityTypes.Contains(subEntityType.BaseType))
+                    {
+                        excludedSubEntityTypes.Add(subEntityType);
+                        continue;
+                    }
+                    List<MethodDeclarationSyntax> subMethods;
+                    if (specificationsElements.GetMethods.TryGetValue(subEntityType.Name, out subMethods) &&
+                        subMethods.Any(m => m.Identifier.ValueText == getMethod.Identifier.ValueText))
+                    {
+                        excludedSubEntityTypes.Add(subEntityType);
+                        continue;
+                    }
+                    GenerateIncludeFor(subEntityType.Name, propertyName, getMethod, specificationsElements, edmxElements.EntityTypes, code, serverEntitiesNamespace);
+                }
+            }
+        }
+        string methodClassName = null;
+        foreach (var method in specificationsElements.ServiceMethods.Union(specificationsElements.SubMethods).Where(m =>
+        {
+            var semanticModel = specificationsElements.SemanticModelPerMethods[m];
+            var methodSymbol = specificationsElements.MethodSymbolPerMethods[m];
+            if (methodSymbol.Parameters.OfType<ParameterSymbol>().Count() == 1 && methodSymbol.IsExtensionMethod && (edmxElements.EntityTypes.Any(et => et.Name == methodSymbol.Parameters[0].Type.Name) || edmxElements.ComplexTypes.Any(ct => ct.Name == methodSymbol.Parameters[0].Type.Name)))
+            {
+                methodClassName = methodSymbol.Parameters[0].Type.Name;
+                return true;
+            }
+            return false;
+        }))
+        {
+            GenerateIncludeFor(methodClassName, method.Identifier.ValueText, method, specificationsElements, edmxElements.EntityTypes, code,
+                serverEntitiesNamespace);
+            var entityType = edmxElements.EntityTypes.FirstOrDefault(et => et.Name == methodClassName);
+            if (entityType != null)
+            {
+                var excludedSubEntityTypes = new List<EntityType>();
+                foreach (var subEntityType in GetSubEntityTypes(edmxElements.ItemCollection, entityType).Reverse())
+                {
+                    if (excludedSubEntityTypes.Contains(subEntityType) || excludedSubEntityTypes.Contains(subEntityType.BaseType))
+                    {
+                        excludedSubEntityTypes.Add(subEntityType);
+                        continue;
+                    }
+                    if (specificationsElements.ServiceMethods.Union(specificationsElements.SubMethods).Any(m =>
+                    {
+                        var methodSymbol = specificationsElements.MethodSymbolPerMethods[m];
+                        return methodSymbol.Parameters.OfType<ParameterSymbol>().Count() == 1 && methodSymbol.IsExtensionMethod &&
+                               (edmxElements.EntityTypes.Any(et => et.Name == methodSymbol.Parameters[0].Type.Name) ||
+                                edmxElements.ComplexTypes.Any(ct => ct.Name == methodSymbol.Parameters[0].Type.Name)) &&
+                               methodSymbol.Parameters[0].Type.Name == subEntityType.Name;
+                    }))
+                    {
+                        excludedSubEntityTypes.Add(subEntityType);
+                        continue;
+                    }
+                    GenerateIncludeFor(subEntityType.Name, method.Identifier.ValueText, method, specificationsElements, edmxElements.EntityTypes, code, serverEntitiesNamespace);
+                }
+            }
+        }
+#>
+}
+<#+
+        WriteFooter(namespaceName);
+
+
+        fileManager.StartNewFile("InheritedTypes.tt");
+        string beginTag = "<" + "#";
+        string endTag = "#" + ">";
+        var edmxUtilityTTIncludeNameValue = edmxUtilityTTIncludeName;
+        if (! string.IsNullOrEmpty(relativePath))
+            edmxUtilityTTIncludeNameValue = Regex.Replace(edmxUtilityTTIncludeName, @"^((.?)*)\.ttinclude$", m => string.Concat(relativePath, m.Groups[1].Value, ".merge.ttinclude"));
+#>
+<#="<" + "#@" #> template language="C#" hostspecific="true"<#=endTag #>
+<#="<" + "#@" #> include file="<#=edmxUtilityTTIncludeNameValue #>"<#=endTag #>
+<#="<" + "#@" #> output extension=".txt"<#=endTag #>
+<#=beginTag #>var fileManager = EntityFrameworkTemplateFileManager.Create(this);<#=endTag #>
+<#+
+    foreach (var inheritedType in edmxElements.EdmTypes)
+    {
+        string inheritedTypeName = code.Escape(inheritedType);
+        var usedUsings = new Dictionary<string, List<string>>();
+        var withNamespaces = new HashSet<string>();
+        if (inheritedType.Abstract)
+        {
+            foreach (var ms in specificationsElements.ExtensionMethods.Where(m =>
+            {
+                var semanticModel = specificationsElements.SemanticModelPerMethods[m];
+                var methodSymbol = specificationsElements.MethodSymbolPerMethods[m];
+                if (! specificationsElements.AbstractMethods.Contains(m))
+                    return false;
+                List<NamedTypeSymbol> interfaces;
+                return methodSymbol.Parameters[0].Type.Name == inheritedTypeName || specificationsElements.InterfacesPerClasses.TryGetValue(inheritedTypeName, out interfaces) && interfaces.Any(i => methodSymbol.Parameters[0].Type.ToString() == i.ToString());
+            }).GroupBy(m => m.Parent))
+            {
+                var semanticModel = specificationsElements.SemanticModelPerMethods[ms.First()];
+                new UsingVisitor(semanticModel, specificationsElements, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, SpecificationsElements.Type.Server, specificationsElements.SpecificationsNamespaces, m => ms.Contains(m) ? SpecificationsElements.MethodAnalizing.Method : SpecificationsElements.MethodAnalizing.Signature, usedUsings).Visit(ms.Key);
+            }
+            foreach (var @using in usedUsings.SelectMany(u => u.Value))
+                withNamespaces.Add(@using);
+        }
+        else
+        {
+#>
+<#=beginTag #>fileManager.StartNewFile("Inherited<#=inheritedTypeName #>.cs");<#=endTag #>
+<#+
+            WriteHeader(edmxElements.NamespaceName, code);
+#>
+class Inherited<#=inheritedTypeName #> : <#=serverEntitiesNamespace #>.<#=inheritedTypeName #> 
+{
+}
+<#+
+            WriteFooter(edmxElements.NamespaceName);
+        }
+#>
+<#=beginTag #>fileManager.StartNewFile("With<#=inheritedTypeName #>.cs");<#=endTag #>
+<#+
+        var subEntityTypesGetMethods = new Dictionary<string, List<MethodDeclarationSyntax>>();
+        foreach (var subEntity in GetSubEntityTypes(edmxElements.ItemCollection, inheritedTypeName))
+        {
+            List<MethodDeclarationSyntax> subEntityTypeGetMethods;
+            if (specificationsElements.GetMethods.TryGetValue(code.Escape(subEntity), out subEntityTypeGetMethods) && subEntityTypeGetMethods.Any())
+            {
+                var subEntityTypeGetMethods2 = new List<MethodDeclarationSyntax>();
+                foreach (var m in subEntityTypeGetMethods)
+                {
+                    var semanticModel = specificationsElements.SemanticModelPerMethods[m];
+                    var methodSymbol = specificationsElements.MethodSymbolPerMethods[m];
+                    var typeRewriter = new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes);
+                    withNamespaces.Add(methodSymbol.ReturnType.ContainingNamespace.ToString());
+                    subEntityTypeGetMethods2.Add(m.WithReturnType((TypeSyntax)typeRewriter.Visit(m.ReturnType)));
+                }
+                subEntityTypesGetMethods.Add(code.Escape(subEntity), subEntityTypeGetMethods2);
+            }
+        }
+        withNamespaces.Add("System");
+        foreach (var ns in withNamespaces)
+        {
+#>
+using <#=ns #>;
+<#+
+        }
+#>
+
+namespace <#=edmxElements.NamespaceName #>
+{
+    class With<#=inheritedTypeName #> : <#=serverEntitiesNamespace #>.<#=inheritedTypeName #>
+    {
+        public <#=serverEntitiesNamespace #>.<#=inheritedTypeName #> <#=inheritedTypeName #> { get; set; }
+<#+
+        if (inheritedType.Abstract)
+            ImplementAbstractMethods(inheritedTypeName, specificationsElements, serverFxDALInterfacesNamespace);
+        foreach (var subEntityTypeGetMethods in subEntityTypesGetMethods)
+        {
+            foreach (var m in subEntityTypeGetMethods.Value)
+            {
+                var propertyName = string.Concat(subEntityTypeGetMethods.Key, "_", GetPropertyNameFromMethodName(m.Identifier.ValueText));
+                var fieldName = "_" + code.CamelCase(propertyName);
+                string returnType = m.ReturnType.ToString();
+#>
+
+        private <#=returnType#> <#=fieldName#>;
+        public <#=returnType#> <#=propertyName#>
+        {
+            get { return <#=fieldName#>; }
+            set
+            {
+                <#=fieldName#> = value;
+                Has<#=propertyName#> = true;
+            }
+        }
+        public bool Has<#=propertyName#> { get; set; }
+<#+
+            }
+        }
+#>
+    }
+}
+<#+
+    }
+#>
+<#=beginTag #>fileManager.Process();<#=endTag #>
+<#+
+
+        fileManager.Process();
+    }
+
+void WriteServiceMethod(MethodDeclarationSyntax specificationServiceMethod, IEnumerable<ParameterSyntax> parameters, TypeSyntax returnType, ISemanticModel semanticModel, SpecificationsElements specificationsElements, EdmxElements edmxElements, string contextName, string serviceName, List<MethodSymbol> addedSubMethods, List<MethodDeclarationSyntax> methods, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverEntitiesNamespace, IEnumerable<TypeSymbol> dtoTypes, DTOAndInterfacesTypesRewriter dtoAndInterfacesTypesRewriter)
+{
+    var serviceMethodValue = SyntaxFactory.MethodDeclaration(returnType, specificationServiceMethod.Identifier.ValueText)
+.WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList<ParameterSyntax>(parameters.Select(p => SyntaxFactory.Parameter(p.Identifier).WithType(p.Type).WithDefault(p.Default)), parameters.Skip(1).Select(v => SyntaxFactory.Token(SyntaxKind.CommaToken)))))
+.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword))).WithTypeParameterList(specificationServiceMethod.TypeParameterList).WithConstraintClauses(SyntaxFactory.List(specificationServiceMethod.ConstraintClauses.Select(cc =>  (TypeParameterConstraintClauseSyntax)dtoAndInterfacesTypesRewriter.Visit(cc))));
+    var specificationServiceMethodSymbol = (MethodSymbol)semanticModel.GetDeclaredSymbol(specificationServiceMethod);
+    if (specificationsElements.ExtensionMethods.Contains(specificationServiceMethod) && ! specificationsElements.NonEntitiesExtensionMethods.Contains(specificationServiceMethod))
+    {
+        var serviceMethodSB = new StringBuilder();
+        if (! specificationServiceMethodSymbol.ReturnsVoid)
+            serviceMethodSB.Append("return ");
+        serviceMethodSB.Append(specificationServiceMethodSymbol.Parameters[0].Name);
+        serviceMethodSB.Append(".");
+        serviceMethodSB.Append(specificationServiceMethodSymbol.Name);
+        serviceMethodSB.Append("(");
+        var parametersEnumerator = parameters.GetEnumerator();
+        bool hasParameter = parametersEnumerator.MoveNext() && parametersEnumerator.MoveNext();
+        if (hasParameter)
+            for(;;)
+            {
+                serviceMethodSB.Append(parametersEnumerator.Current.Identifier.ValueText);
+                if (parametersEnumerator.MoveNext())
+                    serviceMethodSB.Append(", ");
+                else
+                    break;
+            }
+        if (specificationsElements.ValidateMethods.Values.SelectMany(m => m).Contains(specificationServiceMethod))
+        {
+            if (hasParameter)
+                serviceMethodSB.Append(",");
+            serviceMethodSB.Append("force: true");
+        }
+        serviceMethodSB.Append(");");
+        var expression = SyntaxFactory.ParseStatement(serviceMethodSB.ToString());
+#>
+<#=serviceMethodValue
+    .WithBody(
+        SyntaxFactory.Block(
+            SyntaxFactory.ParseStatement("_context.UseWAQSProvider = true;"), expression))
+    .NormalizeWhitespace().ToString()#>
+<#+
+        return;
+    }
+
+    var transformParameterNames = new Dictionary<string, SyntaxNode>();
+    if (contextName != null)
+        transformParameterNames.Add(contextName, SyntaxFactory.IdentifierName("_context"));
+    if (serviceName != null)
+        transformParameterNames.Add(serviceName, SyntaxFactory.ThisExpression());
+    if (specificationsElements.CustomMethods.Contains(specificationServiceMethod))
+    {
+#>
+<#=serviceMethodValue
+    .WithBody(
+        SyntaxFactory.Block(
+            SyntaxFactory.ParseStatement(string.Concat(specificationServiceMethodSymbol.ReturnsVoid ? "" : "return ", serviceMethodValue.Identifier.ValueText, "Body(", serviceMethodValue.ParameterList.Parameters.Count == 0 ? "" : serviceMethodValue.ParameterList.Parameters.Select(p => p.Identifier.ValueText).Aggregate((p1, p2) => string.Concat(p1, ", ", p2)), ");"))))
+    .NormalizeWhitespace().ToString()#>
+<#+
+        return;
+    }
+    var bodyRewriter = new SpecificationMethodBodyRewriterService(specificationsElements, specificationsElements.MethodsDependentProperties[specificationServiceMethod], semanticModel, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, dtoTypes, transformParameterNames);
+    var methodBody = (BlockSyntax)bodyRewriter.Visit(specificationServiceMethod.Body);
+    if (specificationsElements.HasContextAsParameter(specificationServiceMethod))
+        methodBody = SyntaxFactory.Block(new [] { SyntaxFactory.ParseStatement("_context.UseWAQSProvider = true;")}.Union(methodBody.Statements));
+#>
+<#=serviceMethodValue
+    .WithBody(methodBody)
+    .NormalizeWhitespace().ToString()#>
+<#+
+    new GetDependentMethodsVisitor(specificationsElements, specificationsElements.GetMethods.SelectMany(ms => ms.Value).Union(specificationsElements.SubMethods), semanticModel, (method, methodSymbol) => 
+        {
+            if (! addedSubMethods.Contains(methodSymbol))
+            {
+                addedSubMethods.Add(methodSymbol);
+            }
+        }).Visit(specificationServiceMethod);
+}
+
+class GetDependentMethodsVisitor : SyntaxVisitor
+{
+    private SpecificationsElements _specificationsElements;
+    private IEnumerable<MethodDeclarationSyntax> _methods;
+    private ISemanticModel _semanticModel;
+    private Action<MethodDeclarationSyntax, MethodSymbol> _action;
+
+    public GetDependentMethodsVisitor(SpecificationsElements specificationsElements, IEnumerable<MethodDeclarationSyntax> methods, ISemanticModel semanticModel, Action<MethodDeclarationSyntax, MethodSymbol> action)
+    {
+        _specificationsElements = specificationsElements;
+        _methods = methods;
+        _semanticModel = semanticModel;
+        _action = action;
+    }
+
+    public override void Visit(SyntaxNode node)
+    {
+        base.Visit(node);
+        foreach (var childNode in node.ChildNodes())
+            Visit(childNode);
+    }
+
+    public override void VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        var invocationExpressionMethodSymbol = _semanticModel.GetSymbolInfo(node).Symbol as MethodSymbol;
+        if (invocationExpressionMethodSymbol != null)
+        {
+            var method = _methods.Select(m => new { Method = m, MethodSymbol = _specificationsElements.MethodSymbolPerMethods[m] }).FirstOrDefault(m => m.MethodSymbol.Equals(invocationExpressionMethodSymbol));
+            if (method != null)
+                _action(method.Method, (MethodSymbol)method.MethodSymbol);
+        }
+        base.VisitInvocationExpression(node);
+    }
+}
+
+class SpecificationMethodWithContextOrServiceRewriter : DTOAndInterfacesTypesRewriter
+{
+    private SpecificationsElements _specificationsElements;
+    private ISemanticModel _semanticModel;
+    private string _serverFxDALInterfacesNamespace;
+    private string _serverFxServiceInterfacesNamespace;
+    private string _serverFxSpecificationsNamespace;
+    private string _serverEntitiesNamespace;
+    private string _contextName;
+    private string _serviceName;
+
+    public SpecificationMethodWithContextOrServiceRewriter(SpecificationsElements specificationsElements, ISemanticModel semanticModel, IEnumerable<TypeSymbol> dtoTypes, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxSpecificationsNamespace, string serverEntitiesNamespace)
+        : base(semanticModel, specificationsElements, dtoTypes)
+    {
+        _specificationsElements = specificationsElements;
+        _semanticModel = semanticModel;
+        _serverFxDALInterfacesNamespace = serverFxDALInterfacesNamespace;
+        _serverFxServiceInterfacesNamespace = serverFxServiceInterfacesNamespace;
+        _serverFxSpecificationsNamespace = serverFxSpecificationsNamespace;
+        _serverEntitiesNamespace = serverEntitiesNamespace;
+    }
+
+    public override SyntaxNode VisitParameterList(ParameterListSyntax node)
+    {
+        var parameters = node.Parameters.Select(p => new { Parameter = p, ParameterTypeSymbol = ((IParameterSymbol)_semanticModel.GetDeclaredSymbol(p)).Type}).Where(p => 
+            {
+                if (_specificationsElements.IsContext(p.ParameterTypeSymbol))
+                {
+                    _contextName = p.Parameter.Identifier.ValueText;
+                    return false;
+                }
+                if (_specificationsElements.IsService(p.ParameterTypeSymbol))
+                {
+                    _serviceName = p.Parameter.Identifier.ValueText;
+                    return false;
+                }
+                return true;
+            }).Select(p => 
+                {
+                    var parameter = (ParameterSyntax)Visit(p.Parameter);
+                    return parameter.WithModifiers(SyntaxFactory.TokenList());
+                }).ToList();
+        return SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters, parameters.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken))));
+    }
+
+    public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
+    {
+        if (node.Identifier.ValueText == _contextName)
+            return SyntaxFactory.IdentifierName("_context");
+        if (node.Identifier.ValueText == _serviceName)
+            return SyntaxFactory.ThisExpression();
+        return base.VisitIdentifierName(node);
+    }
+
+    public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        var expression = (ExpressionSyntax)Visit(node.Expression);
+        var methodSymbol = (MethodSymbol)_semanticModel.GetSymbolInfo(node).Symbol;
+        var argumentsList = node.ArgumentList.Arguments.Where(a =>
+            {
+                var identifierName = a.Expression as IdentifierNameSyntax;
+                if (identifierName != null && (identifierName.ToFullString() == _contextName || identifierName.ToFullString() == _serviceName))
+                    return false;
+                return true;
+            }).Select(a => (ArgumentSyntax)Visit(a)).ToList();
+        IEnumerable<ArgumentSyntax> arguments = argumentsList;
+
+        if (! methodSymbol.IsStatic)
+        {
+            var argumentExpressions = node.ArgumentList.Arguments.Select(a => a.Expression).ToList();
+            switch (methodSymbol.Parameters.OfType<ParameterSymbol>().Count() - argumentExpressions.Count())
+            {
+                case 0:
+                    break;
+                case 1:
+                    argumentExpressions.Insert(0, ((MemberAccessExpressionSyntax)node.Expression).Expression);
+                    break;
+                default:
+                    throw new InvalidOperationException();
+            }
+            var methodSymbolParametersEnumerator = methodSymbol.Parameters.GetEnumerator();
+            var argumentTypes = argumentExpressions.Select(a => 
+                {
+                    methodSymbolParametersEnumerator.MoveNext();
+                    var symbol = _semanticModel.GetSymbolInfo(a).Symbol;
+                    var symbolAslocalSymbol = symbol as LocalSymbol;
+                    if (symbolAslocalSymbol != null)
+                        return symbolAslocalSymbol.Type;
+                    var methodAslocalSymbol = symbol as MethodSymbol;
+                    if (methodAslocalSymbol != null)
+                        return methodAslocalSymbol.ReturnType;
+                    var parameterAslocalSymbol = symbol as ParameterSymbol;
+                    if (parameterAslocalSymbol != null)
+                        return parameterAslocalSymbol.Type;
+                    var parameterAsPropertySymbol = symbol as PropertySymbol;
+                    if (parameterAsPropertySymbol != null)
+                        return parameterAsPropertySymbol.Type;
+                    return methodSymbolParametersEnumerator.Current.Type;
+                }).ToList();
+            _specificationsElements.GetSpecificationEquivalentMethod(ref methodSymbol, argumentTypes);
+        }
+        
+        var maes = expression as MemberAccessExpressionSyntax;
+        MethodDeclarationSyntax method;
+        if ((method = _specificationsElements.MethodPerMethodSymbols.FirstOrDefault(m => m.Key.ToString() == methodSymbol.ToString()).Value) != null && maes != null && _specificationsElements.GetMethods.Values.Any(ms => ms.Contains(method)))
+            return SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, maes.Expression ?? argumentsList[0].Expression, SyntaxFactory.IdentifierName(maes.Name.Identifier.ValueText.Substring(3)));
+
+        MethodDeclarationSyntax methodSyntax = _specificationsElements.MethodPerMethodSymbols.Where(m => m.Key.ToString() == methodSymbol.ToString()).Select(m => m.Value).FirstOrDefault();
+        bool methodSyntaxFound = methodSyntax != null;
+        var expressionAsMemberAccessExpressionSyntax = expression as MemberAccessExpressionSyntax;
+        bool expressionSet = false;
+        if (methodSyntaxFound && methodSymbol.Parameters.OfType<ParameterSymbol>().Count() == node.ArgumentList.Arguments.Count() && _specificationsElements.ExtensionMethods.Contains(methodSyntax) && ! _specificationsElements.NonEntitiesExtensionMethods.Contains(methodSyntax))
+        {
+            IdentifierNameSyntax expressionAsIdentifierNameSyntax;
+            SimpleNameSyntax name;
+            if (expressionAsMemberAccessExpressionSyntax != null)
+                name = expressionAsMemberAccessExpressionSyntax.Name;
+            else if ((expressionAsIdentifierNameSyntax = expression as IdentifierNameSyntax) != null)
+                name = expressionAsIdentifierNameSyntax;
+            else
+                throw new NotImplementedException();
+            expression = SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, arguments.First().Expression, name);
+            expressionSet = true;
+            arguments = arguments.Skip(1);
+        }
+        if (methodSyntaxFound && _specificationsElements.NonEntitiesExtensionMethods.Contains(methodSyntax) && expressionAsMemberAccessExpressionSyntax != null && expressionAsMemberAccessExpressionSyntax.Expression != null)
+        {
+            if (! _specificationsElements.IsContext(methodSymbol.Parameters[0].Type))
+                arguments = new [] { SyntaxFactory.Argument(expressionAsMemberAccessExpressionSyntax.Expression) }.Union (arguments); 
+            expression = SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, SyntaxFactory.IdentifierName("this"), expressionAsMemberAccessExpressionSyntax.Name);
+            expressionSet = true;
+        }
+        if (methodSyntaxFound && maes == null && ! expressionSet)
+        {
+            var methodParameterType = GetClassExtensionMethodClass(methodSymbol, _specificationsElements, _serverFxSpecificationsNamespace, _serverEntitiesNamespace);
+            expression = SyntaxFactory.ParseExpression(string.Concat(methodParameterType == null ? "this" : methodParameterType.ToString(), ".", expression.NormalizeWhitespace().ToString()));
+        }
+        else if (maes != null && maes.Expression.ToString() == "_context" && _specificationsElements.SemanticModelPerMethods.Any(m => m.ToString() == methodSymbol.ToString()))
+            expression = SyntaxFactory.IdentifierName(maes.Name.ToString() + (methodSymbol.ReturnsVoid ? "Action" : "Func"));
+        return SyntaxFactory.InvocationExpression(expression, SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments, arguments.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
+    }
+
+    public override SyntaxNode VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
+    {
+        var value = (MemberAccessExpressionSyntax)base.VisitMemberAccessExpression(node);
+        if (value.Expression == node.Expression)
+        {
+            var typeSymbol = SemanticModel.GetSymbolInfo(value.Expression).Symbol as ITypeSymbol;
+            if (typeSymbol != null)
+            {
+                var typeSymbolName = typeSymbol.ToString();
+                if (SpecificationsElements.SpecificationsTypes.Any(t => t.ToString() == typeSymbolName))
+                    return SyntaxFactory.IdentifierName(value.Name.Identifier.ValueText);
+            }
+        }
+        return value;
+    }
+}
+
+void ImplementAbstractMethods(string className, SpecificationsElements specificationsElements, string serverFxDALInterfacesNamespace)
+{
+    PushIndent(CodeRegion.GetIndent(2));
+    foreach (var method in specificationsElements.ExtensionMethods)
+    {
+        var semanticModel = specificationsElements.SemanticModelPerMethods[method];
+        if (! specificationsElements.AbstractMethods.Contains(method))
+            continue;
+        var methodSymbol = specificationsElements.MethodSymbolPerMethods[method];
+        List<NamedTypeSymbol> interfaces;
+        if (! (methodSymbol.Parameters[0].Type.Name == className || specificationsElements.InterfacesPerClasses.TryGetValue(className, out interfaces) && interfaces.Any(i => methodSymbol.Parameters[0].Type.ToString() == i.ToString())))
+            continue;
+        var parameters = new List<ParameterSyntax>();
+        int parameterIndex = 1;
+        var typeRewriter = new TypeRewriter(semanticModel, n => 
+            {
+                TypeSyntax t = n;
+                specificationsElements.ReplaceInterface(ref t, semanticModel, withInterfaceSpecifications:true);
+                return (NameSyntax)t;
+            });
+        foreach (var p in method.ParameterList.Parameters.Skip(1))
+            if (! specificationsElements.IsContext(methodSymbol.Parameters[parameterIndex ++].Type))
+                parameters.Add((ParameterSyntax)typeRewriter.Visit(p));
+        var returnType = (TypeSyntax)typeRewriter.Visit(method.ReturnType);
+        var newMethod = method.WithReturnType(returnType);
+        newMethod = newMethod.WithModifiers(SyntaxFactory.TokenList(new [] { SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.OverrideKeyword) })).WithBody(SyntaxFactory.Block(SyntaxFactory.ParseStatement("throw new InvalidOperationException();"))).WithAttributeLists(SyntaxFactory.List<AttributeListSyntax>()).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters, parameters.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
+#>
+<#=newMethod.NormalizeWhitespace().ToString()#>
+<#+
+    }
+    PopIndent();
+}
+
+class SpecificationMethodBodyRewriterService : SpecificationMethodBodyRewriter
+{
+    private string _serverFxDALInterfacesNamespace;
+    private string _serverFxServiceInterfacesNamespace;
+    private Dictionary<string, SyntaxNode> _parameterNames;
+
+    public SpecificationMethodBodyRewriterService(SpecificationsElements specificationsElements, List<List<PropertySymbolInfo>> dependentProperties, ISemanticModel semanticModel, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, IEnumerable<TypeSymbol> dtoTypes, Dictionary<string, SyntaxNode> parameterNames)
+        : base(specificationsElements, dependentProperties, semanticModel, dtoTypes, serverFxServiceInterfacesNamespace)
+    {
+        _serverFxDALInterfacesNamespace = serverFxDALInterfacesNamespace;
+        _serverFxServiceInterfacesNamespace = serverFxServiceInterfacesNamespace;
+        _parameterNames = parameterNames;
+    }
+
+    public override SyntaxNode VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
+    {
+        if (SpecificationsElements.ServicePropertiesStrings.Contains(SemanticModel.GetSymbolInfo(node).Symbol.ToString()))
+            return node.Name;
+        return base.VisitMemberAccessExpression(node);
+    }
+
+    public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
+    {
+        SyntaxNode result;
+        if (_parameterNames != null && _parameterNames.TryGetValue(node.Identifier.ValueText, out result))
+            return result;
+        return base.VisitIdentifierName(node);
+    }
+
+    public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+    {
+        MethodSymbol invocationExpressionMethodSymbol;
+        if (node != null && (invocationExpressionMethodSymbol = SemanticModel.GetSymbolInfo(node).Symbol as MethodSymbol) != null)
+        {
+            if (! invocationExpressionMethodSymbol.IsStatic)
+                SpecificationsElements.GetSpecificationEquivalentMethod(ref invocationExpressionMethodSymbol, SpecificationsElements.Methods);
+            MethodDeclarationSyntax invocationExpressionSyntax = SpecificationsElements.MethodPerMethodSymbols.Where(m => m.Key.ToString() == invocationExpressionMethodSymbol.ToString()).Select(m => m.Value).FirstOrDefault();
+            bool methodFound = invocationExpressionSyntax != null;
+            IParameterSymbol parameterSymbol;
+            IEnumerable<ArgumentSyntax> arguments = node.ArgumentList.Arguments;
+            bool useExtension = arguments.Count() != invocationExpressionMethodSymbol.Parameters.OfType<ParameterSymbol>().Count();
+            arguments = arguments.Where(a => (parameterSymbol = SemanticModel.GetSymbolInfo(a.Expression).Symbol as IParameterSymbol) == null || ! SpecificationsElements.IsContextOrService(parameterSymbol.Type)).Select(a => (ArgumentSyntax)Visit(a)).ToList();
+            if (methodFound)
+            {
+                if (SpecificationsElements.ExtensionMethods.Contains(invocationExpressionSyntax) && ! SpecificationsElements.NonEntitiesExtensionMethods.Contains(invocationExpressionSyntax))
+                {
+                    if (useExtension)
+                    {
+                        if (SpecificationsElements.GetMethodsSymbols.Contains(invocationExpressionMethodSymbol))
+                            return SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, (ExpressionSyntax)Visit(((MemberAccessExpressionSyntax)node.Expression).Expression), SyntaxFactory.IdentifierName(GetPropertyNameFromMethodName(invocationExpressionMethodSymbol.Name)));
+                        return SyntaxFactory.InvocationExpression((ExpressionSyntax)Visit(node.Expression), SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments, arguments.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
+                    }
+                    if (SpecificationsElements.GetMethodsSymbols.Contains(invocationExpressionMethodSymbol))
+                        return SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, (ExpressionSyntax)Visit(node.ArgumentList.Arguments[0].Expression), SyntaxFactory.IdentifierName(GetPropertyNameFromMethodName(invocationExpressionMethodSymbol.Name)));
+                    return SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, (ExpressionSyntax)Visit(node.ArgumentList.Arguments[0].Expression), SyntaxFactory.IdentifierName(invocationExpressionMethodSymbol.Name)), SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList<ArgumentSyntax>(arguments.Skip(1), arguments.Skip(2).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken))))); 
+                }
+                bool nonEntitiesExtension;
+                if ((nonEntitiesExtension = SpecificationsElements.NonEntitiesExtensionMethods.Contains(invocationExpressionSyntax)) || SpecificationsElements.NonExtensionMethods.Contains(invocationExpressionSyntax))
+                {
+                    var memberAccessExpression = node.Expression as MemberAccessExpressionSyntax;
+                    ISymbol symbol;
+                    IParameterSymbol expressionParameterSymbol;
+                    if (nonEntitiesExtension && !(memberAccessExpression == null || memberAccessExpression.Expression == null) && (!((expressionParameterSymbol = (symbol = SemanticModel.GetSymbolInfo(memberAccessExpression.Expression).Symbol) as IParameterSymbol) == null || SpecificationsElements.IsContext(expressionParameterSymbol.Type)) || symbol is IPropertySymbol || symbol is MethodSymbol || symbol is ILocalSymbol))
+                        arguments = new [] { SyntaxFactory.Argument(((ExpressionSyntax)Visit(memberAccessExpression.Expression))) }.Union(arguments);
+                    return SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKindMemberAccessExpression, SyntaxFactory.IdentifierName("this"), SyntaxFactory.IdentifierName(invocationExpressionMethodSymbol.Name)), SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(arguments, arguments.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken))))); 
+                }
+            }
+        }
+        return base.VisitInvocationExpression(node);
+    }
+}
+
+    private void GenerateIncludeFor(string className, string propertyName, MethodDeclarationSyntax method, SpecificationsElements specificationsElements, List<EntityType> entityTypes, CodeGenerationTools code, string serverEntitiesNamespace)
+    {
+        var includeForSB = IncludeFor(method, specificationsElements, entityTypes, code, serverEntitiesNamespace, serverEntitiesNamespace, specificationsElements.TypeSymbols[className]);
+        string includeFor;
+        if (includeForSB == null)
+            includeFor = "throw new NotImplementedException();";
+        else
+        {
+            includeFor = includeForSB.ToString();
+            if (includeFor.Length > 0)
+                includeFor = string.Concat("query = query", includeFor, ";");
+        }
+#>
+        [IncludeMethod]
+        public static IWAQSQuery<<#=serverEntitiesNamespace #>.<#=className#>> IncludeFor<#=propertyName #>(this IWAQSQuery<<#=serverEntitiesNamespace #>.<#=className#>> query)
+        {
+            bool done = false;
+            IncludeFor<#=propertyName #>CustomQueryable(ref query, ref done);
+<#+
+            if (includeFor.Length == 0)
+            {
+#>
+            return query;
+<#+
+            }
+            else
+            {
+#>
+            if (done)
+                return query;
+            <#=includeFor #>
+<#+
+                if (includeForSB != null)
+                {
+#>
+            return query;
+<#+
+                }
+            }
+#>
+        }
+        static partial void IncludeFor<#=propertyName #>CustomQueryable(ref IWAQSQuery<<#=serverEntitiesNamespace #>.<#=className#>> query, ref bool done);
+
+        [IncludeMethod]
+        public static IEnumerable<<#=serverEntitiesNamespace #>.<#=className#>> IncludeFor<#=propertyName #>(this IEnumerable<<#=serverEntitiesNamespace #>.<#=className#>> source)
+        {
+            return source;
+        }
+
+        [IncludeMethod]
+        public static IWAQSQueryValue<<#=serverEntitiesNamespace #>.<#=className#>> IncludeFor<#=propertyName #>(this IWAQSQueryValue<<#=serverEntitiesNamespace #>.<#=className#>> query)
+        {
+            bool done = false;
+            IncludeFor<#=propertyName #>CustomIWAQSQueryValue(ref query, ref done);
+<#+
+            if (includeFor.Length == 0)
+            {
+#>
+            return query;
+<#+
+            }
+            else
+            {
+#>
+            if (done)
+                return query;
+            <#=includeFor #>
+<#+
+                if (includeForSB != null)
+                {
+#>
+            return query;
+<#+
+                }
+            }
+#>
+        }
+        static partial void IncludeFor<#=propertyName #>CustomIWAQSQueryValue(ref IWAQSQueryValue<<#=serverEntitiesNamespace #>.<#=className#>> query, ref bool done);
+
+        [IncludeMethod]
+        public static <#=serverEntitiesNamespace #>.<#=className#> IncludeFor<#=propertyName #>(this <#=serverEntitiesNamespace #>.<#=className#> source)
+        {
+            return source;
+        }
+
+<#+
+    }
+
+    private void GenerateIncludeNavigationProperty(CodeGenerationTools code, EntityContainer container, string serverFxDALInterfacesNamespace, string serverEntitiesNamespace, string contextName, EntityType entityType, string entityTypeFullName, string entityTypeName, NavigationProperty navigationProperty, EntityType subEntityType = null, string subEntityTypeName = "", string subEntityTypeFullName = "")
+    {
+        if (subEntityType == null)
+            subEntityType = entityType;
+#>
+    
+<#+
+        string navigationPropertyName = code.Escape(navigationProperty);
+        EntityType toEntityType = (EntityType)navigationProperty.ToEndMember.GetEntityType();
+        string toEntityTypeName = code.Escape(toEntityType);
+        string toEntityTypeFullName = string.Format("{0}.{1}", serverEntitiesNamespace, toEntityTypeName);
+        EntitySet toEntitySet = GetEntitySet(container, toEntityType);
+        string toEntitySetName = code.Escape(toEntitySet);
+        string eParameter = subEntityTypeName == string.Empty ? "e" : string.Concat("(", serverEntitiesNamespace, ".", subEntityTypeName, " e)");
+        string subEntityTypeFullNameWithComma = subEntityTypeFullName == string.Empty ? string.Empty : subEntityTypeFullName + ", ";
+        string subEntityOrEntityName = subEntityTypeName == string.Empty ? entityTypeName : subEntityTypeName;
+        if (navigationProperty.ToEndMember.RelationshipMultiplicity == System.Data.Metadata.Edm.RelationshipMultiplicity.Many)
+        {
+            if (navigationProperty.FromEndMember.RelationshipMultiplicity == System.Data.Metadata.Edm.RelationshipMultiplicity.Many)
+            {
+#>
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQuery<<#=entityTypeFullName#>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)null);
+    }
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQuery<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeManyToMany(source, ((I<#=contextName#>)source.DataContext).<#=toEntitySetName#><#=toEntitySet.ElementType == toEntityType ? "" : string.Concat(".OfType<", toEntityTypeFullName, ">()")#>, <#=eParameter#> => e.<#=navigationPropertyName#>, <#=eParameter#> => e.<#=navigationPropertyName#>, (es, e) => es.Contains(e), queryTransform, fromQuery =>	
+        from e1 in fromQuery
+        from e2 in e1.<#=navigationPropertyName#>
+        select new Include<#+WriteIncludeTypeKeys(code, subEntityType, navigationProperty);#> { <#+InitKeys(code, subEntityType, "e1", 1, prefixName: subEntityOrEntityName);#>, <#+InitKeys(code, toEntityType, "e2", 2, prefixName: toEntityTypeName);#> }, (key, e1) => <#+TestKeys(code, subEntityType, "key", "e1", subEntityOrEntityName + "1");#>, (key, e2) => <#+TestKeys(code, toEntityType, "key", "e2", toEntityTypeName + "2");#>, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQuery<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeManyToOneMany(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, (fromQuery, to) => 
+        from e in fromQuery
+        select new Include<#+WriteIncludeTo(code, subEntityType, navigationProperty);#> { <#+InitKeys(code, subEntityType, "e", prefixName: subEntityOrEntityName);#>, To = to }, k => k.To, (k, f) => <#+TestKeys(code, subEntityType, "k", "f", subEntityOrEntityName);#>, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQueryValue<<#=entityTypeFullName#>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)null);
+    }
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeOneOneToMany(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, <#=eParameter#> => e.<#=navigationPropertyName#>, true);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeOneOneToMany(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, <#=eParameter#> => e.<#=navigationPropertyName#>, true);
+    }
+<#+
+                if (subEntityTypeName == string.Empty)
+                {
+#>
+
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName #>> <#=subEntityTypeName #>Include<#=navigationPropertyName #>(this IWAQSQuery<<#=entityTypeFullName #>> source1, IWAQSQuery<<#=toEntityTypeFullName #>> source2)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.IncludeManyToMany(
+            source1, 
+            source2, 
+            (fromQuery, toQuery) => from e1 in fromQuery
+                                    from e2 in toQuery
+                                    where e1.<#=navigationPropertyName #>.Contains(e2)
+                                    select new Include<#+WriteIncludeTypeKeys(code, subEntityType, navigationProperty); #> { <#+InitKeys(code, subEntityType, "e1", 1, prefixName: subEntityOrEntityName); #>, <#+InitKeys(code, toEntityType, "e2", 2, prefixName: toEntityTypeName); #> },
+            (fromValue, toQuery) => from e2 in toQuery
+                                    let e1 = fromValue
+                                    where e1.<#=navigationPropertyName #>.Contains(e2)
+                                    select new Include<#+WriteIncludeTypeKeys(code, subEntityType, navigationProperty); #>{ <#+InitKeys(code, subEntityType, "e1", 1, prefixName: subEntityOrEntityName); #>, <#+InitKeys(code, toEntityType, "e2", 2, prefixName: toEntityTypeName); #> },
+            (key, e1) => <#+TestKeys(code, subEntityType, "key", "e1", subEntityOrEntityName + "1"); #>, 
+            (key, e2) => <#+TestKeys(code, toEntityType, "key", "e2", toEntityTypeName + "2"); #>, 
+            <#=eParameter #> => e.<#=navigationPropertyName #>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName #>> <#=subEntityTypeName #>Include<#=navigationPropertyName #>(this IWAQSQuery<<#=entityTypeFullName #>> source1, IWAQSQueryValue<<#=toEntityTypeFullName #>> source2)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.IncludeManyToOneMany(
+            source1, 
+            source2, 
+            (fromQuery, toValue) => from e1 in fromQuery
+                                    let e2 = toValue
+                                    where e1.<#=navigationPropertyName #>.Contains(toValue)
+                                    select new Include<#+WriteIncludeTypeKeys(code, subEntityType, navigationProperty); #>{ <#+InitKeys(code, subEntityType, "e1", 1, prefixName: subEntityOrEntityName); #>, <#+InitKeys(code, toEntityType, "e2", 2, prefixName: toEntityTypeName); #> }, 
+            (key, e1) => <#+TestKeys(code, subEntityType, "key", "e1", subEntityOrEntityName + "1"); #>, 
+            (key, e2) => <#+TestKeys(code, toEntityType, "key", "e2", toEntityTypeName + "2"); #>, 
+            <#=eParameter #> => e.<#=navigationPropertyName #>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName #>> <#=subEntityTypeName #>Include<#=navigationPropertyName #>(this IWAQSQueryValue<<#=entityTypeFullName #>> source1, IWAQSQuery<<#=toEntityTypeFullName #>> source2)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.IncludeOneManyToMany(
+            source1, 
+            source2, 
+            (fromValue, toQuery) => from e2 in toQuery
+                                    let e1 = fromValue
+                                    where e1.<#=navigationPropertyName #>.Contains(e2)
+                                    select new Include<#+WriteIncludeTypeKeys(code, subEntityType, navigationProperty); #>{ <#+InitKeys(code, subEntityType, "e1", 1, prefixName: subEntityOrEntityName); #>, <#+InitKeys(code, toEntityType, "e2", 2, prefixName: toEntityTypeName); #> }, 
+            (key, e1) => <#+TestKeys(code, subEntityType, "key", "e1", subEntityOrEntityName + "1"); #>, 
+            (key, e2) => <#+TestKeys(code, toEntityType, "key", "e2", toEntityTypeName + "2"); #>, 
+            <#=eParameter #> => e.<#=navigationPropertyName #>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName #>> <#=subEntityTypeName #>Include<#=navigationPropertyName #>(this IWAQSQueryValue<<#=entityTypeFullName #>> source1, IWAQSQueryValue<<#=toEntityTypeFullName #>> source2)
+    {
+        return <#=serverFxDALInterfacesNamespace #>.QueryableExtensions.IncludeOneManyToOneMany(
+            source1, 
+            source2, 
+            (fromQuery, toValue) => from e1 in fromQuery
+                                    let e2 = toValue
+                                    where e1.<#=navigationPropertyName #>.Contains(toValue)
+                                    select new Include<#+WriteIncludeTypeKeys(code, subEntityType, navigationProperty); #>{ <#+InitKeys(code, subEntityType, "e1", 1, prefixName: subEntityOrEntityName); #>, <#+InitKeys(code, toEntityType, "e2", 2, prefixName: toEntityTypeName); #> },
+            (key, e1) => <#+TestKeys(code, subEntityType, "key", "e1", subEntityOrEntityName + "1"); #>, 
+            (key, e2) => <#+TestKeys(code, toEntityType, "key", "e2", toEntityTypeName + "2"); #>, 
+            <#=eParameter #> => e.<#=navigationPropertyName #>);
+    }
+<#+
+                }
+            }
+            else
+            {
+#>
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQuery<<#=entityTypeFullName#>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)null);
+    }
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQuery<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeOneToMany(source, ((I<#=contextName#>)source.DataContext).<#=toEntitySetName#><#=toEntitySet.ElementType == toEntityType ? "" : string.Concat(".OfType<", toEntityTypeFullName, ">()")#>, <#=eParameter#> => e.<#=navigationPropertyName#>, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, queryTransform, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQueryValue<<#=entityTypeFullName#>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)null);
+    }
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeOneOneToMany(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQuery<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeOneToMany(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeOneOneToMany(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)null);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeManyOneToMany<<#=entityTypeFullName#>, <#=subEntityTypeFullNameWithComma#><#=toEntityTypeFullName#>>(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        if (!(queryTransform == null || source.ExpressionTransformation == null))
+            queryTransform = (Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>>)source.ExpressionTransformation(queryTransform);
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeManyOneToOneMany<<#=entityTypeFullName#>, <#=subEntityTypeFullNameWithComma#><#=toEntityTypeFullName#>>(source, <#=eParameter#> => e.<#=navigationPropertyName#>, queryTransform, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, <#=eParameter#> => e.<#=navigationPropertyName#>);
+    }
+<#+
+            }
+#>
+ 
+    [IncludeMethod]
+    public static IEnumerable<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IEnumerable<<#=entityTypeFullName#>> source)
+    {
+        return source;
+    }
+    [IncludeMethod]
+    public static IEnumerable<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IEnumerable<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>> queryTransform)
+    {
+        return source;
+    }
+
+    [IncludeMethod]
+    public static <#=entityTypeFullName#> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this <#=entityTypeFullName#> source)
+    {
+        return source;
+    }
+    [IncludeMethod]
+    public static <#=entityTypeFullName#> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this <#=entityTypeFullName#> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, IEnumerable<<#=toEntityTypeFullName#>>>> queryTransform)
+    {
+        return source;
+    }
+
+    [IncludeMethod]
+    public static IEnumerable<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IEnumerable<<#=entityTypeFullName#>> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        return source;
+    }
+
+    [IncludeMethod]
+    public static <#=entityTypeFullName#> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this <#=entityTypeFullName#> source, Expression<Func<IEnumerable<<#=toEntityTypeFullName#>>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        return source;
+    }
+<#+
+        }
+        else
+        {
+#>
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQuery<<#=entityTypeFullName#>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>>)null);
+    }
+    [IncludeMethod]
+    public static IWAQSQuery<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQuery<<#=entityTypeFullName#>> source, Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>> addIncludes)
+    {
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeManyToOne(source, ((I<#=contextName#>)source.DataContext).<#=toEntitySetName#><#=toEntitySet.ElementType == toEntityType ? "" : string.Concat(".OfType<", toEntityTypeFullName, ">()")#>, <#=eParameter#> => e.<#=navigationPropertyName#>, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, addIncludes, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, (e, value) => e.<#=navigationPropertyName#> = value);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQueryValue<<#=entityTypeFullName#>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>>)null);
+    }
+    [IncludeMethod]
+    public static IWAQSQueryValue<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<<#=entityTypeFullName#>> source, Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>> addIncludes)
+    {
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeOneManyToOne(source, <#=eParameter#> => e.<#=navigationPropertyName#>, addIncludes, (e, value) => e.<#=navigationPropertyName#> = value);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> source)
+    {
+        return <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(source, (Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>>)null);
+    }
+
+    [IncludeMethod]
+    public static IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IWAQSQueryValue<IEnumerable<<#=entityTypeFullName#>>> source, Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>> addIncludes)
+    {
+        return <#=serverFxDALInterfacesNamespace#>.QueryableExtensions.IncludeManyOneToOne<<#=entityTypeFullName#>, <#=subEntityTypeFullNameWithComma#><#=toEntityTypeFullName#>>(source, <#=eParameter#> => e.<#=navigationPropertyName#>, addIncludes, (e1, e2) => <#+TestNavigationKeys(code, navigationProperty);#>, (e, value) => e.<#=navigationPropertyName#> = value);
+    }
+
+    [IncludeMethod]
+    public static IEnumerable<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this IEnumerable<<#=entityTypeFullName#>> source)
+    {
+        return source;
+    }
+    [IncludeMethod]
+    public static IEnumerable<<#=entityTypeFullName#>> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this IEnumerable<<#=entityTypeFullName#>> source, Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        return source;
+    }
+
+    [IncludeMethod]
+    public static <#=entityTypeFullName#> <#=subEntityTypeName#>Include<#=navigationPropertyName#>(this <#=entityTypeFullName#> source)
+    {
+        return source;
+    }
+    [IncludeMethod]
+    public static <#=entityTypeFullName#> <#=subEntityTypeName#>Include<#=navigationPropertyName#>WithExpression(this <#=entityTypeFullName#> source, Expression<Func<<#=toEntityTypeFullName#>, <#=toEntityTypeFullName#>>> queryTransform)
+    {
+        return source;
+    }
+<#+
+        }
+    }
+#>

@@ -1,0 +1,6 @@
+<#@ include file="WAQS.VS12.Specifications.ttinclude"#>
+<#@ include file="WAQS.VS12.Edmx.Utility.ttinclude"#>
+<#@ include file="WAQS.Server.Global.WCFService.Contract.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

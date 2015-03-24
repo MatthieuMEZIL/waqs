@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Xml.Linq;
 using Roslyn.Compilers.CSharp;
@@ -39,13 +39,13 @@ namespace InitViewModel
                 XElement framework = waqs.Element("Framework");
                 XElement waqsClientContext = framework.Element("ClientContext");
                 XAttribute waqsClientContextAttribute = waqsClientContext.Attribute("NamespaceName");
-                string waqsClientContextNamespace = waqsClientContextAttribute == null ? "WCFAsyncQueryableServices.ClientContext" : waqsClientContextAttribute.Value;
+                string waqsClientContextNamespace = waqsClientContextAttribute == null ? "WAQS.ClientContext" : waqsClientContextAttribute.Value;
                 XElement waqsClientContextInterfaces = framework.Element("ClientContextInterfaces");
                 XAttribute waqsClientContextInterfacesAttribute = waqsClientContextInterfaces.Attribute("NamespaceName");
-                string waqsClientContextInterfacesNamespace = waqsClientContextInterfacesAttribute == null ? "WCFAsyncQueryableServices.ClientContext.Interfaces" : waqsClientContextInterfacesAttribute.Value;
+                string waqsClientContextInterfacesNamespace = waqsClientContextInterfacesAttribute == null ? "WAQS.ClientContext.Interfaces" : waqsClientContextInterfacesAttribute.Value;
                 XElement waqsComponentModel = framework.Element("ComponentModel");
                 XAttribute waqsComponentModelAttribute = waqsComponentModel.Attribute("NamespaceName");
-                string waqsComponentModelNamespace = waqsComponentModelAttribute == null ? "WCFAsyncQueryableServices.ComponentModel" : waqsComponentModelAttribute.Value;
+                string waqsComponentModelNamespace = waqsComponentModelAttribute == null ? "WAQS.ComponentModel" : waqsComponentModelAttribute.Value;
                 var viewModelRewriter = new ViewModelRewriter(edmxName, entitiesNamespace, clientContextNamespace, clientContextInterfacesNamespace, waqsClientContextNamespace, waqsClientContextInterfacesNamespace, waqsComponentModelNamespace);
                 content = viewModelRewriter.Visit(Syntax.ParseCompilationUnit(content)).NormalizeWhitespace().ToString();
                 using (var sw = new StreamWriter(filePath))

@@ -1,0 +1,4 @@
+<#@ include file="WAQS.VS12.NET45.Client.DTO.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

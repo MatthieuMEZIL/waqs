@@ -1,0 +1,5 @@
+<#@ include file="WAQS.Client.WCFServiceProxyBase.ttinclude"#>
+<#@ assembly name="%ProgramFiles%\Microsoft SDKs\Silverlight\v5.0\Tools\ServiceReference\Microsoft.Silverlight.ServiceReference.dll"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

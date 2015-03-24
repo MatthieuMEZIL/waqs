@@ -1,0 +1,1198 @@
+<#@import namespace="System.Text.RegularExpressions"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+public class EdmxElements
+{
+    private EdmxElements(ITextTemplatingEngineHost host, string edmxPath, string namespaceName)
+    {
+        EdmxPath = edmxPath;
+        Code = new CodeGenerationTools(this);
+        NamespaceName = namespaceName ?? Code.VsNamespaceSuggestion();
+        MetadataTools = new MetadataTools(this);
+        Loader = new MetadataLoader(this);
+        ItemCollection = Loader.CreateEdmItemCollection(EdmxPath);
+        EdmxName = Path.GetFileNameWithoutExtension(EdmxPath);
+        Container = ItemCollection.GetItems<EntityContainer>().FirstOrDefault();
+        EntityTypes = ItemCollection.GetItems<EntityType>().ToList();
+        ComplexTypes = ItemCollection.GetItems<ComplexType>().ToList();
+        EdmTypes = EntityTypes.Cast<StructuralType>().Union(ComplexTypes).ToList();
+        EntitySets = Container.BaseEntitySets.OfType<EntitySet>().ToList();
+        FunctionImports = Container.FunctionImports.ToList();
+    }
+
+    private EdmxElements()
+    {
+    }
+
+    public static EdmxElements Get(ITextTemplatingEngineHost host, string edmxPath, string namespaceName = null)
+    {
+        return Get(host, ref edmxPath, namespaceName);
+    }
+
+    public static EdmxElements Get(ITextTemplatingEngineHost host, ref string edmxPath, string namespaceName = null)
+    {
+        edmxPath = Path.GetFullPath(host.ResolvePath(edmxPath));
+        return new EdmxElements(host, edmxPath, namespaceName);
+    }
+
+    public string EdmxPath { get; private set; }
+    public string NamespaceName { get; private set; }
+    public string EdmxName { get; private set; }
+    public MetadataTools MetadataTools { get; private set; }
+    public CodeGenerationTools Code { get; private set; }
+    public MetadataLoader Loader { get; private set; }
+    public EdmItemCollection ItemCollection { get; private set; }
+    public List<EntityType> EntityTypes { get; private set; }
+    public List<ComplexType> ComplexTypes { get; private set; }
+    public List<StructuralType> EdmTypes { get; private set; }
+    public List<EntitySet> EntitySets { get; private set; }
+    public List<EdmFunction> FunctionImports { get; private set; }
+    public EntityContainer Container { get; private set; }
+
+    private StoreItemCollection _storeItemCollection;
+    public StoreItemCollection StoreItemCollection
+    {
+        get 
+        {
+            if (_storeItemCollection == null)
+                Loader.TryCreateStoreItemCollection(EdmxPath, out _storeItemCollection);
+            return _storeItemCollection; 
+        }
+    }
+
+    private EntityContainer _storeContainer;
+    public EntityContainer StoreContainer
+    {
+        get { return _storeContainer ?? (_storeContainer = StoreItemCollection.GetItems<EntityContainer>().First()); }
+    }
+
+    private string _storeContainerName;
+    public string StoreContainerName 
+    {
+        get { return _storeContainerName ?? (_storeContainerName = StoreContainer.Name); }
+    }
+
+    private StorageMappingItemCollection _mappingCollection;
+    public StorageMappingItemCollection MappingCollection
+    {
+        get 
+        { 
+            if (_mappingCollection == null)
+                Loader.TryCreateStorageMappingItemCollection(EdmxPath, ItemCollection, StoreItemCollection, out _mappingCollection);
+            return _mappingCollection;
+        }
+    }
+}
+
+
+partial class WritingFunctions
+{
+    private Action<string> _write;
+
+    public WritingFunctions(Action<string> write)
+    {
+        _write = write;
+    }
+
+    public void Write(string text)
+    {
+        _write(text);
+    }
+}
+
+public static class EdmFunctionExtensions
+{
+    public static string GetParameters(EdmFunction edmFunction, EdmxElements edmxElements)
+    {
+        FunctionImportParameter[] parameters;
+        return GetParameters(edmFunction, edmxElements, out parameters);
+    }
+    public static string GetParameters(EdmFunction edmFunction, EdmxElements edmxElements, out FunctionImportParameter[] parameters)
+    {
+        parameters = FunctionImportParameter.Create(edmFunction.Parameters, edmxElements.Code, edmxElements.MetadataTools).ToArray();
+        return String.Join(", ", parameters.Select(p => p.FunctionParameterType + " " + p.FunctionParameterName));
+    }
+
+    public static string GetReturnTypeName(EdmFunction edmFunction, EdmxElements edmxElements)
+    {
+        TypeUsage returnType;
+        return GetReturnTypeName(edmFunction, edmxElements, out returnType);
+    }
+    public static string GetReturnTypeName(EdmFunction edmFunction, EdmxElements edmxElements, out TypeUsage returnType)
+    {
+        returnType = edmxElements.MetadataTools.GetElementType(edmFunction.ReturnParameter.TypeUsage);
+        if (returnType == null)
+            return null;
+        return edmxElements.Code.Escape(returnType);
+    }
+}
+
+public static string GetPlurial(string entityTypeName)
+{
+    return entityTypeName.EndsWith("y") ? entityTypeName.Substring(0, entityTypeName.Length - 1) + "ies" : entityTypeName.EndsWith("s") ? entityTypeName + "es" : entityTypeName + "s";
+}
+
+public static string GetPlurial(CodeGenerationTools code, EntityContainer container, EdmType edmType)
+{
+    var entityType = edmType as EntityType;
+
+    EntitySet entitySet;
+    if (entityType != null && (entitySet = GetEntitySet(container, entityType)) != null && entitySet.ElementType == entityType)
+        return code.Escape(entitySet);
+    return GetPlurial(code.Escape(edmType));
+}
+
+public static string GetContainerNameWithoutEntitiesName(EntityContainer container)
+{
+    string containerName = container.Name;
+    string containerWithoutEntitiesName = containerName;
+    if (containerWithoutEntitiesName.EndsWith("Entities") && containerWithoutEntitiesName.Length > 8)
+        containerWithoutEntitiesName = containerWithoutEntitiesName.Substring(0, containerWithoutEntitiesName.Length - 8);
+    return containerWithoutEntitiesName;
+}
+
+public static string PropertyAccessibilityAndVirtual(EdmMember member)
+{
+    string accessibility = Accessibility.ForProperty(member);
+    if (accessibility != "private")
+    {
+        return accessibility + " virtual";
+    }
+
+    return accessibility;
+}
+
+public static bool IsConcurrencyFixed(EdmMember edmMember)
+{
+    return edmMember.TypeUsage.Facets.Any(f => f.Name == "ConcurrencyMode" && f.Value.ToString() == "Fixed");
+}
+
+public static int? MaxLength(EdmMember edmMember)
+{
+    var maxLengthFacet = edmMember.TypeUsage.Facets.FirstOrDefault(f => f.Name == "MaxLength");
+    if (maxLengthFacet != null && maxLengthFacet.Value != null && maxLengthFacet.Value.ToString() != "Max")
+        return (int)maxLengthFacet.Value;
+    return null;
+}
+
+public static bool FixedLength(EdmMember edmMember)
+{
+    return edmMember.TypeUsage.Facets.Any(f => f.Name == "FixedLength" && f.Value!=null && (bool)f.Value);
+}
+
+public static string ReadOnlyPropertyAccessibilityAndVirtual(EdmMember member)
+{
+    string accessibility = Accessibility.ForReadOnlyProperty(member);
+    if (accessibility != "private")
+    {
+        return accessibility + " virtual";
+    }
+
+    return accessibility;
+}
+
+public static string AccessibilityAndVirtual(string accessibility)
+{
+    if (accessibility != "private")
+    {
+        return accessibility + " virtual";
+    }
+
+    return accessibility;
+}
+
+public static EntitySet GetEntitySet(EntityContainer container, EntityType entityType)
+{
+    EntitySet value = container.BaseEntitySets.OfType<EntitySet>().FirstOrDefault(es => es.ElementType == entityType);
+    if (value != null)
+        return value;
+    if (entityType.BaseType != null)
+        return GetEntitySet(container, (EntityType)entityType.BaseType);
+    return null;
+}
+
+public static EntitySet GetEntitySet(EntityContainer container, EdmItemCollection itemCollection, string entityTypeName)
+{
+    return GetEntitySet(container, itemCollection.GetItems<EntityType>().First(et => et.Name == entityTypeName));
+}
+
+public static NavigationProperty GetNavigationPropertyFromFK(EdmProperty property)
+{
+    var entityType = (EntityType)property.DeclaringType;
+    foreach (NavigationProperty navigationProperty in entityType.NavigationProperties.Where(n => Accessibility.ForReadOnlyProperty(n) == "public"))
+    {
+        var association = (AssociationType)navigationProperty.RelationshipType;
+        var associationEndMembers = association.AssociationEndMembers.Where(aem => aem.GetEntityType() == entityType);
+        var referentialConstraint = association.ReferentialConstraints.FirstOrDefault();
+        if (referentialConstraint == null)
+            return null;
+        if (referentialConstraint != null && associationEndMembers.Contains(referentialConstraint.ToRole) && referentialConstraint.ToProperties.Contains(property) && navigationProperty.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
+        {
+            return navigationProperty;
+        }
+    }
+    return null;
+}
+
+public static NavigationProperty GetOtherNavigationProperty(NavigationProperty navigationProperty)
+{
+    var association = (AssociationType)navigationProperty.RelationshipType;
+    return navigationProperty.ToEndMember.GetEntityType().NavigationProperties.FirstOrDefault(np => np.RelationshipType == association && np != navigationProperty);
+}
+
+public static IEnumerable<EdmProperty> GetFKsFromNavigationProperty(NavigationProperty navigationProperty)
+{
+    var association = (AssociationType)navigationProperty.RelationshipType;
+    var referentialConstraint = association.ReferentialConstraints.FirstOrDefault();
+    if (referentialConstraint != null)
+    {
+        if (navigationProperty.FromEndMember == referentialConstraint.FromRole)
+            return referentialConstraint.ToProperties; 
+        else
+            return referentialConstraint.FromProperties; 
+    }
+    return new EdmProperty[0];
+}
+
+public static IEnumerable<EntityType> GetSubEntityTypes(EdmItemCollection itemCollection, EntityType entityType, string accessibility = "public")
+{
+    return GetSubEntityTypes(itemCollection, entityType.Name, accessibility);
+}
+
+public static IEnumerable<EntityType> GetSubEntityTypes(EdmItemCollection itemCollection, string entityTypeName, string accessibility = "public")
+{
+    IEnumerable<EntityType> subEntityTypes = itemCollection.GetItems<EntityType>().OrderBy(e => e.Name).Where(e => e.BaseType != null && e.BaseType.Name == entityTypeName);
+    if (accessibility != null)
+        subEntityTypes = subEntityTypes.Where(e => Accessibility.ForType(e) == accessibility);
+    foreach (EntityType et in subEntityTypes)
+    {
+        foreach (EntityType subEntityType in GetSubEntityTypes(itemCollection, et, accessibility))
+            yield return subEntityType;
+        yield return et;
+    }
+}
+
+public EntityType GetEntityType(EdmItemCollection itemCollection, string entityTypeName)
+{
+    return itemCollection.GetItems<EntityType>().FirstOrDefault(et => et.Name == entityTypeName);
+}
+
+public static IEnumerable<EntityType> GetEntityTypes(EdmItemCollection itemCollection, EntitySet entitySet)
+{
+    var entityType = (EntityType)entitySet.ElementType;
+    foreach (var subEntityType in GetSubEntityTypes(itemCollection, entityType))
+        yield return subEntityType;
+    yield return entityType;
+}
+
+public static IEnumerable<EntityType> GetDescendantsThenAscendantsEntityTypes(EdmItemCollection itemCollection, EntityType entityType)
+{
+    foreach (var subEntityType in GetSubEntityTypes(itemCollection, entityType))
+        yield return subEntityType;
+    yield return entityType;
+    while ((entityType = (EntityType)entityType.BaseType) != null)
+        yield return entityType;
+}
+
+public static void DefineMetadata()
+{
+    TemplateMetadata[MetadataConstants.TT_TEMPLATE_NAME] = "CSharpSelfTracking.Types";
+    TemplateMetadata[MetadataConstants.TT_TEMPLATE_VERSION] = "5.0";
+    TemplateMetadata[MetadataConstants.TT_MINIMUM_ENTITY_FRAMEWORK_VERSION] = "4.0";
+}
+
+void WriteHeader(string namespaceName, CodeGenerationTools code, params string[] usings)
+{
+    new WritingFunctions(Write).WriteHeader(PushIndent, namespaceName, code, usings);
+}
+partial class WritingFunctions
+{
+public void WriteHeader(Action<string> pushIndent, string namespaceName, CodeGenerationTools code, params string[] usings)
+{
+    WriteHeaderWithExternAliases(pushIndent, namespaceName, code, new string[0], usings);
+}
+}
+
+void WriteCopyright()
+{
+    new WritingFunctions(Write).WriteCopyright();
+}
+partial class WritingFunctions
+{
+public void WriteCopyright()
+{
+#>
+//------------------------------------------------------------------------------
+// <auto-generated>
+//     This code was generated from a template.
+//     Changes to this file may cause incorrect behavior and will be lost if the code is regenerated.
+// </auto-generated>
+//------------------------------------------------------------------------------
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+// matthieu.mezil@live.fr
+
+<#+
+}
+}
+
+void WriteHeaderWithExternAliases(string namespaceName, CodeGenerationTools code, string[] aliases, string[] usings)
+{
+    new WritingFunctions(Write).WriteHeaderWithExternAliases(PushIndent, namespaceName, code, aliases, usings);
+}
+partial class WritingFunctions
+{
+public void WriteHeaderWithExternAliases(Action<string> pushIndent, string namespaceName, CodeGenerationTools code, string[] aliases, string[] usings)
+{
+    CodeRegion region = new CodeRegion(this);
+    WriteCopyright();
+    foreach (var a in aliases.Where(al => al != null).Distinct())
+    {
+#>
+extern alias <#=a#>;
+<#+
+    }	
+#>
+ 
+<#+
+    foreach (var u in usings.Where(us => ! string.IsNullOrEmpty(us)).Distinct())
+    {
+#>
+using <#=u#>;
+<#+
+    }	
+    if (!String.IsNullOrEmpty(namespaceName))
+    {
+#>
+
+namespace <#=code.EscapeNamespace(namespaceName)#>
+{
+<#+
+        pushIndent(CodeRegion.GetIndent(1));
+    }
+}
+}
+
+void WriteFooter(string namespaceName)
+{
+    new WritingFunctions(Write).WriteFooter(PopIndent, namespaceName);
+}
+partial class WritingFunctions
+{
+public void WriteFooter(Func<string> popIndent, string namespaceName)
+{
+    if (!String.IsNullOrEmpty(namespaceName))
+    {
+        popIndent();
+#>
+}
+<#+
+    }
+}
+}
+
+public partial class OriginalValueMembers
+{
+    private readonly HashSet<EdmProperty> _concurrencyMembers;
+
+    public OriginalValueMembers(bool recordRequiredOriginalValuesOnly, MetadataWorkspace metadataWorkspace, MetadataTools metadataTools)
+    {
+        if (recordRequiredOriginalValuesOnly)
+            try
+            {
+                _concurrencyMembers = new HashSet<EdmProperty>();
+                foreach (EntityContainer container in metadataWorkspace.GetItems<EntityContainer>(DataSpace.CSpace))
+                {
+                    ILookup<EntityType, EntityType> directSubTypeLookup = metadataWorkspace.GetItems<EntityType>(DataSpace.CSpace).ToLookup(e => (EntityType)e.BaseType);
+                    foreach (EntitySetBase eSet in container.BaseEntitySets.Where(es => es.BuiltInTypeKind == BuiltInTypeKind.EntitySet))
+                    {
+                        List<EntityType> subTypes = new List<EntityType>();
+                        GetSubtypes(directSubTypeLookup, (EntityType)eSet.ElementType, subTypes);
+                        foreach (EntityType eType in subTypes)
+                            foreach (EdmProperty member in GetRelevantMembersForUpdate(metadataWorkspace, eSet, eType, true))
+                                _concurrencyMembers.Add(member);
+                    }
+                }
+
+                foreach (AssociationType assoc in metadataWorkspace.GetItems<AssociationType>(DataSpace.CSpace).Where(a => a.IsForeignKey))
+                    foreach (EdmProperty toProperty in assoc.ReferentialConstraints[0].ToProperties)
+                        _concurrencyMembers.Add(toProperty);
+            }
+            catch (Exception)
+            {
+                _concurrencyMembers = null;
+            }
+    }
+
+    public bool IsOriginalValueMember(EdmProperty edmProperty)
+    {
+        return _concurrencyMembers == null || _concurrencyMembers.Contains(edmProperty);
+    }
+
+    private static void GetSubtypes(ILookup<EntityType, EntityType> lookup, EntityType eType, List<EntityType> subTypes)
+    {
+        subTypes.Add(eType);
+        foreach (EntityType subType in lookup[eType])
+            GetSubtypes(lookup, subType, subTypes);
+    }
+}
+
+bool VerifyTypesAreCaseInsensitiveUnique(EdmItemCollection itemCollection)
+{
+    Dictionary<string, bool> alreadySeen = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+    foreach(StructuralType type in itemCollection.GetItems<StructuralType>())
+    {
+        if (!(type is EntityType || type is ComplexType))
+            continue;
+
+        if (alreadySeen.ContainsKey(type.FullName))
+        {
+            Error(String.Format(CultureInfo.CurrentCulture, "This template does not support types that differ only by case, the types {0} are not supported", type.FullName));
+            return false;
+        }
+        else
+            alreadySeen.Add(type.FullName, true);
+    }
+
+    return true;
+}
+
+// True if the association for the specified navigation property is an identifying relationship or a foreign key relationship.
+public static bool IsForeignKeyOrIdentifyingRelationship(MetadataTools tools, NavigationProperty navProperty)
+{
+    if (tools == null)
+        throw new ArgumentNullException("tools");
+
+    if (navProperty == null)
+        throw new ArgumentNullException("navProperty");
+
+    return IsForeignKeyOrIdentifyingRelationship(tools, (AssociationType)navProperty.RelationshipType);
+}
+
+// True if the specified association is an identifying relationship or a foreign key relationship.
+public static bool IsForeignKeyOrIdentifyingRelationship(MetadataTools tools, AssociationType association)
+{
+    if (tools == null)
+        throw new ArgumentNullException("tools");
+
+    if (association == null)
+        throw new ArgumentNullException("association");
+
+    return association.IsForeignKey || tools.IsIdentifyingRelationship(association);
+}
+
+public static bool IsPublic(EdmMember member)
+{
+    string setter = Accessibility.ForWriteOnlyProperty(member);
+    string getter = Accessibility.ForReadOnlyProperty(member);
+
+    return getter == "public" && setter == "public" && (member.TypeUsage.EdmType is ComplexType ? Accessibility.ForType(member.TypeUsage.EdmType) == "public" : true);
+}
+public static bool IsPublicOrInternal(EdmMember member)
+{
+    string setter = Accessibility.ForWriteOnlyProperty(member);
+    string getter = Accessibility.ForReadOnlyProperty(member);
+    string typeAccessibility;
+    return (getter == "public" || getter == "internal") && (setter == "public" || setter == "internal") && (member.TypeUsage.EdmType is ComplexType ? ((typeAccessibility = Accessibility.ForType(member.TypeUsage.EdmType)) == "public" || typeAccessibility == "internal") : true);
+}
+
+public static bool IsPublic(EdmFunction method)
+{
+    return Accessibility.ForMethod(method) == "public";
+}
+public static bool IsPublicOrInternal(EdmFunction method)
+{
+    string methodAccessibility = Accessibility.ForMethod(method);
+    return methodAccessibility == "public" || methodAccessibility == "internal";
+}
+
+public static bool IsPublic(NavigationProperty np)
+{
+    if (np == null || np.ToEndMember == null)
+        return false;
+    return IsPublic((EdmMember)np) && Accessibility.ForType(np.ToEndMember.GetEntityType()) == "public";
+}
+public static bool IsPublicOrInternal(NavigationProperty np)
+{
+    if (np == null || np.ToEndMember == null)
+        return false;
+    string typeAccessibility;
+    return IsPublicOrInternal((EdmMember)np) && ((typeAccessibility = Accessibility.ForType(np.ToEndMember.GetEntityType())) == "public" || typeAccessibility == "internal");
+}
+
+public static bool IsPublic(EdmType type)
+{
+    return Accessibility.ForType(type) == "public";
+}
+
+public static IEnumerable<EdmProperty> GetCSDLIdentityProperties(EntityType entityType)
+{
+    return entityType.Properties.Where(p => p.MetadataProperties.Select(mp => mp.Value).OfType<string>().Any(sgp => sgp == "Identity"));
+}
+
+public static IEnumerable<EdmProperty> GetCSDLComputedProperties(EntityType entityType)
+{
+    return entityType.Properties.Where(p => p.MetadataProperties.Select(mp => mp.Value).OfType<string>().Any(sgp => sgp == "Computed"));
+}
+
+public IEnumerable<string> GetIdentityProperties(string inputFile, EntityType entityType)
+{
+    return GetIdentityProperties(inputFile, entityType, HostResolvePath);
+}
+public static IEnumerable<string> GetIdentityProperties(string inputFile, EntityType entityType, Func<string, string> hostResolvePath)
+{
+    return GetStoreGeneratedPropertiesPrivate(inputFile, entityType, "Identity", hostResolvePath).Distinct();
+}
+
+public bool HasTemporaryKeys(string inputFile, EntityType entityType)
+{
+    return HasTemporaryKeys(inputFile, entityType, HostResolvePath);
+}
+public static bool HasTemporaryKeys(string inputFile, EntityType entityType, Func<string, string> hostResolvePath)
+{
+    return GetStoreGeneratedPropertiesPrivate(inputFile, entityType, "Identity", hostResolvePath).Any() || entityType.NavigationProperties.Any(np => np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.One && np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.ZeroOrOne && HasTemporaryKeys(inputFile, np.ToEndMember.GetEntityType(), hostResolvePath));
+}
+
+public string HostResolvePath(string path)
+{
+    return Host.ResolvePath(path);
+}
+
+public bool CouldHaveCSDLTemporaryKeys(EntityType entityType)
+{
+    return CouldHaveCSDLTemporaryKeys(entityType, HostResolvePath);
+}
+public static bool CouldHaveCSDLTemporaryKeys(EntityType entityType, Func<string, string> hostResolvePath, List<NavigationProperty> navigationProperties = null)
+{
+    if (navigationProperties == null)
+        navigationProperties = new List<NavigationProperty>();
+    return HasCSDLTemporaryKeys(entityType, hostResolvePath) || CouldHaveCSDLTemporaryKeysNps(entityType, hostResolvePath, navigationProperties).Any();
+}
+
+public IEnumerable<NavigationProperty> CouldHaveCSDLTemporaryKeysNps(EntityType entityType)
+{
+    return CouldHaveCSDLTemporaryKeysNps(entityType, HostResolvePath);
+}
+public static IEnumerable<NavigationProperty> CouldHaveCSDLTemporaryKeysNps(EntityType entityType, Func<string, string> hostResolvePath, List<NavigationProperty> navigationProperties = null)
+{
+    if (navigationProperties == null)
+        navigationProperties = new List<NavigationProperty>();
+    return entityType.NavigationProperties.Where(np => 
+        {
+            if (navigationProperties.Contains(np) || !np.GetDependentProperties().Any())
+                return false;
+            navigationProperties.Add(np);
+            IEnumerable<EdmProperty> fromProperties, toProperties;
+            GetNavigationPropertyReferentialConstraintsEnumerables(np, out fromProperties, out toProperties);
+            return np.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many && fromProperties.Any(f => entityType.KeyMembers.Contains(f)) && CouldHaveCSDLTemporaryKeys(np.ToEndMember.GetEntityType(), hostResolvePath, navigationProperties);
+        });
+}
+
+public IEnumerable<EdmMember> TemporaryKeys(EntityType entityType)
+{
+    return TemporaryKeys(entityType, HostResolvePath);
+}
+public static IEnumerable<EdmMember> TemporaryKeys(EntityType entityType, Func<string, string> hostResolvePath, List<NavigationProperty> navigationProperties = null)
+{
+    if (navigationProperties == null)
+        navigationProperties = new List<NavigationProperty>();
+    return GetCSDLIdentityProperties(entityType).Cast<EdmMember>().Intersect(entityType.KeyMembers).Union(CouldHaveCSDLTemporaryKeysNps(entityType, hostResolvePath).SelectMany<NavigationProperty, EdmMember>(np => 
+        {
+            if (navigationProperties.Contains(np))
+                return new EdmMember[0];
+            navigationProperties.Add(np);
+            IEnumerable<EdmProperty> fromProperties, toProperties;
+            GetNavigationPropertyReferentialConstraintsEnumerables(np, out fromProperties, out toProperties);
+            var toTemporaryKeys = TemporaryKeys(np.ToEndMember.GetEntityType(), hostResolvePath, navigationProperties).Intersect(toProperties);
+            IEnumerator<EdmProperty> fromPropertiesEnumerator = fromProperties.GetEnumerator(), toPropertiesEnumerator = toProperties.GetEnumerator();
+            var result = new List<EdmMember>();
+            while (fromPropertiesEnumerator.MoveNext() && toPropertiesEnumerator.MoveNext())
+                if (toTemporaryKeys.Contains(toPropertiesEnumerator.Current))
+                    result.Add(fromPropertiesEnumerator.Current);
+            return result;
+        })).Distinct();
+}
+
+public bool HasCSDLTemporaryKeys(EntityType entityType)
+{
+    return HasCSDLTemporaryKeys(entityType, HostResolvePath);
+}
+public static bool HasCSDLTemporaryKeys(EntityType entityType, Func<string, string> hostResolvePath)
+{
+    return GetCSDLIdentityProperties(entityType).Any() || entityType.NavigationProperties.Any(np => np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.One && np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.ZeroOrOne && HasCSDLTemporaryKeys(np.ToEndMember.GetEntityType(), hostResolvePath));
+}
+
+public IEnumerable<string> GetComputedProperties(string inputFile, EntityType entityType)
+{
+    return GetComputedProperties(inputFile, entityType, HostResolvePath);
+}
+public static IEnumerable<string> GetComputedProperties(string inputFile, EntityType entityType, Func<string, string> hostResolvePath)
+{
+    return GetStoreGeneratedPropertiesPrivate(inputFile, entityType, "Computed", hostResolvePath).Distinct();
+}
+
+public IEnumerable<string> GetStoreGeneratedPropertiesPrivate(string inputFile, EntityType entityType, string storeGeneratedPattern)
+{
+    return GetStoreGeneratedPropertiesPrivate(inputFile, entityType, storeGeneratedPattern, HostResolvePath);
+}
+public static IEnumerable<string> GetStoreGeneratedPropertiesPrivate(string inputFile, EntityType entityType, string storeGeneratedPattern, Func<string, string> hostResolvePath)
+{
+    var root = XElement.Load(hostResolvePath(inputFile));
+    var edm_ns = GetEDM_NS(root);
+    string msl_ns = GetMSL_NS(root);
+    string ssdl_ns = GetSSDL_NS(root);
+    var runtime = root.Element(XName.Get("Runtime", edm_ns));
+    for (var entityTypeLoop = entityType ; entityTypeLoop != null ; entityTypeLoop = (EntityType)entityTypeLoop.BaseType)
+    {
+        var entityTypeMapping = runtime.Element(XName.Get("Mappings", edm_ns)).Element(XName.Get("Mapping", msl_ns)).Descendants(XName.Get("EntityTypeMapping", msl_ns)).FirstOrDefault(etm => Regex.IsMatch(etm.Attribute("TypeName").Value, string.Concat(@"^(?:IsTypeOf\()?", entityTypeLoop.NamespaceName, ".", entityTypeLoop.Name, @"(?:\))?$")));
+        if (entityTypeMapping != null) 
+            foreach (var mappingFragment in entityTypeMapping.Elements(XName.Get("MappingFragment", msl_ns)))
+            {
+                foreach (var storeGeneratedProp in GetStoreGeneratedPropertiesPrivate(runtime, mappingFragment, mappingFragment.Attribute("StoreEntitySet").Value, storeGeneratedPattern, edm_ns, msl_ns, ssdl_ns))
+                    yield return storeGeneratedProp;
+            }
+    }
+}
+
+public static IEnumerable<string> GetStoreGeneratedPropertiesPrivate(XElement runtime, XElement mappingParent, string table, string storeGeneratedPattern, string edm_ns, string msl_ns, string ssdl_ns, string prefix = "")
+{
+    foreach (var scalarProperty in mappingParent.Elements(XName.Get("ScalarProperty", msl_ns)))
+    {
+        var column = scalarProperty.Attribute("ColumnName").Value;
+        XAttribute storeGeneratedPatternAttribute;
+        if ((storeGeneratedPatternAttribute = runtime.Element(XName.Get("StorageModels", edm_ns)).Element(XName.Get("Schema", ssdl_ns)).Elements(XName.Get("EntityType", ssdl_ns)).First(et => et.Attribute("Name").Value == table).Elements(XName.Get("Property", ssdl_ns)).First(p => p.Attribute("Name").Value == column).Attribute("StoreGeneratedPattern")) != null && storeGeneratedPatternAttribute.Value == storeGeneratedPattern)
+            yield return prefix + scalarProperty.Attribute("Name").Value;
+    }
+    foreach (var complexProperty in mappingParent.Elements(XName.Get("ComplexProperty", msl_ns)))
+        foreach (var storeGeneratedProp in GetStoreGeneratedPropertiesPrivate(runtime, complexProperty, table, storeGeneratedPattern, edm_ns, msl_ns, ssdl_ns, prefix = complexProperty.Attribute("Name").Value + "."))
+            yield return storeGeneratedProp;
+}
+
+public static string InitializedTrackingField(EdmProperty property, CodeGenerationTools code)
+{
+    string namePart = property.Name + "Initialized";
+    if (code.CamelCaseFields)
+        namePart = code.CamelCase(namePart);
+    return "_" + namePart;
+}
+
+public static bool IsSaveReference(MetadataTools tools, NavigationProperty navProperty)
+{
+    return !IsForeignKeyOrIdentifyingRelationship(tools, navProperty) && navProperty.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many && navProperty.FromEndMember.RelationshipMultiplicity != RelationshipMultiplicity.One;
+}
+
+public static string CreateFixupMethodName(RelationshipEndMember endMember)
+{
+    return String.Format(CultureInfo.InvariantCulture, "Fixup{0}_{1}_{2}Keys", endMember.DeclaringType.NamespaceName.Replace(".", "_"), endMember.DeclaringType.Name, endMember.Name);
+}
+
+public static string CreateKeyNameVariable(string keyName)
+{
+    return String.Format(CultureInfo.InvariantCulture, "{0}KeyName", keyName);
+}
+
+public static string CreateReferenceValueLookupKey(AssociationEndMember endMember, string keyName)
+{
+    return String.Format(CultureInfo.InvariantCulture, "Navigate({0}.{1}).{2}", endMember.DeclaringType.FullName, endMember.Name, keyName);
+}
+
+public static string CreateReferenceValueLookupKey(NavigationProperty navProp, string keyName)
+{
+    return String.Format(CultureInfo.InvariantCulture, "{0}.{1}", navProp.Name, keyName);
+}
+
+public IEnumerable<string> GetTablesMappedTo(string inputFile, EntityType entityType)
+{
+    return GetTablesMappedTo(inputFile, entityType, HostResolvePath);
+}
+public static IEnumerable<string> GetTablesMappedTo(string inputFile, EntityType entityType, Func<string, string> hostResolvePath)
+{
+    var root = XElement.Load(hostResolvePath(inputFile));
+    var edm_ns = GetEDM_NS(root);
+    string msl_ns = GetMSL_NS(root);
+    var runtime = root.Element(XName.Get("Runtime", edm_ns));
+    for (var entityTypeLoop = entityType ; entityTypeLoop != null ; entityTypeLoop = (EntityType)entityTypeLoop.BaseType)
+    {
+        var entityTypeMapping = runtime.Element(XName.Get("Mappings", edm_ns)).Element(XName.Get("Mapping", msl_ns)).Descendants(XName.Get("EntityTypeMapping", msl_ns)).FirstOrDefault(etm => Regex.IsMatch(etm.Attribute("TypeName").Value, string.Concat(@"^(?:IsTypeOf\()?", entityTypeLoop.NamespaceName, ".", entityTypeLoop.Name, @"(?:\))?$")));
+        if (entityTypeMapping != null)
+            foreach (var mappingFragment in entityTypeMapping.Elements(XName.Get("MappingFragment", msl_ns)))
+                yield return mappingFragment.Attribute("StoreEntitySet").Value;
+    }	
+}
+
+public IEnumerable<XElement> GetDependentTablesAssociation(string inputFile, string table)
+{
+    return GetDependentTablesAssociation(inputFile, table, HostResolvePath);
+}
+public static IEnumerable<XElement> GetDependentTablesAssociation(string inputFile, string table, Func<string, string> hostResolvePath)
+{
+    var root = XElement.Load(hostResolvePath(inputFile));
+    var edm_ns = GetEDM_NS(root);
+    string ssdl_ns = GetSSDL_NS(root);
+    var runtime = root.Element(XName.Get("Runtime", edm_ns));
+    foreach (var association in runtime.Element(XName.Get("StorageModels", edm_ns)).Element(XName.Get("Schema", ssdl_ns)).Elements(XName.Get("Association", ssdl_ns)))
+    {
+        XElement end;
+        if ((end = association.Elements(XName.Get("End", ssdl_ns)).FirstOrDefault(r => r.Attribute("Type").Value.EndsWith("." + table))) != null && end.Attribute("Role").Value == association.Element(XName.Get("ReferentialConstraint", ssdl_ns)).Element(XName.Get("Principal", ssdl_ns)).Attribute("Role").Value)
+            yield return association;
+    }
+}
+
+public IEnumerable<XElement> GetDependentTablesAssociation(string inputFile, List<string> tables, string table)
+{
+    return GetDependentTablesAssociation(inputFile, tables, table, HostResolvePath);
+}
+public static IEnumerable<XElement> GetDependentTablesAssociation(string inputFile, List<string> tables, string table, Func<string, string> hostResolvePath)
+{
+    var root = XElement.Load(hostResolvePath(inputFile));
+    var edm_ns = GetEDM_NS(root);
+    string ssdl_ns = GetSSDL_NS(root);
+    var runtime = root.Element(XName.Get("Runtime", edm_ns));
+    foreach (var association in runtime.Element(XName.Get("StorageModels", edm_ns)).Element(XName.Get("Schema", ssdl_ns)).Elements(XName.Get("Association", ssdl_ns)))
+    {
+        XElement end;
+        if ((end = association.Elements(XName.Get("End", ssdl_ns)).FirstOrDefault(e => e.Attribute("Type").Value.EndsWith("." + table))) != null && end.Attribute("Role").Value == association.Element(XName.Get("ReferentialConstraint", ssdl_ns)).Element(XName.Get("Principal", ssdl_ns)).Attribute("Role").Value && tables.Contains(Regex.Match(association.Elements(XName.Get("End", ssdl_ns)).First(e => e != end).Attribute("Type").Value, "[^.]+$").Value))
+            yield return association;
+    }
+}
+
+public IEnumerable<string> TableWithoutPrincipal(string inputFile, List<string> tables)
+{
+    return TableWithoutPrincipal(inputFile, tables, HostResolvePath);
+}
+public static IEnumerable<string> TableWithoutPrincipal(string inputFile, List<string> tables, Func<string, string> hostResolvePath)
+{
+    var root = XElement.Load(hostResolvePath(inputFile));
+    var edm_ns = GetEDM_NS(root);
+    string ssdl_ns = GetSSDL_NS(root);
+    var runtime = root.Element(XName.Get("Runtime", edm_ns));
+    return tables.Where(table => ! runtime.Element(XName.Get("StorageModels", edm_ns)).Element(XName.Get("Schema", ssdl_ns)).Elements(XName.Get("Association", ssdl_ns)).Any(association => 
+    {
+        XElement end;
+        return (end = association.Elements(XName.Get("End", ssdl_ns)).FirstOrDefault(e => e.Attribute("Type").Value.EndsWith("." + table))) != null && end.Attribute("Role").Value == association.Element(XName.Get("ReferentialConstraint", ssdl_ns)).Element(XName.Get("Dependent", ssdl_ns)).Attribute("Role").Value && tables.Contains(Regex.Match(association.Elements(XName.Get("End", ssdl_ns)).First(e => e != end).Attribute("Type").Value, "[^.]+$").Value);
+    }));
+}
+
+public string GetMappedColumn(string inputFile, EntityType entityType, string table, EdmMember prop)
+{
+    return GetMappedColumn(inputFile, entityType, table, prop, HostResolvePath);
+}
+public static string GetMappedColumn(string inputFile, EntityType entityType, string table, EdmMember prop, Func<string, string> hostResolvePath)
+{
+    var root = XElement.Load(hostResolvePath(inputFile));
+    var edm_ns = GetEDM_NS(root);
+    string msl_ns = GetMSL_NS(root);
+    string ssdl_ns = GetSSDL_NS(root);
+    var runtime = root.Element(XName.Get("Runtime", edm_ns));
+    if (entityType != null)
+    {
+        var entityTypeMapping = runtime.Element(XName.Get("Mappings", edm_ns)).Element(XName.Get("Mapping", msl_ns)).Descendants(XName.Get("EntityTypeMapping", msl_ns)).FirstOrDefault(etm => Regex.IsMatch(etm.Attribute("TypeName").Value, string.Concat(@"^(?:IsTypeOf\()?", entityType.NamespaceName, ".", entityType.Name, @"(?:\))?$")));
+        if (entityTypeMapping == null)
+            return null;
+        var storeEntitySetMapping = entityTypeMapping.Elements(XName.Get("MappingFragment", msl_ns)).FirstOrDefault(mf => mf.Attribute("StoreEntitySet").Value == table);
+        if (storeEntitySetMapping == null)
+        { 
+            if (entityType.BaseType == null)
+                return null;
+            return GetMappedColumn(inputFile, (EntityType)entityType.BaseType, table, prop, hostResolvePath);
+        }
+        return storeEntitySetMapping.Elements(XName.Get("ScalarProperty", msl_ns)).First(sp => sp.Attribute("Name").Value == prop.Name).Attribute("ColumnName").Value;
+    }
+    return null;
+}
+
+public bool IsHorizontalEntitySplittingCondition(string inputFile, EntityType entityType, EdmMember prop)
+{
+    return IsHorizontalEntitySplittingCondition(inputFile, entityType, prop, HostResolvePath);
+}
+public void GetEdmxRuntimeAndEDMAndMSLNamespaces(string inputFile, out string edm_ns, out string msl_ns, out XElement runtime)
+{
+    GetEdmxRuntimeAndEDMAndMSLNamespaces(inputFile, HostResolvePath, out edm_ns, out msl_ns, out runtime);
+}
+public static void GetEdmxRuntimeAndEDMAndMSLNamespaces(string inputFile, Func<string, string> hostResolvePath, out string edm_ns, out string msl_ns, out XElement runtime)
+{
+    var root = XElement.Load(hostResolvePath(inputFile));
+    edm_ns = GetEDM_NS(root);
+    msl_ns = GetMSL_NS(root);
+    runtime = root.Element(XName.Get("Runtime", edm_ns));
+}
+public static bool IsHorizontalEntitySplittingCondition(string inputFile, EntityType entityType, EdmMember prop, Func<string, string> hostResolvePath)
+{
+    string edm_ns, msl_ns;
+    XElement runtime;
+    GetEdmxRuntimeAndEDMAndMSLNamespaces(inputFile, hostResolvePath, out edm_ns, out msl_ns, out runtime);
+    return IsHorizontalEntitySplittingCondition(inputFile, entityType, prop, edm_ns, msl_ns, runtime);
+}
+public static bool IsHorizontalEntitySplittingCondition(string inputFile, EntityType entityType, EdmMember prop, string edm_ns, string msl_ns, XElement runtime)
+{
+    for (var entityTypeLoop = entityType ; entityTypeLoop != null ; entityTypeLoop = (EntityType)entityTypeLoop.BaseType)
+    {
+        var entityTypeMapping = runtime.Element(XName.Get("Mappings", edm_ns)).Element(XName.Get("Mapping", msl_ns)).Descendants(XName.Get("EntityTypeMapping", msl_ns)).FirstOrDefault(etm => Regex.IsMatch(etm.Attribute("TypeName").Value, string.Concat(@"^(?:IsTypeOf\()?", entityType.NamespaceName, ".", entityType.Name, @"(?:\))?$")));
+        if (entityTypeMapping == null)
+            return false;
+        if (entityTypeMapping.Elements(XName.Get("MappingFragment", msl_ns)).Any(mf => mf.Elements(XName.Get("Condition", msl_ns)).Any(c => 
+            {
+                var nameAttribute = c.Attribute("Name");
+                if (nameAttribute == null)
+                    return false;
+                if (nameAttribute.Value == prop.Name)
+                    return true;
+                return false;
+            })))
+            return true;
+    }
+    return false;
+}
+
+public static void GetNavigationPropertyReferentialConstraintsEnumerables(NavigationProperty navigationProperty, out IEnumerable<EdmProperty> fromEnumerable, out IEnumerable<EdmProperty> toEnumerable)
+{
+    ReferentialConstraint referentialConstraint;
+    GetNavigationPropertyReferentialConstraintsEnumerables(navigationProperty, out referentialConstraint, out fromEnumerable, out toEnumerable);
+}
+public static void GetNavigationPropertyReferentialConstraintsEnumerables(NavigationProperty navigationProperty, out ReferentialConstraint referentialConstraint, out IEnumerable<EdmProperty> fromEnumerable, out IEnumerable<EdmProperty> toEnumerable)
+{
+    var association = (AssociationType)navigationProperty.RelationshipType;
+    referentialConstraint = association.ReferentialConstraints.FirstOrDefault();
+    if (referentialConstraint != null)
+    {
+        if (navigationProperty.FromEndMember == referentialConstraint.FromRole)
+        {
+            fromEnumerable = referentialConstraint.FromProperties;
+            toEnumerable = referentialConstraint.ToProperties; 
+        }
+        else
+        {
+            fromEnumerable = referentialConstraint.ToProperties;
+            toEnumerable = referentialConstraint.FromProperties; 
+        }
+        return;
+    }
+    fromEnumerable = new EdmProperty[0];
+    toEnumerable = new EdmProperty[0];
+}
+
+public static void GetNavigationPropertyReferentialConstraintsEnumerators(NavigationProperty navigationProperty, out IEnumerator<EdmProperty> fromEnumerator, out IEnumerator<EdmProperty> toEnumerator)
+{
+    ReferentialConstraint referentialConstraint;
+    GetNavigationPropertyReferentialConstraintsEnumerators(navigationProperty, out referentialConstraint, out fromEnumerator, out toEnumerator);
+}
+public static void GetNavigationPropertyReferentialConstraintsEnumerators(NavigationProperty navigationProperty, out ReferentialConstraint referentialConstraint, out IEnumerator<EdmProperty> fromEnumerator, out IEnumerator<EdmProperty> toEnumerator)
+{
+    IEnumerable<EdmProperty> fromEnumerable, toEnumerable;
+    GetNavigationPropertyReferentialConstraintsEnumerables(navigationProperty, out referentialConstraint, out fromEnumerable, out toEnumerable);
+    fromEnumerator = fromEnumerable.GetEnumerator();
+    toEnumerator = toEnumerable.GetEnumerator();
+}
+
+public static  bool IsStruct(EdmProperty property)
+{
+    return IsStruct(property.TypeUsage);
+}
+public static bool IsStruct(TypeUsage type)
+{
+    switch (type.ToString())
+    {
+        case "Edm.Byte":
+        case "Edm.DateTime":
+        case "Edm.DateTimeOffset":
+        case "Edm.Time":
+        case "Edm.Decimal":
+        case "Edm.Double":
+        case "Edm.Single":
+        case "Edm.Int16":
+        case "Edm.Int32":
+        case "Edm.Int64":
+        case "Edm.SByte":
+            return true;
+    }
+    return false;
+}
+
+public static IEnumerable<Tuple<string, string>> GetKeysProperties(CodeGenerationTools code, EntityType entityType, int? index = null)
+{
+    foreach (var km in entityType.KeyMembers)
+    {
+        string typeName = code.Escape(km.TypeUsage);
+        string key = string.Concat(code.Escape(entityType), index, code.Escape(km));
+        yield return new Tuple<string, string>(typeName, key);
+    }
+} 
+
+public bool HasPublicManyToManyRelationship(EdmxElements edmxElements)
+{
+    return edmxElements.EntityTypes.Any(e => IsPublic(e) && e.NavigationProperties.Any(np => IsPublic(np) && IsPublic(np) && np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many && np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many));
+}
+
+public IEnumerable<string> WriteKeysTypes(EdmxElements edmxElements, EntityFrameworkTemplateFileManager fileManager, string entitiesNamespace, string edmxName, string relativePath)
+{
+    fileManager.StartNewFile("Includes.tt");
+    string beginTag = "<" + "#";
+    string endTag = "#" + ">";
+    var edmxUtilityTTIncludeNameValue = edmxUtilityTTIncludeName;
+    if (! string.IsNullOrEmpty(relativePath))
+        edmxUtilityTTIncludeNameValue = Regex.Replace(edmxUtilityTTIncludeName, @"^((.?)*)\.ttinclude$", m => string.Concat(relativePath, m.Groups[1].Value, ".merge.ttinclude"));
+#>
+<#="<" + "#@"#> template language="C#" hostspecific="true"<#=endTag#>
+<#="<" + "#@"#> include file="<#=edmxUtilityTTIncludeNameValue#>"<#=endTag#>
+<#="<" + "#@"#> output extension=".txt"<#=endTag#>
+<#=beginTag#>var fileManager = EntityFrameworkTemplateFileManager.Create(this);<#=endTag#>
+<#+
+    var code = edmxElements.Code;
+    var typeNames = new List<string>();
+    string @namespace = edmxElements.NamespaceName + ".Query.Include";
+    foreach (EntityType entityType in edmxElements.EntityTypes.Where(e => IsPublic(e)))
+    {
+        string entityTypeName = code.Escape(entityType);
+        foreach (var navigationProperty in entityType.NavigationProperties.Where(np => IsPublic(np) && IsPublic(np) && np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many && np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many))
+        {
+            var typeNameSB = new StringBuilder();
+            var properties = new List<Tuple<string, string>>();
+            typeNameSB.Append("Include");
+            foreach (var p in GetKeysProperties(code, entityType, 1).Union(GetKeysProperties(code, (EntityType)navigationProperty.ToEndMember.GetEntityType(), 2)))
+            {
+                typeNameSB.Append(p.Item2);
+                properties.Add(p);
+            }
+            string typeName = typeNameSB.ToString();
+            if (typeNames.Contains(typeName))
+                continue;
+            typeNames.Add(typeName);
+#>
+<#=beginTag#>fileManager.StartNewFile("<#=typeName#>.cs");<#=endTag#>
+<#+
+            WriteHeader(@namespace, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://<#=edmxName#>/QueryInclude")]
+public class <#=typeName#>
+{
+<#+
+            foreach (var p in properties)
+            {
+#>
+    [DataMember]
+    public <#=p.Item1#> <#=p.Item2#> { get; set; }
+
+<#+
+            }
+#>
+}
+<#+
+            WriteFooter(@namespace);
+            yield return typeName;
+
+            var fromProperties = GetKeysProperties(code, entityType).ToList();
+            typeNameSB = new StringBuilder();
+            typeNameSB.Append("Include");
+            foreach (var p in fromProperties)
+                typeNameSB.Append(p.Item2);
+            typeNameSB.Append("To");
+            var toTypeName = code.Escape(navigationProperty.ToEndMember.GetEntityType());
+            typeNameSB.Append(toTypeName);
+            typeName = typeNameSB.ToString();
+
+#>
+<#=beginTag#>fileManager.StartNewFile("<#=typeName + ".cs"#>");<#=endTag#>
+<#+
+            WriteHeader(@namespace, code, "System", "System.Runtime.Serialization");
+#>
+[DataContract(Namespace = "http://<#=edmxName#>/QueryInclude")]
+public class <#=typeName#>
+{
+<#+
+            foreach (var p in fromProperties)
+            {
+#>
+    [DataMember]
+    public <#=p.Item1#> <#=p.Item2#> { get; set; }
+
+<#+
+            }
+#>
+    [DataMember]
+    public <#=entitiesNamespace#>.<#=toTypeName#> To { get; set; }
+}
+<#+
+            WriteFooter(@namespace);
+            yield return typeName;
+        }
+    }
+#>
+<#=beginTag#>fileManager.Process();<#=endTag#>
+<#+
+}
+
+public static IEnumerable<string> GetKeysTypes(EdmxElements edmxElements)
+{
+    var code = edmxElements.Code;
+    var typeNames = new List<string>();
+    foreach (EntityType entityType in edmxElements.EntityTypes.Where(e => IsPublic(e)))
+    {
+        string entityTypeName = code.Escape(entityType);
+        foreach (var navigationProperty in entityType.NavigationProperties.Where(np => IsPublic(np) && IsPublic(np) && np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many && np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many))
+        {
+            var typeNameSB = new StringBuilder();
+            typeNameSB.Append("Include");
+            foreach (var p in GetKeysProperties(code, entityType, 1).Union(GetKeysProperties(code, (EntityType)navigationProperty.ToEndMember.GetEntityType(), 2)))
+                typeNameSB.Append(p.Item2);
+            string typeName = typeNameSB.ToString();
+            if (typeNames.Contains(typeName))
+                continue;
+            typeNames.Add(typeName);
+            yield return typeName;
+
+            var fromProperties = GetKeysProperties(code, entityType).ToList();
+            typeNameSB = new StringBuilder();
+            typeNameSB.Append("Include");
+            foreach (var p in fromProperties)
+                typeNameSB.Append(p.Item2);
+            typeNameSB.Append("To");
+            var toTypeName = code.Escape(navigationProperty.ToEndMember.GetEntityType());
+            typeNameSB.Append(toTypeName);
+            yield return typeNameSB.ToString();
+        }
+    }
+}
+
+public static class EdmxChanges
+{
+    public static bool EdmxApplyChanges(string edmxPath, XElement edmx)
+    {
+        if (File.Exists(edmxPath + ".changes.xml"))
+        {
+            var changes = XElement.Load(edmxPath + ".changes.xml");
+            ApplyChanges(edmx, changes);
+            return true;
+        }
+        return false;
+    }
+
+    private static void ApplyChanges(XElement original, XElement change)
+    {
+        if (original.Name != change.Name || original.Attribute("Name") != null && original.Attribute("Name").Value != change.Attribute("Name").Value)
+            throw new NotImplementedException();
+        foreach (var addedAttribute in change.Attributes())
+        {
+            XAttribute originalAttribute = original.Attribute(addedAttribute.Name);
+            if (originalAttribute == null)
+                original.Add(addedAttribute);
+            else
+                originalAttribute.Value = addedAttribute.Value;
+        }
+        foreach (var changesChild in change.Elements())
+        {
+            var originalChild = original.Elements().FirstOrDefault(o => o.Name == changesChild.Name && (o.Attribute("Name") == null || o.Attribute("Name").Value == changesChild.Attribute("Name").Value));
+            if (originalChild == null)
+            {
+                switch (changesChild.Name.LocalName)
+                {
+                    case "add":
+                        foreach (var changesSubChild in changesChild.Elements())
+                            original.Add(changesSubChild);
+                        break;
+                    case "remove":
+                        foreach (var changesSubChild in changesChild.Elements())
+                        {
+                            originalChild = original.Elements().First(o => o.Name == changesSubChild.Name && (o.Attribute("Name") == null || o.Attribute("Name").Value == changesSubChild.Attribute("Name").Value));
+                            originalChild.Remove();
+                        }
+                        break;
+                    case "replace":
+                        foreach (var changesSubChild in changesChild.Elements())
+                        {
+                            originalChild = original.Elements().First(o => o.Name == changesSubChild.Name && (o.Attribute("Name") == null || o.Attribute("Name").Value == changesSubChild.Attribute("Name").Value));
+                            originalChild.Remove();
+                            original.Add(changesSubChild);
+                        }
+                        break;
+                    default:
+                        throw new NotImplementedException();
+                }
+            }
+            else
+            {
+                ApplyChanges(originalChild, changesChild);
+            }
+        }
+    }
+}
+
+void TestKeys(CodeGenerationTools code, EntityType entityType, string e1, string e2, string prefix1 = null, string prefix2 = null)
+{
+    var keysEnumerator = entityType.KeyMembers.GetEnumerator();
+    keysEnumerator.MoveNext();
+    for(;;)
+    {
+        string key = code.Escape(keysEnumerator.Current);
+#><#=e1#>.<#=prefix1 ?? ""#><#=key#> == <#=e2#>.<#=prefix2 ?? ""#><#=key#><#+
+        if (keysEnumerator.MoveNext())
+        {
+#> && <#+
+        }
+        else
+            break;		
+    }
+}
+
+
+void WriteIncludeTypeKeys(CodeGenerationTools code, EntityType entityType, NavigationProperty navigationProperty)
+{
+    var entityTypeName = code.Escape(entityType);
+    foreach (var km in entityType.KeyMembers)
+    {
+#><#=entityTypeName#>1<#=code.Escape(km)#><#+
+    }
+    var toEntityType = navigationProperty.ToEndMember.GetEntityType();
+    var toEntityTypeName = code.Escape(toEntityType);
+    foreach (var km in toEntityType.KeyMembers)
+    {
+#><#=toEntityTypeName#>2<#=code.Escape(km)#><#+
+    }
+}
+
+void WriteIncludeTo(CodeGenerationTools code, EntityType entityType, NavigationProperty navigationProperty)
+{
+    var entityTypeName = code.Escape(entityType);
+    foreach (var km in entityType.KeyMembers)
+    {
+#><#=entityTypeName#><#=code.Escape(km)#><#+
+    }
+#>To<#=code.Escape(navigationProperty.ToEndMember.GetEntityType())#><#+
+}
+
+void InitKeys(CodeGenerationTools code, EntityType entityType, string e, int? index = null, string prefixName = null)
+{
+    var keysEnumerator = entityType.KeyMembers.GetEnumerator();
+    keysEnumerator.MoveNext();
+    for(;;)
+    {
+        string key = code.Escape(keysEnumerator.Current);
+#><#=prefixName ?? ""#><#=index == null ? "" : index.Value.ToString()#><#=key#> = <#=e#>.<#=key#><#+
+        if (keysEnumerator.MoveNext())
+        {
+#>, <#+
+        }
+        else
+            break;		
+    }
+}
+
+void TestNavigationKeys(CodeGenerationTools code, NavigationProperty navigationProperty, string e1 = "e1", string e2 = "e2")
+{
+    IEnumerator<EdmProperty> fromEnumerator, toEnumerator;
+    ReferentialConstraint referentialConstraint;
+    GetNavigationPropertyReferentialConstraintsEnumerators(navigationProperty, out referentialConstraint, out fromEnumerator, out toEnumerator);
+    if (referentialConstraint != null)
+    {
+        bool hasNext = fromEnumerator.MoveNext() & toEnumerator.MoveNext(); 
+        while (hasNext)
+        {
+#><#=e1#>.<#=fromEnumerator.Current#> == <#=e2#>.<#=toEnumerator.Current#><#+
+            hasNext = fromEnumerator.MoveNext() & toEnumerator.MoveNext(); 
+            if (! hasNext)
+                break;
+#> && <#+
+        }
+    }
+}
+#>

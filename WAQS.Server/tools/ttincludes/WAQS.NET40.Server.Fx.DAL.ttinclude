@@ -1,0 +1,45 @@
+<#+
+private void CompleteEntitySet()
+    {
+    }
+
+    private void EFAsyncQueryProviderFactory()
+    {
+    }
+
+    private void CompleteEFAsyncEnumerableFactory()
+    {
+    }
+
+    private void Complete(EntityFrameworkTemplateFileManager fileManager, CodeGenerationTools code, string namespaceName, string serverFxDALInterfacesNamespace)
+    {
+    }
+
+    private void CompleteExceptionHandlerObjectContextUsings(List<string> exceptionHandlerObjectContextUsings)
+    {
+    }
+
+    private void CompleteExceptionHandlerObjectContext()
+    {
+    }
+
+    private void CompleteObjectContextCustomizerCreateObjectContext()
+    {
+    }
+
+    private void CompleteObjectContextCustomizerBaseUsings(List<string> objectContextCustomizerBaseUsings)
+    {
+    }
+
+    private void CompleteObjectContextCustomizerBase()
+    {
+    }
+
+    private void CompleteCustomizableObjectContextUsings(List<string> customizableObjectContextUsings)
+    {
+    }
+
+    private void CompleteCustomizableObjectContext()
+    {
+    }
+#>

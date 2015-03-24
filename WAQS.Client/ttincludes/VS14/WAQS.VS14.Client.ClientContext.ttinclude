@@ -1,0 +1,5 @@
+<#@ include file="WAQS.VS14.Specifications.ttinclude"#>
+<#@ include file="WAQS.VS14.Edmx.Utility.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

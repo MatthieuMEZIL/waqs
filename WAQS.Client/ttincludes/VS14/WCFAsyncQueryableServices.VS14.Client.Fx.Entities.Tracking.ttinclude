@@ -1,5 +1,0 @@
-<#@ include file="WCFAsyncQueryableServices.VS14.Edmx.Utility.ttinclude"#>
-<#@ include file="WCFAsyncQueryableServices.Client.Fx.Entities.Tracking.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

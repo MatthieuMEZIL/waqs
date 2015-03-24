@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Data.Entity.Core;
 using Microsoft.Practices.ServiceLocation;
 using Microsoft.Practices.Unity;
-using WCFAsyncQueryableServices.Common;
-using WCFAsyncQueryableServices.DAL;
+using WAQS.Common;
+using WAQS.DAL;
 
 namespace $RootNamespace$
 {

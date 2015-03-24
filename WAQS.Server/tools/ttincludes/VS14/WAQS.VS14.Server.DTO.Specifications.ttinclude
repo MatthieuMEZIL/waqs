@@ -1,0 +1,7 @@
+<#@ include file="WAQS.VS14.Specifications.ttinclude"#>
+<#@ include file="WAQS.VS14.Edmx.Utility.ttinclude"#>
+<#@ include file="WAQS.Server.DTO.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Microsoft Corporation.  All rights reserved.
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

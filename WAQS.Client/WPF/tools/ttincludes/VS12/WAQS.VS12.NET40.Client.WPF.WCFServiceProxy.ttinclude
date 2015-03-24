@@ -1,0 +1,4 @@
+<#@ include file="WAQS.VS12.Client.WPF.WCFServiceProxy.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

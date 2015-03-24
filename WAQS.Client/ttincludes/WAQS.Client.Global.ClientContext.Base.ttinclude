@@ -1,0 +1,9 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+public class ClientContext
+{
+	public string Name { get; set; }
+	public string WAQS { get; set; }
+}
+#>

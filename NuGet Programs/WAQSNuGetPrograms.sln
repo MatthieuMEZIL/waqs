@@ -1,21 +1,21 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.22512.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWCFAsyncQueryableServicesServer", "InitWCFAsyncQueryableServicesServer\InitWCFAsyncQueryableServicesServer.csproj", "{ADC1BE3B-FEEC-4DE0-9A59-E3172626D586}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSServer", "InitWAQSServer\InitWAQSServer.csproj", "{ADC1BE3B-FEEC-4DE0-9A59-E3172626D586}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWCFAsyncQueryableServicesServerMock", "InitWCFAsyncQueryableServicesServerMock\InitWCFAsyncQueryableServicesServerMock.csproj", "{9D2066A6-EE9A-45E0-BFAC-9C0EF7C15215}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSServerMock", "InitWAQSServerMock\InitWAQSServerMock.csproj", "{9D2066A6-EE9A-45E0-BFAC-9C0EF7C15215}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWCFAsyncQueryableServicesClientWPFGlobal", "InitWCFAsyncQueryableServicesClientWPFGlobal\InitWCFAsyncQueryableServicesClientWPFGlobal.csproj", "{96644329-B632-4D49-AD8A-03B1FE9C1846}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSClientWPFGlobal", "InitWAQSClientWPFGlobal\InitWAQSClientWPFGlobal.csproj", "{96644329-B632-4D49-AD8A-03B1FE9C1846}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWCFAsyncQueryableServicesClientPCL", "InitWCFAsyncQueryableServicesClientPCL\InitWCFAsyncQueryableServicesClientPCL.csproj", "{9906CABA-F6AD-4A77-86DD-CC3BEB9CFCD3}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSClientPCL", "InitWAQSClientPCL\InitWAQSClientPCL.csproj", "{9906CABA-F6AD-4A77-86DD-CC3BEB9CFCD3}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitViewModel", "InitViewModel\InitViewModel.csproj", "{4C32AF7D-D804-4B12-8A9B-AFD9549298EC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWCFAsyncQueryableServicesClientPCLGlobal", "InitWCFAsyncQueryableServicesClientPCLGlobal\InitWCFAsyncQueryableServicesClientPCLGlobal.csproj", "{0C7A8149-4025-48C3-8194-9A45EFD09B5E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSClientPCLGlobal", "InitWAQSClientPCLGlobal\InitWAQSClientPCLGlobal.csproj", "{0C7A8149-4025-48C3-8194-9A45EFD09B5E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWCFAsyncQueryableServicesClientWPF", "InitWCFAsyncQueryableServicesClientWPF\InitWCFAsyncQueryableServicesClientWPF.csproj", "{A2AB0742-94AF-4A07-B517-45601BD40B85}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSClientWPF", "InitWAQSClientWPF\InitWAQSClientWPF.csproj", "{A2AB0742-94AF-4A07-B517-45601BD40B85}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

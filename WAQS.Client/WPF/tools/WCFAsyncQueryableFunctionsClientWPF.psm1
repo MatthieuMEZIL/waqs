@@ -1,4 +1,4 @@
-﻿function GetToolsPath()
+function GetToolsPath()
 {
 	$modules = (Get-Module WCFAsyncQueryableFunctionsClientWPF | select -property path)
 	if ($modules.Length -eq $null -or $modules.Length -eq 1)
@@ -38,7 +38,7 @@ function GetAvailableVersions()
 
 
 
-function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $sourceControl, $netVersion, $option)
+function WAQSClientWPFInternal($edmxPath, $svcUrl, $kind, $sourceControl, $netVersion, $option)
 {
 	if ($kind -eq $null)
 	{
@@ -94,7 +94,7 @@ function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $
 	$toolsPath = GetToolsPath
 	$wpfToolsPath = Join-Path $toolsPath "Client.WPF"
 	$defaultNamespace = ((Get-Project).Properties | ? {$_.Name -eq 'RootNamespace'}).Value
-	$exePath = Join-Path $wpfToolsPath InitWCFAsyncQueryableServicesClientWPF.exe
+	$exePath = Join-Path $wpfToolsPath InitWAQSClientWPF.exe
 	$references = (Get-Project).Object.References
 	$null = $references.Add("System")
 	$null = $references.Add("System.ComponentModel.DataAnnotations")
@@ -282,7 +282,7 @@ function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $
 	   $ttincludesFolder = Join-Path $toolsPath 'ttincludes'
 	   $wpfClientTemplatesProjectItems = $wpfClientTemplates.ProjectItems
 	   $existingWPFClientTTIncludes = $wpfClientTemplatesProjectItems | select -ExpandProperty Name
-	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WCFAsyncQueryableServices.")})
+	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WAQS.")})
 	   {
 	       $m = [System.Text.RegularExpressions.Regex]::Match($ttinclude, '.(NET\d+).')
 	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -333,7 +333,7 @@ function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $
 	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolderVS))
 	   {
            $ttincludeName = [System.IO.Path]::GetFileName($ttinclude)
-           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WCFAsyncQueryableServices."))
+           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WAQS."))
            {
     	       $m = [System.Text.RegularExpressions.Regex]::Match($ttinclude, '.(NET\d+).')
     	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -437,7 +437,7 @@ function WCFAsyncQueryableServicesClientWPFInternal($edmxPath, $svcUrl, $kind, $
 	}
 }
 
-function WCFAsyncQueryableServicesClientWPF($edmxPath, $svcPath, $kind, $sourceControl, $netVersion, $option)
+function WAQSClientWPF($edmxPath, $svcPath, $kind, $sourceControl, $netVersion, $option)
 {
 	$version = ((Get-Project).Properties | ?{$_.Name -eq "TargetFrameworkMoniker"}).Value
 	if (-not $version.StartsWith('.NETFramework,'))
@@ -514,10 +514,10 @@ function WCFAsyncQueryableServicesClientWPF($edmxPath, $svcPath, $kind, $sourceC
     		}
 		}
 	}
-	WCFAsyncQueryableServicesClientWPFInternal $edmxPath $svcUrl $kind $sourceControl $netVersion $option
+	WAQSClientWPFInternal $edmxPath $svcUrl $kind $sourceControl $netVersion $option
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesClientWPF' @{ 
+Register-TabExpansion 'WAQSClientWPF' @{ 
 'edmxPath' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{($_.Name.EndsWith(".edmx")) -and (-not (Test-Path (Join-Path ([System.IO.Path]::GetDirectoryName((Get-Project).FullName)) ("WAQS." + [System.IO.Path]::GetFileNameWithoutExtension($_.Name)))))} | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} }
 'svcPath' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{($_.Name.EndsWith(".svc")) -and (-not (Test-Path (Join-Path ([System.IO.Path]::GetDirectoryName((Get-Project).FullName)) ("WAQS." + [System.IO.Path]::GetFileNameWithoutExtension($_.Name)))))} | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} }
 'kind' = { "All", "WithoutGlobal", "WithoutFramework", "WithoutGlobalWithoutFramework", "FrameworkOnly", "GlobalOnly" }
@@ -525,12 +525,12 @@ Register-TabExpansion 'WCFAsyncQueryableServicesClientWPF' @{
 'netVersion' = { GetAvailableVersions }
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesClientWPF
+Export-ModuleMember WAQSClientWPF
 
 
 
 
-function WCFAsyncQueryableServicesGlobalClientWPFInternal($contexts, $svcUrl, $sourceControl, $netVersion, $option)
+function WAQSGlobalClientWPFInternal($contexts, $svcUrl, $sourceControl, $netVersion, $option)
 {
 	if ($contexts -eq $null)
 	{
@@ -605,7 +605,7 @@ function WCFAsyncQueryableServicesGlobalClientWPFInternal($contexts, $svcUrl, $s
 	{
 	}
 
-	$exePath = Join-Path $toolsPath InitWCFAsyncQueryableServicesClientWPFGlobal.exe
+	$exePath = Join-Path $toolsPath InitWAQSClientWPFGlobal.exe
 	$exeArgs = @('"' + $toolsPath + '"', '"' + $projectDirectoryPath + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $svcUrl +'"', '"' + $contexts + '"', '"' + $defaultNamespace + '"', '"' + $appConfigFilePath + '"', '"' + $appXamlCsFilePath + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"')
 	if ($option -eq 'Debug')
 	{
@@ -623,7 +623,7 @@ function WCFAsyncQueryableServicesGlobalClientWPFInternal($contexts, $svcUrl, $s
 	}
 }
 
-function WCFAsyncQueryableServicesGlobalClientWPF($contexts, $svcPath, $sourceControl, $netVersion, $option)
+function WAQSGlobalClientWPF($contexts, $svcPath, $sourceControl, $netVersion, $option)
 {
 	$version = ((Get-Project).Properties | ?{$_.Name -eq "TargetFrameworkMoniker"}).Value
 	if (-not $version.StartsWith('.NETFramework,'))
@@ -656,22 +656,22 @@ function WCFAsyncQueryableServicesGlobalClientWPF($contexts, $svcPath, $sourceCo
 		}		      
 	    $svcUrl = ($svcProjectProperties | ?{$_.Name -eq "WebApplication.BrowseURL"} | select -ExpandProperty Value) + "/" + $svcPath.SubString(($svcProjectProperties | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value | select -ExpandProperty Length)).Replace("\", "/")
 	}
-	WCFAsyncQueryableServicesGlobalClientWPFInternal $contexts $svcUrl $sourceControl $netVersion $option
+	WAQSGlobalClientWPFInternal $contexts $svcUrl $sourceControl $netVersion $option
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesGlobalClientWPF' @{ 
+Register-TabExpansion 'WAQSGlobalClientWPF' @{ 
 'contexts' = { $DTE.Solution.FindProjectItem("Contexts.xml") | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} } ;
 'svcPath' = { $DTE.Solution.FindProjectItem("Global.svc") | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} } ;
 'sourceControl' = { "WithSourceControl", "WithoutSourceControl" }
 'netVersion' = { GetAvailableVersions };
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesGlobalClientWPF
+Export-ModuleMember WAQSGlobalClientWPF
 
 
 
 
-function WCFAsyncQueryableServicesApplyViewModelWPF($edmxName, $xamlFilePath)
+function WAQSApplyViewModelWPF($edmxName, $xamlFilePath)
 {
 	if ($edmxName -eq $null)
 	{
@@ -726,14 +726,14 @@ function WCFAsyncQueryableServicesApplyViewModelWPF($edmxName, $xamlFilePath)
 	}
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesApplyViewModelWPF' @{ 
+Register-TabExpansion 'WAQSApplyViewModelWPF' @{ 
 'edmxName' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{$_.Name.EndsWith(".edmx")} | select {[System.IO.Path]::GetFileNameWithoutExtension($_.Name)} | select -unique -ExpandProperty * | Sort-Object | foreach {'"' + $_ + '"'} };
 'xamlFilePath' = { (GetAllProjectItems (Get-Project)) | ?{$_.Name.EndsWith(".xaml")} | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} }
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesApplyViewModelWPF
+Export-ModuleMember WAQSApplyViewModelWPF
 
-function UpdateWCFAsyncQueryableServicesClientWPFT4Templates()
+function UpdateWAQSClientWPFT4Templates()
 {
     $projectsT4RootItems = GetProjects | foreach {(GetAllT4RootItems $_)}
     foreach ($file in $projectsT4RootItems | foreach {$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value | ?{$_.EndsWith(".Client.WPF.tt")})
@@ -746,7 +746,7 @@ function UpdateWCFAsyncQueryableServicesClientWPFT4Templates()
     }
 }
 
-Export-ModuleMember UpdateWCFAsyncQueryableServicesClientWPFT4Templates
+Export-ModuleMember UpdateWAQSClientWPFT4Templates
 
 
 function MergeWPFClientTTIncludes()

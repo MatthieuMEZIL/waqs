@@ -1,0 +1,6 @@
+<#@ include file="WAQS.VS14.Edmx.Utility.ttinclude"#>
+<#@ include file="WAQS.Server.DAL.emdx.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+string VsVersion = "VS14";
+#>

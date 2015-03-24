@@ -1,5 +1,5 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
-<WCFAsyncQueryableServices.Client EdmxPath="$edmxPath$">
+<?xml version="1.0" encoding="utf-8" ?>
+<WAQS.Client EdmxPath="$edmxPath$">
   <Specifications>
     <Specification SlnFilePath="$SpecificationsSlnFilePath$" CsprojPath="$SpecificationsCsprojPath$" FolderPath="$SpecificationsFolderPath$" />
   </Specifications>
@@ -10,20 +10,20 @@
   <ClientContext WSDL="$svcUrl$?wsdl" />
   <ClientContextInterfaces />
   <Framework>
-    <ComponentModel NamespaceName="WCFAsyncQueryableServices.ComponentModel" Generate="true" />
-    <EntitiesTracking NamespaceName="WCFAsyncQueryableServices.EntitiesTracking" Generate="true"/>
-    <ClientContext NamespaceName="WCFAsyncQueryableServices.ClientContext" Generate="true" />
-    <ClientContextInterfaces NamespaceName="WCFAsyncQueryableServices.ClientContext.Interfaces" Generate="true" />
-    <Entities NamespaceName="WCFAsyncQueryableServices.Entities" Generate="true" />
-    <System NamespaceName="WCFAsyncQueryableServices.Fx.System" Generate="true" />
+    <ComponentModel NamespaceName="WAQS.ComponentModel" Generate="true" />
+    <EntitiesTracking NamespaceName="WAQS.EntitiesTracking" Generate="true"/>
+    <ClientContext NamespaceName="WAQS.ClientContext" Generate="true" />
+    <ClientContextInterfaces NamespaceName="WAQS.ClientContext.Interfaces" Generate="true" />
+    <Entities NamespaceName="WAQS.Entities" Generate="true" />
+    <System NamespaceName="WAQS.Fx.System" Generate="true" />
   </Framework>
-  <WCFAsyncQueryableServices.Server>
+  <WAQS.Server>
     <Entities SlnFilePath="$ServerEntitiesSlnFilePath$" CsprojPath="$ServerEntitiesCsprojPath$" FolderPath="$ServerEntitiesFolderPath$" NamespaceName="$ServerEntitiesNamespace$" />
     <Framework>
-      <Common NamespaceName="WCFAsyncQueryableServices.Common" />
-      <Specifications NamespaceName="WCFAsyncQueryableServices.Specifications" />
-      <DALInterfaces NamespaceName="WCFAsyncQueryableServices.DAL.Interfaces" />
-      <ServiceInterfaces NamespaceName="WCFAsyncQueryableServices.Service.Interfaces" />
+      <Common NamespaceName="WAQS.Common" />
+      <Specifications NamespaceName="WAQS.Specifications" />
+      <DALInterfaces NamespaceName="WAQS.DAL.Interfaces" />
+      <ServiceInterfaces NamespaceName="WAQS.Service.Interfaces" />
     </Framework>
-  </WCFAsyncQueryableServices.Server>
-</WCFAsyncQueryableServices.Client>
+  </WAQS.Server>
+</WAQS.Client>

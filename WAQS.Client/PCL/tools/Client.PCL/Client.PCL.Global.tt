@@ -1,4 +1,4 @@
-<#@ include file="WCFAsyncQueryableServices.$VSVersion$.$NetVersion$.Client.PCL.Global.ttinclude"#>
+<#@ include file="WAQS.$VSVersion$.$NetVersion$.Client.PCL.Global.ttinclude"#>
 <#WriteClient("Global.Client.PCL.waqs", "$ClientContextNamespace$");#>
 
 

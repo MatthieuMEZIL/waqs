@@ -1,0 +1,99 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerFxWCFServiceExceptionHandler(string serverFxServiceNamespace, string serverFxServiceContractNamespace, string serverFxCommonNamespace, string namespaceName = null)
+{
+CodeGenerationTools code = new CodeGenerationTools(this);
+if (namespaceName == null)
+	namespaceName = code.VsNamespaceSuggestion();
+MetadataLoader loader = new MetadataLoader(this);
+CodeRegion region = new CodeRegion(this, 1);
+MetadataTools ef = new MetadataTools(this);
+
+EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+fileManager.StartNewFile("WCFExceptionHandlerEndpointBehavior.cs");
+WriteHeader(namespaceName, code, "System", "System.ServiceModel.Channels", "System.ServiceModel.Configuration", "System.ServiceModel.Description", "System.ServiceModel.Dispatcher");
+#>
+public class WCFExceptionHandlerEndpointBehavior : BehaviorExtensionElement, IEndpointBehavior
+{
+	public void AddBindingParameters(ServiceEndpoint endpoint, BindingParameterCollection bindingParameters)
+	{
+	}
+
+	public void ApplyClientBehavior(ServiceEndpoint endpoint, ClientRuntime clientRuntime)
+	{
+	}
+
+	public void ApplyDispatchBehavior(ServiceEndpoint endpoint, EndpointDispatcher endpointDispatcher)
+	{
+		var exceptionHandlerMessageInspector = new ExceptionHandlerMessageInspector();
+		endpointDispatcher.DispatchRuntime.MessageInspectors.Add(exceptionHandlerMessageInspector);
+		endpointDispatcher.ChannelDispatcher.ErrorHandlers.Add(new WCFExceptionHandler());
+	}
+
+	public void Validate(ServiceEndpoint endpoint)
+	{
+	}
+
+	public override Type BehaviorType
+	{
+		get { return typeof(WCFExceptionHandlerEndpointBehavior); }
+	}
+
+	protected override object CreateBehavior()
+	{
+		return new WCFExceptionHandlerEndpointBehavior();
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("ExceptionHandlerMessageInspector.cs");
+WriteHeader(namespaceName, code, "System.Net", "System.ServiceModel", "System.ServiceModel.Channels", "System.ServiceModel.Dispatcher");
+#>
+public class ExceptionHandlerMessageInspector : IDispatchMessageInspector
+{
+	public object AfterReceiveRequest(ref Message request, IClientChannel channel, InstanceContext instanceContext)
+	{
+		return null;
+	}
+
+	public void BeforeSendReply(ref Message reply, object correlationState)
+	{
+		if (reply != null && reply.IsFault)
+			reply.Properties[HttpResponseMessageProperty.Name] = new HttpResponseMessageProperty { StatusCode = HttpStatusCode.OK };
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("WCFExceptionHandler.cs");
+WriteHeader(namespaceName, code, "System", "System.Linq", "System.ServiceModel", "System.ServiceModel.Channels", "System.ServiceModel.Dispatcher", "Microsoft.Practices.ServiceLocation");
+#>
+public partial class WCFExceptionHandler : IErrorHandler
+{
+	public bool HandleError(Exception error)
+	{
+		return ! (error is FaultException);
+	}
+	
+	public void ProvideFault(Exception error, MessageVersion version, ref Message fault)
+	{
+		FaultException exception = error as FaultException;
+		if (exception != null)
+			return;
+		exception = <#=serverFxServiceNamespace#>.WCFService.GetFaultException(error, ServiceLocator.Current.GetAllInstances<<#=serverFxCommonNamespace#>.IExceptionDetailFactory>().ToDictionary(edf => edf.Type), ed => new <#=serverFxServiceContractNamespace#>.FaultDetail { ErrorMessage = ed.Message }, fd => DefineFaultDetail(fd));
+		fault = Message.CreateMessage(version, exception.CreateMessageFault(), exception.Action);
+	}
+
+	partial void DefineFaultDetail(<#=serverFxServiceContractNamespace#>.FaultDetail faultDetail);
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.Process();
+}
+#>

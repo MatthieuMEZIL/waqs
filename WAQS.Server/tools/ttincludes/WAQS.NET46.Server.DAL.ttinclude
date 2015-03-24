@@ -1,0 +1,23 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+private void CompleteContextUsings(List<string> contextUsings)
+{
+    contextUsings.Add("System.Threading.Tasks");
+}
+
+private void CompleteContext()
+{
+#>
+    
+
+    async Task IDataContext.SaveChangesAsync(bool acceptChanges)
+    {
+        var saveOption = acceptChanges ? SaveOptions.AcceptAllChangesAfterSave : SaveOptions.None;
+        if (UseWAQSProvider)
+            saveOption |= SaveOptions.DetectChangesBeforeSave;
+        await SaveChangesAsync(saveOption);
+    }
+<#+
+}
+#>

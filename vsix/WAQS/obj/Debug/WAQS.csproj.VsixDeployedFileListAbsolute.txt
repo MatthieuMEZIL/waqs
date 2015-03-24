@@ -1,0 +1,9 @@
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\WAQS.dll
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\Microsoft.Data.Edm.dll
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\Microsoft.Data.OData.dll
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\Microsoft.Data.Services.Client.dll
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\System.Spatial.dll
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\WAQS.pkgdef
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\extension.vsixmanifest
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\WAQSKey.pkgdef
+C:\Users\mamezil\AppData\Local\Microsoft\VisualStudio\14.0Exp\Extensions\WAQS\WAQS\2.0\\WAQS.pdb

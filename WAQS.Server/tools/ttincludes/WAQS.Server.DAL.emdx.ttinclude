@@ -1,0 +1,100 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerDALEdmx(string edmxPath, string dalNamespaceName, string relativePath)
+{
+	edmxPath = Path.GetFullPath(Host.ResolvePath(edmxPath));
+
+	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+	string usedEdmx = Path.GetFileNameWithoutExtension(edmxPath) + ".edmx";
+
+	fileManager.StartNewFile(usedEdmx);
+
+	var edmx = XElement.Load(Host.ResolvePath(edmxPath));
+
+	string edm_ns = GetEDM_NS(edmx);
+	string ssdl_ns = GetSSDL_NS(edmx);
+	string csdl_ns = GetCSDL_NS(edmx);
+	string msl_ns = GetMSL_NS(edmx);
+	string annotation_ns = GetAnnotation_NS(edmx);
+
+	var runtime = edmx.Element(XName.Get("Runtime", edm_ns));
+	
+	var ssdlSchema = runtime.Element(XName.Get("StorageModels", edm_ns)).Element(XName.Get("Schema", ssdl_ns));
+	ssdlSchema.Add(new XElement(XName.Get("Function", ssdl_ns),
+		new XAttribute("Name", "GetDbDateTime"),
+		new XAttribute("IsComposable", "false"),
+		new XElement(XName.Get("CommandText", ssdl_ns),
+			"SELECT GetDate()")));
+
+	var csdlSchema = runtime.Element(XName.Get("ConceptualModels", edm_ns)).Element(XName.Get("Schema", csdl_ns));
+	var entityContainer = csdlSchema.Element(XName.Get("EntityContainer", csdl_ns));
+
+	var lazyLoadingAttribute = entityContainer.Attribute(XName.Get("LazyLoadingEnabled", annotation_ns));
+	if (lazyLoadingAttribute == null)
+		entityContainer.Add(new XAttribute(XName.Get("LazyLoadingEnabled", annotation_ns), "false"));
+	else
+		lazyLoadingAttribute.Value = "false";
+
+	entityContainer.Add(new XElement(XName.Get("FunctionImport", csdl_ns), 
+		new XAttribute("Name", "GetDbDateTime"),
+		new XAttribute("ReturnType", "Collection(DateTime)")));
+	csdlSchema.Add(new XElement(XName.Get("Function", csdl_ns),
+		new XAttribute("Name", "LessThanString"),
+		new XAttribute("ReturnType", "Boolean"),
+		new XElement(XName.Get("Parameter", csdl_ns),
+			new XAttribute("Name", "s1"),
+			new XAttribute("Type", "String")),
+		new XElement(XName.Get("Parameter", csdl_ns),
+			new XAttribute("Name", "s2"),
+			new XAttribute("Type", "String")),
+		new XElement(XName.Get("DefiningExpression", csdl_ns),
+			"s1 < s2")));
+	csdlSchema.Add(new XElement(XName.Get("Function", csdl_ns),
+		new XAttribute("Name", "GreaterThanString"),
+		new XAttribute("ReturnType", "Boolean"),
+		new XElement(XName.Get("Parameter", csdl_ns),
+			new XAttribute("Name", "s1"),
+			new XAttribute("Type", "String")),
+		new XElement(XName.Get("Parameter", csdl_ns),
+			new XAttribute("Name", "s2"),
+			new XAttribute("Type", "String")),
+		new XElement(XName.Get("DefiningExpression", csdl_ns),
+			"s1 > s2")));
+
+	var mslEntityContainerMapping = runtime.Element(XName.Get("Mappings", edm_ns)).Element(XName.Get("Mapping", msl_ns)).Element(XName.Get("EntityContainerMapping", msl_ns));
+	mslEntityContainerMapping.Add(new XElement(XName.Get("FunctionImportMapping", msl_ns), 
+		new XAttribute("FunctionImportName", "GetDbDateTime"),
+		new XAttribute("FunctionName", ssdlSchema.Attribute("Namespace").Value + ".GetDbDateTime")));
+		
+	var designer = edmx.Element(XName.Get("Designer", edmx.Name.NamespaceName));
+	var options = designer.Element(XName.Get("Options", edmx.Name.NamespaceName));
+	var designerInfoPropertySet = options.Element(XName.Get("DesignerInfoPropertySet", edmx.Name.NamespaceName));
+	var designerProperty = designerInfoPropertySet.Elements(XName.Get("DesignerProperty", edmx.Name.NamespaceName)).FirstOrDefault(e => e.Attribute("Name").Value == "CodeGenerationStrategy");
+	if (designerProperty == null)
+		designerInfoPropertySet.Add(new XElement(XName.Get("DesignerProperty", edmx.Name.NamespaceName), new XAttribute("Name", "CodeGenerationStrategy"), new XAttribute("Value", "None")));
+	else
+		designerProperty.Attribute("Value").Value = "None";
+
+	if (EdmxChanges.EdmxApplyChanges(edmxPath, edmx))
+		runtime = edmx.Element(XName.Get("Runtime", edm_ns));
+
+#>
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Copyright (c) Matthieu MEZIL.  All rights reserved. -->
+<edmx:Edmx Version="3.0" xmlns:edmx="<#=edm_ns#>">
+<#=runtime.ToString()#>
+<#=edmx.Element(XName.Get("Designer", edm_ns)).ToString()#>
+</edmx:Edmx>
+<#+
+	fileManager.StartNewFile(Path.GetFileNameWithoutExtension(edmxPath) + ".DAL.Views.tt");
+#>
+<#=
+string.Format("{0}#@ include file=\"{6}WAQS.{5}.{4}.Server.DAL.CSharp.Views{7}.ttinclude\"#{1}{0}#WriteViewGeneration(@\"{2}\", \"{3}\");#{1}", "<", ">", usedEdmx, dalNamespaceName, NetVersion, VsVersion, relativePath ?? "", string.IsNullOrEmpty(relativePath) ? "" : ".merge")#>
+<#+
+	fileManager.Process();
+}
+#>

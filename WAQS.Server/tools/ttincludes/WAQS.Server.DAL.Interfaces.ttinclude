@@ -1,0 +1,166 @@
+<#@ include file="WAQS.Specifications.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+void WriteServerDALInterfaces(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath entitiesPath, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxEntitiesNamespace, string serverEntitiesNamespace, string namespaceName = null)
+{
+    var fileManager = EntityFrameworkTemplateFileManager.Create(this);
+    var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
+    var code = edmxElements.Code;
+    var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Server);
+    CodeRegion region = new CodeRegion(this);
+    bool hasNonExtensionMethods = specificationsElements.NonExtensionMethods.Count != 0;
+
+    if (edmxElements.Container == null)
+        return ;
+
+    string containerName = code.Escape(edmxElements.Container);
+
+    fileManager.StartNewFile(string.Concat("I", containerName, ".cs"));
+
+    WriteHeader(edmxElements.NamespaceName, code, "System", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", serverFxDALInterfacesNamespace, serverFxDALInterfacesNamespace + ".L2E");
+#>
+public partial interface I<#=containerName#> : IObjectContext, IDisposable
+{
+<#+
+        region.Begin("EntitySet Properties", 2);
+
+        foreach (EntitySet entitySet in edmxElements.Container.BaseEntitySets.OfType<EntitySet>())
+        {
+            string entitySetElementTypeFullName = string.Concat(serverEntitiesNamespace, ".", code.Escape(entitySet.ElementType));
+            string entitySetName = code.Escape(entitySet);
+#>
+
+    IEntitySet<<#=entitySetElementTypeFullName#>> <#=entitySetName#> { get; }
+    Expression<Func<IQueryable<<#=entitySetElementTypeFullName#>>>> <#=entitySetName#>Expression { get; }
+<#+
+        }
+
+        region.End();
+#>
+ 
+<#+
+        region.Begin("Function Imports");
+#>
+
+<#+
+        foreach (EdmFunction edmFunction in edmxElements.Container.FunctionImports)
+        {
+            TypeUsage returnType;
+            var returnTypeName = EdmFunctionExtensions.GetReturnTypeName(edmFunction, edmxElements, out returnType);
+            if (returnType == null)
+                continue;
+            var parametersAsString = EdmFunctionExtensions.GetParameters(edmFunction, edmxElements);
+            WriteEdmFunction(code, returnType, returnTypeName, edmFunction, parametersAsString);
+        }
+        region.End();
+
+        region.Begin("Specifications", 1);
+        foreach (var edmType in edmxElements.EdmTypes)
+        {
+            var className = code.Escape(edmType);
+            if (! GetExtensionMethodsPerClass(className, specificationsElements, serverEntitiesNamespace).Any())
+                continue;
+#>
+    I<#=className#>DALSpecifications <#=className#>DALSpecifications { get; }
+<#+
+        }
+        region.End();
+#>
+}
+<#+
+    WriteFooter(edmxElements.NamespaceName);
+
+    foreach (var edmType in edmxElements.EdmTypes)
+    {
+        var className = code.Escape(edmType);
+        var methods = GetExtensionMethodsPerClass(className, specificationsElements, serverEntitiesNamespace).ToList();
+        if (methods.Count == 0)
+            continue;
+        IEnumerable<string> usings = new string[] { "System", "System.Linq", "System.Linq.Expressions", serverEntitiesNamespace };
+        List<string> specificationMethodsUsings;
+        if (specificationsElements.Usings.TryGetValue(className, out specificationMethodsUsings))
+            usings = usings.Union(specificationMethodsUsings);
+        fileManager.StartNewFile(string.Concat("I", className, "DALSpecifications.cs"));
+        WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
+
+        var baseType = GetBaseTypeWithExtensionMethods(edmType, specificationsElements, code, serverEntitiesNamespace);
+        string interfaceInheritance;
+        if (baseType == null)
+            interfaceInheritance = null;
+        else
+            interfaceInheritance = string.Format(": I{0}DALSpecifications", code.Escape(baseType));
+
+#>
+public interface I<#=className#>DALSpecifications <#=interfaceInheritance == null ?  "" : interfaceInheritance#>
+{
+<#+
+        WriteSpecificationMethod(methods, className, specificationsElements.SemanticModelPerMethods, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, specificationsElements, serverEntitiesNamespace, interfaceInheritance != null);
+#>
+}
+<#+
+        WriteFooter(edmxElements.NamespaceName);
+    }
+
+
+
+    fileManager.Process();
+}
+
+void WriteSpecificationMethod(IEnumerable<MethodDeclarationSyntax> methods, string className, ConcurrentDictionary<MethodDeclarationSyntax, ISemanticModel> semanticModelPerMethods, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, SpecificationsElements specificationsElements, string serverEntitiesNamespace, bool inherits)
+{
+    List<MethodDeclarationSyntax> getMethods;
+    if (! specificationsElements.GetMethods.TryGetValue(className, out getMethods))
+        getMethods = new List<MethodDeclarationSyntax>();
+    foreach (var method in methods)
+    {
+        var semanticModel = semanticModelPerMethods[method];
+        var methodSymbol = (IMethodSymbol)semanticModel.GetDeclaredSymbol(method);
+        if (methodSymbol.ReturnsVoid)
+            continue;
+        string methodName = method.Identifier.ValueText;
+        string propertyName;
+        if (getMethods.Contains(method))
+            propertyName = GetPropertyNameFromMethodName(methodName);
+        else
+             propertyName = methodName;
+        bool expIsValid = false;
+        string exp = null;
+        StringBuilder parameterTypes, parameterNames;
+        bool hasContext;
+        string contextParameterName;
+        specificationsElements.GetParametersWithoutContextTransformInterfaces(method, out parameterTypes, out parameterNames, out hasContext, out contextParameterName, serverEntitiesNamespace, className);
+        if (method.Body.Statements.Count == 1)
+            exp = ToExpression(method, specificationsElements, n => n, parameterNames.ToString(), out expIsValid);
+        bool changed = false;
+        var returnType = (TypeSyntax)new TypeRewriter(semanticModel, n => 
+            {
+                TypeSyntax t = n;
+                if (specificationsElements.ReplaceInterface(ref t, semanticModel))
+                {
+                    changed = true;
+                    return (NameSyntax)t;
+                }
+                return n;
+            }).Visit(method.ReturnType);
+        string methodReturnTypeName;
+        if (changed)
+            methodReturnTypeName = returnType.ToString();
+        else
+            methodReturnTypeName = methodSymbol.ReturnType.ToString();
+        var newKeyword = (inherits && method.AttributeLists.SelectMany(a => a.Attributes).Any(a => semanticModel.GetSymbolInfo(a).Symbol.ContainingType.Name == "OverrideAttribute")) ? "new " : "";
+        if (specificationsElements.AllValidateMethods.Contains(method))
+        {
+#>
+    <#=newKeyword#>Expression<Func<<#=parameterTypes.ToString()#><#=parameterTypes.Length == 0 ? "" : ", "#>bool>> <#=propertyName#>ExpressionCondition { get; }
+<#+
+        }
+        else
+        {
+#>
+    <#=newKeyword#>Expression<Func<<#=parameterTypes.ToString()#><#=parameterTypes.Length == 0 ? "" : ", "#><#=methodReturnTypeName#>>> <#=propertyName#>Expression { get; }
+<#+
+        }
+    }
+}
+#>

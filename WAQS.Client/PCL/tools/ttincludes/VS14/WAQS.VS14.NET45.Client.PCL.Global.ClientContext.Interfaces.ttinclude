@@ -1,0 +1,4 @@
+<#@ include file="WAQS.VS14.Client.Global.ClientContext.Interfaces.ttinclude"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+#>

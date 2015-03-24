@@ -1,4 +1,4 @@
-﻿function GetToolsPath()
+function GetToolsPath()
 {
 	$modules = (Get-Module WCFAsyncQueryableFunctionsServer | select -property path)
 	if ($modules.Length -eq $null -or $modules.Length -eq 1)
@@ -38,7 +38,7 @@ function GetAvailableVersions()
 
 
 
-function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $netVersion, $sourceControl, $option)
+function WAQSServerInternal($edmxPath, $kind, $appKind, $netVersion, $sourceControl, $option)
 {
 	if ($kind -eq $null)
 	{
@@ -104,7 +104,7 @@ function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $ne
 	}
 	$assemblyName = ($fxProject.Properties | ?{$_.Name -eq 'AssemblyName'}).Value
 	$assemblyVersion = ($fxProject.Properties | ?{$_.Name -eq 'AssemblyVersion'}).Value
-	$exePath = Join-Path $toolsPathServer InitWCFAsyncQueryableServicesServer.exe
+	$exePath = Join-Path $toolsPathServer InitWAQSServer.exe
 	$references = (Get-Project).Object.References
 	$null = $references.Add("System")
 	$null = $references.Add("System.Configuration")
@@ -289,7 +289,7 @@ function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $ne
 	   $ttincludesFolder = Join-Path $toolsPath 'ttincludes'
 	   $serverTemplatesProjectItems = $serverTemplates.ProjectItems
 	   $existingServerTTIncludes = $serverTemplatesProjectItems | select -ExpandProperty Name
-	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WCFAsyncQueryableServices.")})
+	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WAQS.")})
 	   {
 	       $m = [System.Text.RegularExpressions.Regex]::Match($ttinclude, '.(NET\d+).')
 	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -312,7 +312,7 @@ function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $ne
 	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolderVS))
 	   {
            $ttincludeName = [System.IO.Path]::GetFileName($ttinclude)
-           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WCFAsyncQueryableServices."))
+           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WAQS."))
            {
     	       $m = [System.Text.RegularExpressions.Regex]::Match($ttinclude, '.(NET\d+).')
     	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -444,7 +444,7 @@ function WCFAsyncQueryableServicesServerInternal($edmxPath, $kind, $appKind, $ne
 	}
 }
 
-function WCFAsyncQueryableServicesServer($edmxPath, $kind, $appKind, $sourceControl, $netVersion, $option)
+function WAQSServer($edmxPath, $kind, $appKind, $sourceControl, $netVersion, $option)
 {
 	if ($netVersion -eq $null)
 	{
@@ -463,10 +463,10 @@ function WCFAsyncQueryableServicesServer($edmxPath, $kind, $appKind, $sourceCont
 	   $sourceControl = "WithoutSourceControl"
 	}
 	$edmxPath = [System.Text.RegularExpressions.Regex]::Match($edmxPath, '^\"?(.*?)\"?$').Groups[1].Value
-	WCFAsyncQueryableServicesServerInternal $edmxPath $kind $appKind $netVersion $sourceControl $option
+	WAQSServerInternal $edmxPath $kind $appKind $netVersion $sourceControl $option
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesServer' @{ 
+Register-TabExpansion 'WAQSServer' @{ 
 'edmxPath' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{($_.Name.EndsWith(".edmx")) -and (-not (Test-Path (Join-Path ([System.IO.Path]::GetDirectoryName((Get-Project).FullName)) ("WAQS." + [System.IO.Path]::GetFileNameWithoutExtension($_.Name)))))} | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} }
 'kind' = { "All", "WithoutGlobal", "WithoutFramework", "WithoutGlobalWithoutFramework", "FrameworkOnly", "GlobalOnly" }
 'appKind' = { "Web", "App" }
@@ -474,9 +474,9 @@ Register-TabExpansion 'WCFAsyncQueryableServicesServer' @{
 'netVersion' = { GetAvailableVersions }
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesServer
+Export-ModuleMember WAQSServer
 
-function UpdateWCFAsyncQueryableServicesServerT4Templates()
+function UpdateWAQSServerT4Templates()
 {
     $projectsT4RootItems = GetProjects | foreach {(GetAllT4RootItems $_)}
     foreach ($file in $projectsT4RootItems | foreach {$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value | ?{$_.EndsWith(".Server.tt")})
@@ -489,7 +489,7 @@ function UpdateWCFAsyncQueryableServicesServerT4Templates()
     }
 }
 
-Export-ModuleMember UpdateWCFAsyncQueryableServicesServerT4Templates
+Export-ModuleMember UpdateWAQSServerT4Templates
 
 
 function MergeServerTTIncludes()

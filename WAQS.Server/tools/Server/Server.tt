@@ -1,4 +1,4 @@
-<#@ include file="WCFAsyncQueryableServices.$VSVersion$.$NetVersion$.Server.ttinclude"#>
+<#@ include file="WAQS.$VSVersion$.$NetVersion$.Server.ttinclude"#>
 <#
 WriteServer("$edmxName$.Server.waqs", "$RootNamespace$");
 #>

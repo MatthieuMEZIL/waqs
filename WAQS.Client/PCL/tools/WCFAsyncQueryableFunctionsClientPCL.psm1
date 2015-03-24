@@ -1,4 +1,4 @@
-﻿function GetToolsPath()
+function GetToolsPath()
 {
 	$modules = (Get-Module WCFAsyncQueryableFunctionsClientPCL | select -property path)
 	if ($modules.Length -eq $null -or $modules.Length -eq 1)
@@ -67,7 +67,7 @@ function GetFirstCsFile($projectItem)
 
 
 
-function WCFAsyncQueryableServicesClientPCLInternal($edmxPath, $svcUrl, $kind, $sourceControl, $netVersion, $option)
+function WAQSClientPCLInternal($edmxPath, $svcUrl, $kind, $sourceControl, $netVersion, $option)
 {
 	if ($kind -eq $null)
 	{
@@ -123,7 +123,7 @@ function WCFAsyncQueryableServicesClientPCLInternal($edmxPath, $svcUrl, $kind, $
 	$toolsPath = GetToolsPath
 	$pclToolsPath = Join-Path $toolsPath "Client.PCL"
 	$defaultNamespace = ((Get-Project).Properties | ? {$_.Name -eq 'RootNamespace'}).Value
-	$exePath = Join-Path $pclToolsPath InitWCFAsyncQueryableServicesClientPCL.exe
+	$exePath = Join-Path $pclToolsPath InitWAQSClientPCL.exe
 	$references = (Get-Project).Object.References
 	$null = $references.Add("System")
 	$null = $references.Add("System.Core")
@@ -260,7 +260,7 @@ function WCFAsyncQueryableServicesClientPCLInternal($edmxPath, $svcUrl, $kind, $
 	   $ttincludesFolder = Join-Path $toolsPath 'ttincludes'
 	   $pclClientTemplatesProjectItems = $pclClientTemplates.ProjectItems
 	   $existingPCLClientTTIncludes = $pclClientTemplatesProjectItems | select -ExpandProperty Name
-	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WCFAsyncQueryableServices.")})
+	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolder) | ?{[System.IO.Path]::GetFileName($_).StartsWith("WAQS.")})
 	   {
 	       $m = [System.Text.RegularExpressions.Regex]::Match($ttinclude, '.(NET\d+).')
 	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -310,7 +310,7 @@ function WCFAsyncQueryableServicesClientPCLInternal($edmxPath, $svcUrl, $kind, $
 	   foreach ($ttinclude in [System.IO.Directory]::GetFiles($ttincludesFolderVS))
 	   {
            $ttincludeName = [System.IO.Path]::GetFileName($ttinclude)
-           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WCFAsyncQueryableServices."))
+           if ([System.IO.Path]::GetFileName($ttincludeName).StartsWith("WAQS."))
            {
     	       $m = [System.Text.RegularExpressions.Regex]::Match($ttincludeName, '.(NET\d+).')
     	       if ((-not ($m.Success)) -or ($m.Groups[1].Value -eq $netVersion))
@@ -410,7 +410,7 @@ function WCFAsyncQueryableServicesClientPCLInternal($edmxPath, $svcUrl, $kind, $
 	}
 }
 
-function WCFAsyncQueryableServicesClientPCL($edmxPath, $svcPath, $kind, $sourceControl, $netVersion, $option)
+function WAQSClientPCL($edmxPath, $svcPath, $kind, $sourceControl, $netVersion, $option)
 {
 	$version = ((Get-Project).Properties | ?{$_.Name -eq "TargetFrameworkMoniker"}).Value
 	if (-not $version.StartsWith('.NETPortable,'))
@@ -469,10 +469,10 @@ function WCFAsyncQueryableServicesClientPCL($edmxPath, $svcPath, $kind, $sourceC
 		    $svcUrl = ($svcProjectProperties | ?{$_.Name -eq "WebApplication.BrowseURL"} | select -ExpandProperty Value) + "/" + $svcPath.SubString(($svcProjectProperties | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value | select -ExpandProperty Length)).Replace("\", "/")
 		}
 	}
-	WCFAsyncQueryableServicesClientPCLInternal $edmxPath $svcUrl $kind $sourceControl $netVersion $option
+	WAQSClientPCLInternal $edmxPath $svcUrl $kind $sourceControl $netVersion $option
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesClientPCL' @{ 
+Register-TabExpansion 'WAQSClientPCL' @{ 
 'edmxPath' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{($_.Name.EndsWith(".edmx")) -and (-not (Test-Path (Join-Path ([System.IO.Path]::GetDirectoryName((Get-Project).FullName)) ("WAQS." + [System.IO.Path]::GetFileNameWithoutExtension($_.Name)))))} | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} }
 'svcPath' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{($_.Name.EndsWith(".svc")) -and (-not (Test-Path (Join-Path ([System.IO.Path]::GetDirectoryName((Get-Project).FullName)) ("WAQS." + [System.IO.Path]::GetFileNameWithoutExtension($_.Name)))))} | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} } 
 'kind' = { "All", "WithoutGlobal", "WithoutFramework", "WithoutGlobalWithoutFramework", "FrameworkOnly", "GlobalOnly" }
@@ -480,12 +480,12 @@ Register-TabExpansion 'WCFAsyncQueryableServicesClientPCL' @{
 'netVersion' = { GetAvailableVersions }
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesClientPCL
+Export-ModuleMember WAQSClientPCL
 
 
 
 
-function WCFAsyncQueryableServicesGlobalClientPCLInternal($contexts, $svcUrl, $sourceControl, $netVersion, $option)
+function WAQSGlobalClientPCLInternal($contexts, $svcUrl, $sourceControl, $netVersion, $option)
 {
 	if ($contexts -eq $null)
 	{
@@ -542,7 +542,7 @@ function WCFAsyncQueryableServicesGlobalClientPCLInternal($contexts, $svcUrl, $s
 	}
 	Install-Package Microsoft.Bcl.Async
 
-	$exePath = Join-Path $toolsPath InitWCFAsyncQueryableServicesClientPCLGlobal.exe
+	$exePath = Join-Path $toolsPath InitWAQSClientPCLGlobal.exe
 	$exeArgs = @('"' + $toolsPath + '"', '"' + $projectDirectoryPath + '"', '"' + $netVersion + '"', '"' + $VSVersion + '"', '"' + $svcUrl +'"', '"' + $contexts + '"', '"' + $defaultNamespace + '"', '"' + $sourceControl + '"', '"' + (($DTE.Solution).FullName) + '"')
 	if ($option -eq 'Debug')
 	{
@@ -560,7 +560,7 @@ function WCFAsyncQueryableServicesGlobalClientPCLInternal($contexts, $svcUrl, $s
 	}
 }
 
-function WCFAsyncQueryableServicesGlobalClientPCL($contexts, $svcPath, $sourceControl, $netVersion, $option)
+function WAQSGlobalClientPCL($contexts, $svcPath, $sourceControl, $netVersion, $option)
 {
 	$version = ((Get-Project).Properties | ?{$_.Name -eq "TargetFrameworkMoniker"}).Value
 	if (-not $version.StartsWith('.NETPortable,'))
@@ -593,20 +593,20 @@ function WCFAsyncQueryableServicesGlobalClientPCL($contexts, $svcPath, $sourceCo
 		}		      
 	    $svcUrl = ($svcProjectProperties | ?{$_.Name -eq "WebApplication.BrowseURL"} | select -ExpandProperty Value) + "/" + $svcPath.SubString(($svcProjectProperties | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value | select -ExpandProperty Length)).Replace("\", "/")
 	}
-	WCFAsyncQueryableServicesGlobalClientPCLInternal $contexts $svcUrl $sourceControl $netVersion $option
+	WAQSGlobalClientPCLInternal $contexts $svcUrl $sourceControl $netVersion $option
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesGlobalClientPCL' @{ 
+Register-TabExpansion 'WAQSGlobalClientPCL' @{ 
 'contexts' = { $DTE.Solution.FindProjectItem("Contexts.xml") | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} } 
 'svcPath' = { $DTE.Solution.FindProjectItem("Global.svc") | foreach {$_.Properties | ?{$_.Name -eq 'LocalPath'} | select -ExpandProperty Value} | Sort-Object | foreach {'"' + $_ + '"'} } 
 'sourceControl' = { "WithSourceControl", "WithoutSourceControl" }
 'netVersion' = { GetAvailableVersions }
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesGlobalClientPCL
+Export-ModuleMember WAQSGlobalClientPCL
 
 
-function WCFAsyncQueryableServicesApplyViewModelPCL($edmxName)
+function WAQSApplyViewModelPCL($edmxName)
 {
 	if ($edmxName -eq $null)
 	{
@@ -652,16 +652,16 @@ function WCFAsyncQueryableServicesApplyViewModelPCL($edmxName)
 	}
 }
 
-Register-TabExpansion 'WCFAsyncQueryableServicesApplyViewModelPCL' @{ 
+Register-TabExpansion 'WAQSApplyViewModelPCL' @{ 
 'edmxName' = { GetProjects | foreach {(GetAllProjectItems $_)} | ?{$_.Name.EndsWith(".edmx")} | select {[System.IO.Path]::GetFileNameWithoutExtension($_.Name)} | select -unique -ExpandProperty * | Sort-Object | foreach {'"' + $_ + '"'} }
 }
 
-Export-ModuleMember WCFAsyncQueryableServicesApplyViewModelPCL
+Export-ModuleMember WAQSApplyViewModelPCL
 
 
 
 
-function UpdateWCFAsyncQueryableServicesClientPCLT4Templates()
+function UpdateWAQSClientPCLT4Templates()
 {
     $projectsT4RootItems = GetProjects | foreach {(GetAllT4RootItems $_)}
     foreach ($file in $projectsT4RootItems | foreach {$_.Properties} | ?{$_.Name -eq "LocalPath"} | select -ExpandProperty Value | ?{$_.EndsWith(".Client.PCL.tt")})
@@ -674,7 +674,7 @@ function UpdateWCFAsyncQueryableServicesClientPCLT4Templates()
     }
 }
 
-Export-ModuleMember UpdateWCFAsyncQueryableServicesClientPCLT4Templates
+Export-ModuleMember UpdateWAQSClientPCLT4Templates
 
 
 function MergePCLClientTTIncludes()

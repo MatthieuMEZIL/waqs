@@ -1,0 +1,1776 @@
+<#@ template language="C#" debug="false" hostspecific="true"#>
+<#@ output extension=".txt"#>
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+void WriteServerFxService(string serverFxSerializableExpressionsNamespace, string serverFxCommonNamespace, string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxSpecificationsNamespace, string namespaceName = null)
+{
+    string serverFxDALInterfacesL2ENamespace = serverFxDALInterfacesNamespace + ".L2E";
+
+    CodeGenerationTools code = new CodeGenerationTools(this);
+    MetadataLoader loader = new MetadataLoader(this);
+    CodeRegion region = new CodeRegion(this, 1);
+    if (namespaceName == null)
+        namespaceName = code.VsNamespaceSuggestion();
+
+    EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
+
+    fileManager.StartNewFile("SerializableExpressionToLINQExpressionConverter.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Text.RegularExpressions", "System.Text", serverFxSerializableExpressionsNamespace, serverFxCommonNamespace, serverFxSpecificationsNamespace);
+#>
+public static partial class SerializableExpressionToLINQExpressionConverter
+{
+    public static Expression ToLINQExpression(this SerializableExpression serializableExpression, IEnumerable<string> withSpecificationsProperties, ISerializableExpressionConverter serializableExpressionConverter)
+    {
+        var expressionReference = new Reference<Expression>();
+        new Visitor(expressionReference, withSpecificationsProperties, serializableExpressionConverter).Visit(serializableExpression);
+        return OptimizeSelect(expressionReference.Value, serializableExpressionConverter, type => type);
+    }
+        
+    internal static Expression OptimizeSelect(Expression expression, ISerializableExpressionConverter serializableExpressionConverter, Func<Type, Type> getConstructorType)
+    {
+        var dependentProperties = new List<List<PropertyInfo>>();
+        Expression queryableExpression = expression;
+        MethodCallExpression previousMethodCallExpression;
+        while ((previousMethodCallExpression = queryableExpression as MethodCallExpression) != null && previousMethodCallExpression.Method.DeclaringType == typeof(Enumerable))
+            queryableExpression = previousMethodCallExpression.Arguments[0];
+        if (expression == queryableExpression)
+            return expression;
+        new SelectOptimizerVisitor(queryableExpression, dependentProperties, serializableExpressionConverter).Visit(expression);
+        if (dependentProperties.Count == 0)
+            return expression;
+        Type parameterType;
+        var queryableType = queryableExpression.Type.GetGenericArguments()[0];
+        if (expression.Type.IsGenericType ? expression.Type.GetGenericArguments()[0].IsAssignableFrom(queryableType) : expression.Type.IsAssignableFrom(queryableType))
+            return expression;
+        var newQueryableType = getConstructorType(queryableType);
+        var selectParameter = Expression.Parameter(queryableType);
+        List<string> properties = new List<string>();
+        var distinctDependentProperties = dependentProperties.Select(ps =>
+            {
+                var sb = new StringBuilder();
+                foreach (var p in ps)
+                {
+                    sb.Append(p.Name);
+                    sb.Append(".");
+                }
+                string propertyName = sb.ToString();
+                if (properties.Contains(propertyName))
+                    return null;
+                properties.Add(propertyName);
+                return ps;
+            }).Where(ps => ps != null).ToList();
+        expression = expression.ReplaceExpression(queryableExpression, Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == "Select" && m.GetParameters().Length == 2 && (parameterType = m.GetParameters()[1].ParameterType).IsGenericType && (parameterType = parameterType.GetGenericArguments()[0]).IsGenericType && parameterType.GetGenericArguments().Length == 2).MakeGenericMethod(queryableType, newQueryableType), queryableExpression, Expression.Lambda(OptimizeSelectExpression(serializableExpressionConverter, getConstructorType, newQueryableType, distinctDependentProperties, selectParameter), selectParameter)));
+        return expression;
+    }
+        
+    private static Expression OptimizeSelectExpression(ISerializableExpressionConverter serializableExpressionConverter, Func<Type, Type> getConstructorType, Type newQueryableType, IEnumerable<IEnumerable<PropertyInfo>> dependentProperties, Expression selectParameter)
+    {
+        return Expression.MemberInit(Expression.New(newQueryableType), dependentProperties.GroupBy(dp => dp.First().Name).Select(ps =>
+            {
+                var p = ps.First().First();
+                if (ps.Any(ps2 => ps2.Skip(1).Any()))
+                {
+                    if (ps.Any(ps2 => !ps2.Skip(1).Any()))
+                        return Expression.Bind(p, Expression.MakeMemberAccess(selectParameter, p));
+                    return Expression.Bind(p, OptimizeSelectExpression(serializableExpressionConverter, getConstructorType, getConstructorType(p.PropertyType), ps.Select(ps2 => ps2.Skip(1).ToList()).Where(ps2 => ps2.Count != 0), Expression.MakeMemberAccess(selectParameter, p)));
+                }
+                else
+                {
+                    if (p.GetCustomAttributes(typeof(SpecificationsAttribute), true).Length == 0)
+                        return Expression.Bind(p, Expression.MakeMemberAccess(selectParameter, p));
+                    var exp = (LambdaExpression)serializableExpressionConverter.GetSpecificationLINQExpression(p);
+                    return Expression.Bind(p, exp.Body.ReplaceParameter(exp.Parameters[0], selectParameter));
+                }
+            }));
+    }
+        
+    public static Expression GetConstantExpression(object value, Type type)
+    {
+        var expressionReference = new Reference<Expression>();
+        new Visitor(expressionReference, null, null).VisitConstant(type, value);
+        return expressionReference.Value;
+    }
+        
+    public partial class Visitor : SerializableExpressionVisitor
+    {
+        protected Type _type;
+        protected Reference<Expression> _expressionReference;
+        protected IEnumerable<string> _withSpecificationsProperties;
+        protected ISerializableExpressionConverter _serializableExpressionConverter;
+        protected Dictionary<string, ParameterExpression> _lambdaParameters;
+        protected Dictionary<Expression, bool> _isEnumerableExpressions;
+        
+        public Visitor(Reference<Expression> expressionReference, IEnumerable<string> withSpecificationsProperties, ISerializableExpressionConverter serializableExpressionConverter)
+            : this(expressionReference, withSpecificationsProperties, serializableExpressionConverter, new Dictionary<string, ParameterExpression>(), false, new Dictionary<Expression, bool>())
+        {
+        }
+        
+        protected Visitor(Reference<Expression> expressionReference, IEnumerable<string> withSpecificationsProperties, ISerializableExpressionConverter serializableExpressionConverter, Dictionary<string, ParameterExpression> lambdaParameters, bool isEnumerable, Dictionary<Expression, bool> isEnumerableExpressions)
+        {
+            _expressionReference = expressionReference;
+            _withSpecificationsProperties = withSpecificationsProperties;
+            _serializableExpressionConverter = serializableExpressionConverter;
+            _lambdaParameters = lambdaParameters;
+            IsEnumerable = isEnumerable;
+            _isEnumerableExpressions = isEnumerableExpressions;
+        }
+        
+        public bool IsEnumerable { get; protected set; }
+        
+        private Func<Reference<Expression>, IEnumerable<string>, ISerializableExpressionConverter, Dictionary<string, ParameterExpression>, bool, Dictionary<Expression, bool>, Visitor> _visitorFactory;
+        protected Func<Reference<Expression>, IEnumerable<string>, ISerializableExpressionConverter, Dictionary<string, ParameterExpression>, bool, Dictionary<Expression, bool>, Visitor> VisitorFactory
+        {
+            get { return _visitorFactory; }
+            set { _visitorFactory = value; }
+        }
+        protected Visitor CreateNewVisitor(Reference<Expression> expressionReference, Dictionary<string, ParameterExpression> lambdaParameters = null)
+        {
+            return CreateNewVisitor(expressionReference, null, lambdaParameters);
+        }
+        protected Visitor CreateNewVisitor(Reference<Expression> expressionReference, IEnumerable<string> withSpecificationsProperties, Dictionary<string, ParameterExpression> lambdaParameters = null)
+        {
+            if (lambdaParameters == null)
+                lambdaParameters = _lambdaParameters;
+            if (VisitorFactory == null)
+                return new Visitor(expressionReference, withSpecificationsProperties, _serializableExpressionConverter, lambdaParameters, IsEnumerable, _isEnumerableExpressions);
+            return VisitorFactory(expressionReference, withSpecificationsProperties, _serializableExpressionConverter, lambdaParameters, IsEnumerable, _isEnumerableExpressions);
+        }
+        
+        public override void Visit(SerializableExpression expression)
+        {
+            if (expression == null)
+                return;
+            base.Visit(expression);
+            if (_withSpecificationsProperties != null && _withSpecificationsProperties.Any())
+            {
+                var parameterType = _expressionReference.Value.Type.GetGenericArguments()[0];
+                Type genericType;
+                var enumerableSelectParameter = Expression.Parameter(parameterType);
+                var enumerableSelectMethod = typeof(Enumerable).GetMethods().First(m => m.Name == "Select" && m.GetParameters().Length == 2 && (genericType = m.GetParameters()[1].ParameterType).IsGenericType && genericType.GetGenericArguments().Length == 2);
+                var properties = _withSpecificationsProperties.Select(wsp => _serializableExpressionConverter.GetProperty(parameterType, wsp)).Select(p => new { Property = p, Expression = _serializableExpressionConverter.GetSpecificationLINQExpression(p, parameterType) }).ToList();
+                var queryableProperties = properties.Where(p => p.Expression != null).ToList();
+                var enumerableProperties = properties.Where(p => p.Expression == null).Select(p => p.Property).ToList();
+                if (queryableProperties.Count != 0)
+                {
+                    Expression originalQueryableExp;
+                    ParameterExpression queryableSelectParameter = Expression.Parameter(parameterType);
+                    Expression queryableSelectParameterExp = queryableSelectParameter;
+                    if (IsEnumerable)
+                    {
+                        ParameterExpression queryableSelectParameterTmp;
+                        originalQueryableExp = ExtractQueryable(_expressionReference.Value, out queryableSelectParameterExp, out queryableSelectParameterTmp);
+                        if (queryableSelectParameterTmp != null)
+                        {
+                            if (queryableSelectParameterTmp.Type != queryableSelectParameter.Type || originalQueryableExp == null)
+                            {
+                                enumerableProperties.AddRange(queryableProperties.Select(p => p.Property));
+                                queryableProperties.Clear();
+                            }
+                            else
+                                queryableSelectParameterExp = queryableSelectParameterExp.ReplaceParameter(queryableSelectParameterTmp, queryableSelectParameter);
+                        }
+                        else
+                            queryableSelectParameterExp = queryableSelectParameter;
+                    }
+                    else
+                        originalQueryableExp = _expressionReference.Value;
+                    if (queryableProperties.Count != 0)
+                    {
+                        var withType = _serializableExpressionConverter.GetWithType(parameterType);
+                        var queryableExp = Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == "Select" && m.GetParameters().Length == 2 && (genericType = m.GetParameters()[1].ParameterType).IsGenericType && genericType.GetGenericArguments().Length == 1 && (genericType = genericType.GetGenericArguments()[0]).IsGenericType && genericType.GetGenericArguments().Length == 2).MakeGenericMethod(parameterType, withType), originalQueryableExp, Expression.Quote(Expression.Lambda(Expression.MemberInit(Expression.New(withType.GetConstructor(new Type[0])), new MemberBinding[] { Expression.Bind(withType.GetProperty((_serializableExpressionConverter.GetBaseType(parameterType) ?? parameterType).Name), queryableSelectParameter) }.Union(queryableProperties.Select(p =>
+                                                        {
+                                                            LambdaExpression lambda = (LambdaExpression)p.Expression;
+                                                            return Expression.Bind(p.Property, lambda.Body.ReplaceParameter(lambda.Parameters[0], queryableSelectParameterExp));
+                                                        }))), queryableSelectParameter)));
+                        _isEnumerableExpressions.Add(queryableExp, false);
+                        _expressionReference.Value = _expressionReference.Value.ReplaceExpression(originalQueryableExp, queryableExp);
+                    }
+                }
+                if (enumerableProperties.Count != 0)
+                {
+                    _expressionReference.Value = Expression.Call(enumerableSelectMethod.MakeGenericMethod(parameterType, parameterType), _expressionReference.Value, Expression.Lambda(Expression.Block(/*enumerableProperties.Select(p => (Expression)Expression.Assign(Expression.MakeMemberAccess(enumerableSelectParameter, p), _serializableExpressionConverter.GetSpecificationMethod(enumerableSelectParameter, p))).Union(new Expression[] { enumerableSelectParameter })*/), enumerableSelectParameter));
+                }
+            }
+            if (!_isEnumerableExpressions.ContainsKey(_expressionReference.Value))
+                _isEnumerableExpressions.Add(_expressionReference.Value, IsEnumerable);
+        }
+        
+        public virtual IEnumerable<KeyValuePair<PropertyInfo, Expression>> GetLINQUsableProperties(Type type, ParameterExpression selectParameter, out List<PropertyInfo> notSupportedLINQProperties)
+        {
+            var lambdaNotSupportedLINQProperties = notSupportedLINQProperties = new List<PropertyInfo>();
+            return _serializableExpressionConverter.GetScalarAndComplexProperties(type).Select(p => new KeyValuePair<PropertyInfo, Expression>(p, Expression.MakeMemberAccess(selectParameter, p)))
+                .Union(_withSpecificationsProperties.Select(p =>
+                {
+                    Type baseType = _serializableExpressionConverter.GetBaseType(type) ?? type;
+                    var dalSpecification = (LambdaExpression)_serializableExpressionConverter.GetSpecificationLINQExpression(type.GetProperty(p));
+                    if (dalSpecification == null)
+                    {
+                        var propertyInfo = type.GetProperty(p);
+                        lambdaNotSupportedLINQProperties.Add(propertyInfo);
+                        return new KeyValuePair<PropertyInfo, Expression>(propertyInfo, null);
+                    }
+                    return new KeyValuePair<PropertyInfo, Expression>(type.GetProperty(p), dalSpecification.Body.ReplaceParameter(dalSpecification.Parameters[0], selectParameter));
+                }));
+        }
+        
+        private ParameterExpression GetParameterExpression(SerializableParameterExpression expression, Dictionary<string, ParameterExpression> lambdaParameters = null)
+        {
+            if (lambdaParameters == null)
+                lambdaParameters = _lambdaParameters;
+            ParameterExpression value;
+            if (!lambdaParameters.TryGetValue(expression.Name, out value))
+                lambdaParameters.Add(expression.Name, value = Expression.Parameter(expression.Type.ToType(_serializableExpressionConverter), expression.Name));
+            return value;
+        }
+        
+        protected internal override void VisitTypeBinary(SerializableTypeBinaryExpression expression)
+        {
+            Reference<Expression> exp = new Reference<Expression>();
+            var expVisitor = CreateNewVisitor(exp);
+            expVisitor.Visit(expression.Expression);
+            switch (EnumUtils.GetEnumValue<ExpressionType>(expression.NodeType))
+            {
+                case ExpressionType.TypeIs:
+                    _expressionReference.Value = Expression.TypeIs(exp.Value, expression.TypeOperand.ToType(_serializableExpressionConverter));
+                    break;
+                case ExpressionType.TypeAs:
+                    _expressionReference.Value = Expression.TypeAs(exp.Value, expression.TypeOperand.ToType(_serializableExpressionConverter));
+                    break;
+            }
+        }
+        
+            
+        protected internal override void VisitBinary(SerializableBinaryExpression expression)
+        {
+            Reference<Expression> leftExpression = new Reference<Expression>(), rightExpression = new Reference<Expression>();
+            var leftVisitor = CreateNewVisitor(leftExpression);
+            leftVisitor.Visit(expression.Left);
+            var rightVisitor = CreateNewVisitor(rightExpression);
+            rightVisitor.Visit(expression.Right);
+            if (leftVisitor.IsEnumerable || rightVisitor.IsEnumerable)
+                IsEnumerable = true;
+            MakeBinary(expression, leftExpression.Value, rightExpression.Value);
+        }
+    
+        protected virtual void MakeBinary(SerializableBinaryExpression source, Expression leftExpression, Expression rightExpression)
+        {
+            switch (source.NodeType)
+            {
+                case "Add":
+                    if (leftExpression.Type == typeof(string))
+                    {
+                        _expressionReference.Value = Expression.Add(leftExpression, rightExpression, typeof(string).GetMethod("Concat", new Type[] { typeof(string), typeof(string) }));
+                        return;
+                    }
+                    break;
+            }
+            _expressionReference.Value = Expression.MakeBinary(EnumUtils.GetEnumValue<ExpressionType>(source.NodeType), leftExpression, rightExpression);
+        }
+                
+        protected internal override void VisitConstant(SerializableConstantExpression expression)
+        {
+            Type type = expression.Type.ToType(_serializableExpressionConverter);
+            object value = expression.Value;
+            VisitConstant(type, value);
+        }
+        
+        public void VisitConstant(Type type, object value)
+        {
+            if (value == null)
+                _expressionReference.Value = Expression.Constant(value);
+            else if (type == typeof(int))
+                VisitConstant<int>(value);
+            else if (type == typeof(uint))
+                VisitConstant<uint>(value);
+            else if (type == typeof(short))
+                VisitConstant<short>(value);
+            else if (type == typeof(ushort))
+                VisitConstant<ushort>(value);
+            else if (type == typeof(byte))
+                VisitConstant<byte>(value);
+            else if (type == typeof(long))
+                VisitConstant<long>(value);
+            else if (type == typeof(ulong))
+                VisitConstant<ulong>(value);
+            else if (type == typeof(decimal))
+                VisitConstant<decimal>(value);
+            else if (type == typeof(double))
+                VisitConstant<double>(value);
+            else if (type == typeof(char))
+                VisitConstant<char>(value);
+            else if (type == typeof(DateTime))
+                VisitConstant<DateTime>(value);
+            else if (type == typeof(TimeSpan))
+                VisitConstant<TimeSpan>(value);
+            else if (type == typeof(int?))
+                VisitConstant<int?>(value);
+            else if (type == typeof(uint?))
+                VisitConstant<uint?>(value);
+            else if (type == typeof(short?))
+                VisitConstant<short?>(value);
+            else if (type == typeof(ushort?))
+                VisitConstant<ushort?>(value);
+            else if (type == typeof(byte?))
+                VisitConstant<byte?>(value);
+            else if (type == typeof(long?))
+                VisitConstant<long?>(value);
+            else if (type == typeof(ulong?))
+                VisitConstant<ulong?>(value);
+            else if (type == typeof(decimal?))
+                VisitConstant<decimal?>(value);
+            else if (type == typeof(double?))
+                VisitConstant<double?>(value);
+            else if (type == typeof(char?))
+                VisitConstant<char?>(value);
+            else if (type == typeof(DateTime?))
+                VisitConstant<DateTime?>(value);
+            else if (type == typeof(TimeSpan?))
+                VisitConstant<TimeSpan?>(value);
+            else if (type == typeof(string))
+                VisitConstant<string>(value);
+            else if (typeof(Enum).IsAssignableFrom(type) || type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>) && typeof(Enum).IsAssignableFrom(type.GetGenericArguments()[0]))
+                typeof(Visitor).GetMethods(BindingFlags.NonPublic | BindingFlags.Instance).Single(m => m.Name == "VisitConstant" && m.IsGenericMethod).MakeGenericMethod(type).Invoke(this, new object[] { value });
+            else
+                _expressionReference.Value = Expression.Constant(value);
+        }
+        protected void VisitConstant<T>(dynamic value)
+        {
+            T constant = (T)value;
+            Expression<Func<T>> exp = () => constant;
+            _expressionReference.Value = exp.Body;
+        }
+        
+        protected internal override void VisitConstructor(SerializableConstructorExpression expression)
+        {
+            _type = GetConstructorType(expression.Type.ToType(_serializableExpressionConverter));
+            Expression value = GetConstructorExpression(_type, expression);
+            if (value != null)
+            {
+                _expressionReference.Value = value;
+                return;
+            }
+            if (expression.Arguments.Any(a =>
+                {
+                    Reference<Expression> argumentExpression = new Reference<Expression>();
+                    var argumentVisitor = CreateNewVisitor(argumentExpression);
+                    argumentVisitor.Visit(a);
+                    return argumentVisitor.IsEnumerable;
+                }))
+                IsEnumerable = true;
+            if (expression.Type.IsKnownByServer || expression.Arguments.Count == 0)
+            {
+                _expressionReference.Value = Expression.New(_type.GetConstructor(expression.ArgumentTypes.Select(at => at.ToType(_serializableExpressionConverter)).ToArray()), expression.Arguments.Select(a =>
+                {
+                    Reference<Expression> argumentExpression = new Reference<Expression>();
+                    var argumentVisitor = CreateNewVisitor(argumentExpression);
+                    argumentVisitor.IsEnumerable = IsEnumerable;
+                    argumentVisitor.Visit(a);
+                    return argumentExpression.Value;
+                }));
+                return;
+            }
+            var properties = _type.GetProperties();
+            _expressionReference.Value = Expression.MemberInit(Expression.New(_type.GetConstructor(new Type[0])), expression.Arguments.Select((a, i) =>
+            {
+                Reference<Expression> argumentExpression = new Reference<Expression>();
+                var argumentVisitor = CreateNewVisitor(argumentExpression);
+                argumentVisitor.IsEnumerable = IsEnumerable;
+                argumentVisitor.Visit(a);
+                return Expression.Bind(properties[i], argumentExpression.Value);
+            }));
+        }
+        
+        protected virtual Expression GetConstructorExpression(Type type, SerializableConstructorExpression expression)
+        {
+            return null;
+        }
+        
+        protected virtual Type GetConstructorType(Type type)
+        {
+            return type;
+        }
+        
+        protected internal override void VisitEntitySet(SerializableEntitySetExpression expression)
+        {
+            _expressionReference.Value = _serializableExpressionConverter.GetEntitySetExpression(expression.EntitySetName);
+        }
+        
+        protected internal override void VisitLambda(SerializableLambdaExpression expression)
+        {
+            Reference<Expression> bodyExpression = new Reference<Expression>();
+            Dictionary<string, ParameterExpression> parameters = new Dictionary<string, ParameterExpression>(_lambdaParameters);
+            var parameterExpressions = expression.Parameters.Select(p => GetParameterExpression(p, parameters)).ToArray();
+            var bodyVisitor = CreateNewVisitor(bodyExpression, parameters);
+            bodyVisitor.Visit(expression.Body);
+            if (bodyVisitor.IsEnumerable)
+                IsEnumerable = true;
+            _expressionReference.Value = Expression.Lambda(Type.GetType("System.Func`" + (expression.Parameters.Count + 1).ToString()).MakeGenericType(GetLambdaGenericArguments(expression, bodyExpression.Value)), bodyExpression.Value, parameterExpressions);
+        }
+        
+        protected virtual Type[] GetLambdaGenericArguments(SerializableLambdaExpression expression, Expression body)
+        {
+            var genericTypes = new Type[expression.Parameters.Count + (body.Type == null ? 0 : 1)];
+            int index = 0;
+            foreach (var p in expression.Parameters)
+                genericTypes[index++] = p.Type.ToType(_serializableExpressionConverter);
+            if (body.Type != null)
+                genericTypes[index] = expression.ReturnType.ToType(_serializableExpressionConverter);
+            return genericTypes;
+        }
+        
+        protected internal override void VisitMemberInit(SerializableMemberInitExpression expression)
+        {
+            Reference<Expression> newExpression = new Reference<Expression>();
+            var ctorVisitor = CreateNewVisitor(newExpression);
+            ctorVisitor.Visit(expression.Constructor);
+            if (ctorVisitor.IsEnumerable)
+                IsEnumerable = true;
+            Type type = ctorVisitor._type;
+            List<MemberAssignment> memberAssignments = new List<MemberAssignment>();
+            bool resetMemberAssignments = false;
+            for (; ; )
+            {
+                foreach (var s in expression.Setters)
+                {
+                    Reference<Expression> setterExpression = new Reference<Expression>();
+                    var memberAssignmentVisitor = CreateNewVisitor(setterExpression);
+                    memberAssignmentVisitor.Visit(s.Value);
+                    if (memberAssignmentVisitor.IsEnumerable && !IsEnumerable)
+                    {
+                        IsEnumerable = true;
+                        resetMemberAssignments = true;
+                        break;
+                    }
+                    memberAssignments.Add(Expression.Bind(type.GetProperty(s.MemberName), setterExpression.Value));
+                }
+                if (!resetMemberAssignments)
+                    break;
+                memberAssignments.Clear();
+            }
+            _expressionReference.Value = Expression.MemberInit((NewExpression)newExpression.Value, memberAssignments);
+        }
+        
+        protected internal override void VisitMethodCall(SerializableMethodCallExpression expression)
+        {
+            Reference<Expression> source = new Reference<Expression>();
+            if (expression.Source != null)
+            {
+                var sourceVisitor = CreateNewVisitor(source);
+                sourceVisitor.Visit(expression.Source);
+                if (sourceVisitor.IsEnumerable)
+                    IsEnumerable = true;
+            }
+            var isParametersEnumerable = new List<int>();
+            var method = GetMethodInfo(expression);
+            bool parameterNull = false;
+            List<Expression> parameters = expression.Parameters.Select((p, pi) =>
+            {
+                if (parameterNull)
+                    return null;
+                Visitor visitor;
+                Reference<Expression> parameter = new Reference<Expression>();
+                bool takeOneWithSpecification = false;
+                switch (method.Name)
+                {
+                    case "First":
+                    case "FirstOrDefault":
+                    case "Single":
+                    case "SingleOrDefault":
+                    case "Last":
+                    case "LastOrDefault":
+                        if (method.DeclaringType == typeof(Queryable))
+                        {
+                            if (pi == 1)
+                                return null;
+                            if (expression.Parameters.Count == 2)
+                            {
+                                expression.MemberName = "Where";
+                                expression.Signature = typeof(Queryable).GetMethods().First(m => m.Name == "Where" && m.GetParameters()[1].ParameterType.GetGenericArguments()[0].GetGenericArguments().Length == 2).ToString();
+                                p = expression;
+                                method = method.DeclaringType.GetMethods().First(m => m.Name == method.Name && m.GetParameters().Length == 1).MakeGenericMethod(method.GetGenericArguments());
+                            }
+                        }
+                        visitor = CreateNewVisitor(parameter, _withSpecificationsProperties != null ? new List<string>(_withSpecificationsProperties) : null);
+                        if (_withSpecificationsProperties != null)
+                        {
+                            if (! method.Name.StartsWith("Last"))
+                                takeOneWithSpecification = true;
+                            _withSpecificationsProperties = null;
+                        }
+                        break;
+                    default:
+                        visitor = CreateNewVisitor(parameter);
+                        break;
+                }
+                SerializableConstantExpression serializableConstantExpression;
+                if ((method.DeclaringType == typeof(Enumerable) || method.DeclaringType == typeof(Queryable)) && (method.Name == "Take" || method.Name == "Skip") && (serializableConstantExpression = p as SerializableConstantExpression) != null && serializableConstantExpression.Value is int)
+                    return Expression.Constant(serializableConstantExpression.Value, typeof(int));
+                visitor.Visit(p);
+                if (visitor.IsEnumerable)
+                {
+                    MethodCallExpression arg0;
+                    MethodCallExpression methodCall;
+                    if (takeOneWithSpecification && (arg0 = (methodCall = (MethodCallExpression)parameter.Value).Arguments[0] as MethodCallExpression) != null && arg0.Method.Name == "Select" && arg0.Method.DeclaringType == typeof(Queryable))
+                    {
+                        var expSource = arg0.Arguments[0];
+                        var genericType = arg0.Method.GetGenericArguments()[0];
+                        if (expression.Parameters.Count == 2)
+                        {
+                            var expPredicateReference = new Reference<Expression>();
+                            var expPredicateVisitor = CreateNewVisitor(expPredicateReference);
+                            expPredicateVisitor.Visit(expression.Parameters[1]);
+                            expSource = Expression.Call(typeof(Queryable).GetMethods().First(m => 
+                                {
+                                    ParameterInfo[] mParameters;
+                                    if (m.Name != "Where" || (mParameters = m.GetParameters()).Length != 2)
+                                        return false;
+                                    Type[] genericArgs = mParameters[1].ParameterType.GetGenericArguments();
+                                    return genericArgs.Length == 1 && genericArgs[0].GetGenericArguments().Length == 2;
+                                }).MakeGenericMethod(genericType), expSource, Expression.Quote(expPredicateReference.Value));
+                        }
+                        expSource = Expression.Call(typeof(Queryable).GetMethod("Take").MakeGenericMethod(genericType), expSource, Expression.Constant(1));
+                        _isEnumerableExpressions.Remove(parameter.Value);
+                        var parameterSelectSource = Expression.Call(arg0.Method, expSource, arg0.Arguments[1]);
+                        parameter.Value = Expression.Call(methodCall.Method, parameterSelectSource, methodCall.Arguments[1]);
+                        _isEnumerableExpressions.Add(parameter.Value, true);
+                        _isEnumerableExpressions.Add(parameterSelectSource, false);
+                        parameterNull = true;
+                    }
+                    isParametersEnumerable.Add(pi);
+                }
+                return parameter.Value;
+            }).Where(p => p != null).ToList();
+            var value = VisitMethodCall(source.Value, method, parameters, isParametersEnumerable);
+            if (value != null)
+            {
+                _expressionReference.Value = value;
+                return;
+            }
+            if (isParametersEnumerable.Any() && method.DeclaringType == typeof(Queryable))
+            {
+                IsEnumerable = true;
+                switch (method.Name)
+                {
+                    case "Where":
+                        value = VisitWhereCallEnumerableAndQueryable(expression, method, parameters);
+                        break;
+                    case "ThenBy":
+                    case "ThenByDescending":
+                        value = VisitThenByOrThenByDescendingCallEnumerableAndQueryable(expression, method, parameters);
+                        break;
+                    case "Take":
+                    case "Skip":
+                        value = VisitTakeOrSkipCallEnumerableAndQueryable(expression, method, parameters);
+                        break;
+                    case "First":
+                    case "FirstOrDefault":
+                    case "Single":
+                    case "SingleOrDefault":
+                        value = VisitFirstOrFirstOrDefaultOrSingleOrSingleOrDefaultCallEnumerableAndQueryable(expression, method, parameters);
+                        break;
+                    case "Select":
+                        break;
+                }
+                if (value != null)
+                {
+                    _expressionReference.Value = value;
+                    return;
+                }
+                method = GetMethodInfo(expression);
+                Type[] methodGenericArguments;
+                if (method.GetParameters().Length == 2 && parameters.Count == 1 && (methodGenericArguments = method.GetGenericArguments()).Length == 1)
+                    method = method.DeclaringType.GetMethods().First(m => m.Name == method.Name && m.GetParameters().Length == 1).MakeGenericMethod(methodGenericArguments[0]);
+            }
+            if (method.GetCustomAttributes(typeof(SpecificationsAttribute), true).Length == 0)
+            {
+                if (method.Name == "Contains" && source.Value != null && source.Value.Type != method.DeclaringType && source.Value.Type.GetInterfaces().Contains(typeof(IEnumerable)))
+                {
+                    method = typeof(Enumerable).GetMethods().First(m => m.Name == "Contains" && m.GetParameters().Length == 2).MakeGenericMethod(method.DeclaringType.GetGenericArguments()[0]);
+                    parameters.Insert(0, source.Value);
+                    source.Value = null;
+                }
+                _expressionReference.Value = Expression.Call(source.Value, method, parameters);
+            }
+            else
+            {
+                var dalSpecification = (LambdaExpression)_serializableExpressionConverter.GetSpecificationLINQExpression(method, parameters, source.Value.Type);
+                if (dalSpecification == null || IsEnumerable)
+                {
+                    _expressionReference.Value = Expression.Call(source.Value, method, parameters);
+                    IsEnumerable = true;
+                }
+                else
+                    _expressionReference.Value = dalSpecification.Body.ReplaceParameter(dalSpecification.Parameters[0], source.Value);
+            }
+        }
+        
+        protected virtual Expression VisitMethodCall(Expression source, MethodInfo method, List<Expression> parameters, List<int> isParametersEnumerable)
+        {
+            return null;
+        }
+        
+        protected virtual Expression GetQueryableExpression(Expression expression, Func<MethodCallExpression, bool?> allowedMethod)
+        {
+            Expression previousExpression = expression as MethodCallExpression;
+            if (previousExpression == null)
+                return null;
+            MethodCallExpression previousMethodCallExpression;
+            while ((previousMethodCallExpression = previousExpression as MethodCallExpression) != null)
+            {
+                switch (allowedMethod(previousMethodCallExpression))
+                {
+                    case true:
+                        return previousExpression;
+                    case false:
+                        return null;
+                }
+                if ((previousExpression = previousMethodCallExpression.Arguments.FirstOrDefault()) == null)
+                    break;
+            }
+            return previousExpression;
+        }
+        
+        protected virtual Expression VisitWhereCallEnumerableAndQueryable(SerializableMethodCallExpression expression, MethodInfo method, List<Expression> parameters)
+        {
+            Expression selectExpressionBody;
+            ParameterExpression selectExpressionParameter;
+            Expression previousExpression = ExtractQueryable(parameters[0], out selectExpressionBody, out selectExpressionParameter);
+        
+            List<Expression> queryableExpressions = new List<Expression>();
+            List<Expression> enumerableExpressions = new List<Expression>();
+            Stack<Expression> predicateExpressions = new Stack<Expression>();
+            LambdaExpression lambda = (LambdaExpression)parameters[1];
+            var lambdaParameter = lambda.Parameters[0];
+            predicateExpressions.Push(lambda.Body);
+            if (_isEnumerableExpressions[parameters[1]])
+                while (predicateExpressions.Any())
+                {
+                    var predicate = predicateExpressions.Pop();
+                    BinaryExpression binaryExp = predicate as BinaryExpression;
+                    if (binaryExp != null && predicate.NodeType == ExpressionType.AndAlso)
+                    {
+                        if (_isEnumerableExpressions[binaryExp.Left])
+                            predicateExpressions.Push(binaryExp.Left);
+                        else
+                            queryableExpressions.Add(predicate);
+                        if (_isEnumerableExpressions[binaryExp.Right])
+                            predicateExpressions.Push(binaryExp.Right);
+                        else
+                            queryableExpressions.Add(binaryExp.Right);
+                    }
+                    else
+                        enumerableExpressions.Add(predicate);
+                }
+            else
+                queryableExpressions.Add(lambda.Body);
+        
+            if (queryableExpressions.Count == 0)
+                return null;
+        
+            if (previousExpression == null || !_isEnumerableExpressions.ContainsKey(previousExpression) || _isEnumerableExpressions[previousExpression])
+                throw new InvalidOperationException();
+        
+            _isEnumerableExpressions.Remove(parameters[1]);
+        
+            var whereParameter = Expression.Parameter(method.GetGenericArguments()[0]);
+            _isEnumerableExpressions.Remove(parameters[0]);
+            Func<Expression, Expression> whereLambdaSelector;
+            if (selectExpressionBody == null)
+                whereLambdaSelector = e => e.ReplaceParameter(lambda.Parameters[0], whereParameter);
+            else
+            {
+                whereLambdaSelector = e => e.ReplaceParameter(lambda.Parameters[0], selectExpressionBody);
+                whereParameter = selectExpressionParameter;
+                method = method.GetGenericMethodDefinition().MakeGenericMethod(whereParameter.Type);
+            }
+            var queryableSource = Expression.Call(method, previousExpression, Expression.Quote(Expression.Lambda(queryableExpressions.Select(whereLambdaSelector).Aggregate((e1, e2) => Expression.AndAlso(e1, e2)), whereParameter)));
+            _isEnumerableExpressions.Add(queryableSource, false);
+            parameters[0] = parameters[0].ReplaceExpression(previousExpression, queryableSource);
+            if (!_isEnumerableExpressions.ContainsKey(parameters[0]))
+                _isEnumerableExpressions.Add(parameters[0], true);
+            if (enumerableExpressions.Count == 0)
+                return parameters[0];
+        
+            parameters[1] = (LambdaExpression)parameters[1].ReplaceExpression(lambda.Body, enumerableExpressions.Aggregate((e1, e2) => Expression.AndAlso(e1, e2)));
+            _isEnumerableExpressions.Add(parameters[1], true);
+            return null;
+        }
+        
+        private Expression ExtractQueryable(Expression expression, out Expression selectExpressionBody, out ParameterExpression selectExpressionParameter)
+        {
+            Expression selectExpressionBodyValue = null;
+            ParameterExpression selectExpressionParameterValue = null;
+            Expression previousExpression = GetQueryableExpression(expression, m =>
+            {
+                if (m.Method.DeclaringType != typeof(Enumerable))
+                    return true;
+                switch (m.Method.Name)
+                {
+                    case "Select":
+                        if (_isEnumerableExpressions[m.Arguments[1]])
+                            return false;
+                        var selectLambda = (LambdaExpression)m.Arguments[1];
+                        if (selectExpressionBodyValue == null)
+                            selectExpressionBodyValue = selectLambda.Body;
+                        else
+                            selectExpressionBodyValue = selectExpressionBodyValue.ReplaceParameter(selectExpressionParameterValue, selectLambda.Body);
+                        selectExpressionParameterValue = selectLambda.Parameters[0];
+                        break;
+                    case "SelectMany":
+                    case "GroupBy":
+                    case "GroupJoin":
+                    case "Join":
+                    case "Reverse":
+                    case "Union":
+                    case "Take":
+                    case "Skip":
+                        return false;
+                }
+                return null;
+            });
+            selectExpressionBody = selectExpressionBodyValue;
+            selectExpressionParameter = selectExpressionParameterValue;
+            return previousExpression;
+        }
+        
+        protected virtual Expression VisitThenByOrThenByDescendingCallEnumerableAndQueryable(SerializableMethodCallExpression expression, MethodInfo method, List<Expression> parameters)
+        {
+            expression.Signature = Regex.Replace(expression.Signature, @"ThenBy((?:Descending)?)(.*?)System.Linq.IOrderedQueryable", m =>
+            {
+                expression.MemberName = "OrderBy" + m.Groups[1].Value;
+                return string.Concat(expression.MemberName, m.Groups[2].Value, "System.Collections.Generic.IEnumerable");
+            });
+            return null;
+        }
+        
+        protected virtual Expression VisitTakeOrSkipCallEnumerableAndQueryable(SerializableMethodCallExpression expression, MethodInfo method, List<Expression> parameters)
+        {
+            Expression previousExpression = parameters[0];
+            MethodCallExpression previousMethodCallExpression;
+            MethodInfo previousMethod = null;
+            while ((previousMethodCallExpression = previousExpression as MethodCallExpression) != null && (previousMethod = previousMethodCallExpression.Method).DeclaringType == typeof(Enumerable))
+            {
+                switch (previousMethod.Name)
+                {
+                    case "Where":
+                    case "OrderBy":
+                    case "OrderByDescending":
+                    case "Take":
+                    case "Skip":
+                    case "SelectMany":
+                    case "Distinct":
+                    case "GroupBy":
+                    case "GroupJoin":
+                    case "Join":
+                    case "Reverse":
+                    case "Union":
+                        return null;
+                }
+                if ((previousExpression = previousMethodCallExpression.Arguments.FirstOrDefault()) == null)
+                    break;
+            }
+        
+            if (previousExpression == null || !_isEnumerableExpressions.ContainsKey(previousExpression) || _isEnumerableExpressions[previousExpression])
+                throw new InvalidOperationException();
+        
+            _isEnumerableExpressions.Remove(parameters[0]);
+            var queryableValue = Expression.Call(method.GetGenericMethodDefinition().MakeGenericMethod(previousExpression.Type.GetGenericArguments()[0]), previousExpression, parameters[1]);
+            _isEnumerableExpressions.Add(queryableValue, false);
+            var value = parameters[0].ReplaceExpression(previousExpression, queryableValue);
+            _isEnumerableExpressions.Add(value, true);
+        
+            return value;
+        }
+        
+        protected virtual Expression VisitFirstOrFirstOrDefaultOrSingleOrSingleOrDefaultCallEnumerableAndQueryable(SerializableMethodCallExpression expression, MethodInfo method, List<Expression> parameters)
+        {
+            if (parameters.Count == 2)
+                return null;
+        
+            Expression previousExpression = parameters[0];
+            MethodCallExpression previousMethodCallExpression;
+            MethodInfo previousMethod = null;
+            while ((previousMethodCallExpression = previousExpression as MethodCallExpression) != null && (previousMethod = previousMethodCallExpression.Method).DeclaringType == typeof(Enumerable))
+            {
+                switch (previousMethod.Name)
+                {
+                    case "Where":
+                    case "OrderBy":
+                    case "OrderByDescending":
+                    case "Take":
+                    case "Skip":
+                    case "SelectMany":
+                    case "Distinct":
+                    case "GroupBy":
+                    case "GroupJoin":
+                    case "Join":
+                    case "Reverse":
+                    case "Union":
+                        return null;
+                }
+                if ((previousExpression = previousMethodCallExpression.Arguments.FirstOrDefault()) == null)
+                    break;
+            }
+        
+            if (previousExpression == null || !_isEnumerableExpressions.ContainsKey(previousExpression) || _isEnumerableExpressions[previousExpression])
+                throw new InvalidOperationException();
+        
+            int take;
+            switch (method.Name)
+            {
+                case "First":
+                case "FirstOrDefault":
+                    take = 1;
+                    break;
+                case "Single":
+                case "SingleOrDefault":
+                    take = 2;
+                    break;
+                default:
+                    throw new InvalidOperationException();
+            }
+        
+            _isEnumerableExpressions.Remove(parameters[0]);
+            var queryableValue = Expression.Call(typeof(Queryable).GetMethod("Take").MakeGenericMethod(previousExpression.Type.GetGenericArguments()[0]), previousExpression, Expression.Constant(take, typeof(int)));
+            _isEnumerableExpressions.Add(queryableValue, false);
+            parameters[0] = parameters[0].ReplaceExpression(previousExpression, queryableValue);
+            _isEnumerableExpressions.Add(parameters[0], true);
+        
+            return null;
+        }
+        
+        protected MethodInfo GetMethodInfo(SerializableMethodCallExpression expression)
+        {
+            var declaringType = expression.MemberDeclaringType.ToType(_serializableExpressionConverter, false);
+            if (declaringType == typeof(Queryable) && IsEnumerable)
+            {
+                declaringType = typeof(Enumerable);
+                expression.Signature = Regex.Replace(Regex.Replace(expression.Signature, @"System.Linq.Expressions.Expression`1\[((?>[^\[\]]+|\[(?<DEPTH>)|\](?<-DEPTH>))*(?(DEPTH)(?!)))\]", m => m.Groups[1].Value), @"System.Linq.I(\w*)Queryable", m => m.Groups[1].Value.Length == 0 ? "System.Collections.Generic.IEnumerable" : string.Concat("System.Linq.I", m.Groups[1].Value, "Enumerable"));
+            }
+            var methodInfo = declaringType.GetMethods().Where(mi => mi.Name == expression.MemberName).Select(mi => mi.IsGenericMethod ? mi.GetGenericMethodDefinition() : mi).First(mi => expression.Signature == null || mi.ToString() == expression.Signature);
+            if (expression.GenericArguments.Count != 0)
+                methodInfo = methodInfo.MakeGenericMethod(expression.GenericArguments.Select(ga => ga.ToType(_serializableExpressionConverter)).ToArray());
+            return methodInfo;
+        }
+        
+        protected internal override void VisitParameter(SerializableParameterExpression expression)
+        {
+            _expressionReference.Value = GetParameterExpression(expression);
+        }
+        
+        protected internal override void VisitPropertyGetter(SerializablePropertyGetterExpression expression)
+        {
+            Reference<Expression> source = new Reference<Expression>();
+            if (expression.Source != null)
+                CreateNewVisitor(source).Visit(expression.Source);
+            if (expression.MemberName == "Count" && source.Value.Type.GetProperty(expression.MemberName) == null)
+                _expressionReference.Value = Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Count" && m.GetParameters().Length == 1).MakeGenericMethod(source.Value.Type.GetGenericArguments()[0]), source.Value);
+            else
+            {
+                if (source.Value == null)
+                {
+                    _expressionReference.Value = GetSpecificProperty(expression.MemberName);
+                    return;
+                }
+                var property = source.Value.Type.GetProperty(expression.MemberName);
+                if (property.GetCustomAttributes(typeof(SpecificationsAttribute), true).Length == 0)
+                    _expressionReference.Value = GetPropertyGetterExpression(source.Value, property);
+                else
+                {
+                    var dalSpecification = (LambdaExpression)_serializableExpressionConverter.GetSpecificationLINQExpression(property, source.Value.Type);
+                    if (dalSpecification == null || IsEnumerable)
+                    {
+                        _expressionReference.Value = Expression.MakeMemberAccess(source.Value, property);
+                        IsEnumerable = true;
+                    }
+                    else
+                        _expressionReference.Value = dalSpecification.Body.ReplaceParameter(dalSpecification.Parameters[0], source.Value);
+                }
+            }
+        }
+        
+        protected virtual Expression GetSpecificProperty(string propertyName)
+        {
+            Expression value = null;
+            GetSpecificProperty(propertyName, ref value);
+            if (value != null)
+                return value;
+            throw new InvalidOperationException();
+        }
+        partial void GetSpecificProperty(string propertyName, ref Expression expression);
+        
+        protected virtual Expression GetPropertyGetterExpression(Expression source, PropertyInfo property)
+        {
+            return _serializableExpressionConverter.GetCustomPropertyExpression(source, property) ?? Expression.MakeMemberAccess(source, property);
+        }
+        
+        protected internal override void VisitUnary(SerializableUnaryExpression expression)
+        {
+            Reference<Expression> operand = new Reference<Expression>();
+            var operandVisitor = CreateNewVisitor(operand);
+            operandVisitor.Visit(expression.Operand);
+            _expressionReference.Value = Expression.MakeUnary(EnumUtils.GetEnumValue<ExpressionType>(expression.NodeType), operand.Value, expression.Type.ToType(_serializableExpressionConverter));
+            if (operandVisitor.IsEnumerable)
+                IsEnumerable = true;
+        }
+        
+        protected internal override void VisitConditional(SerializableConditionalExpression expression)
+        {
+            Reference<Expression> test = new Reference<Expression>();
+            var testVisitor = CreateNewVisitor(test);
+            testVisitor.Visit(expression.TestExpression);
+            if (testVisitor.IsEnumerable)
+                IsEnumerable = true;
+            Reference<Expression> ifTrue = new Reference<Expression>();
+            var trueVisitor = CreateNewVisitor(ifTrue);
+            trueVisitor.Visit(expression.IfTrueExpression);
+            if (trueVisitor.IsEnumerable && !IsEnumerable)
+            {
+                IsEnumerable = true;
+                if (!testVisitor.IsEnumerable)
+                {
+                    testVisitor = CreateNewVisitor(test);
+                    testVisitor.Visit(expression.TestExpression);
+                }
+            }
+            Reference<Expression> ifFalse = new Reference<Expression>();
+            var falseVisitor = CreateNewVisitor(ifFalse);
+            falseVisitor.Visit(expression.IfFalseExpression);
+            if (falseVisitor.IsEnumerable && !IsEnumerable)
+            {
+                IsEnumerable = true;
+                if (!testVisitor.IsEnumerable)
+                {
+                    testVisitor = CreateNewVisitor(test);
+                    testVisitor.Visit(expression.TestExpression);
+                }
+                if (!trueVisitor.IsEnumerable)
+                {
+                    trueVisitor = CreateNewVisitor(ifTrue);
+                    trueVisitor.Visit(expression.IfTrueExpression);
+                }
+            }
+            Type type = expression.Type.ToType(_serializableExpressionConverter);
+            _expressionReference.Value = Expression.Condition(test.Value, ifTrue.Value, ifFalse.Value, type);
+        }
+    }
+        
+    private class SelectOptimizerVisitor : ExpressionVisitor
+    {
+        private Expression _queryableExpression;
+        private List<List<PropertyInfo>> _dependentProperties;
+        private ISerializableExpressionConverter _serializableExpressionConverter;
+        private List<List<PropertyInfo>> _currentDependentProperties;
+        private bool _isMember;
+        
+        public SelectOptimizerVisitor(Expression queryableExpression, List<List<PropertyInfo>> dependentProperties, ISerializableExpressionConverter serializableExpressionConverter)
+        {
+            _queryableExpression = queryableExpression;
+            _dependentProperties = dependentProperties;
+            _serializableExpressionConverter = serializableExpressionConverter;
+        }
+        
+        public override Expression Visit(Expression node)
+        {
+            if (node == _queryableExpression)
+                return node;
+            _isMember = false;
+            var value = base.Visit(node);
+            if (!_isMember)
+                _currentDependentProperties = null;
+            return value;
+        }
+        
+        protected override Expression VisitMember(MemberExpression node)
+        {
+            var propertyInfo = node.Member as PropertyInfo;
+            if (propertyInfo != null)
+                AddDependences(propertyInfo);
+            Visit(node.Expression);
+            return node;
+        }
+        
+        protected override Expression VisitMethodCall(MethodCallExpression node)
+        {
+            var properties = _serializableExpressionConverter.GetDependentProperties(node.Method).ToList();
+            if (properties.Count != 0)
+            {
+                if (node.Arguments.Count != 0)
+                {
+                    List<List<PropertyInfo>> argumentProperties = new List<List<PropertyInfo>>();
+                    var visitor = new SelectOptimizerVisitor(null, argumentProperties, _serializableExpressionConverter);
+                    visitor.Visit(node.Arguments[0]);
+                    if (argumentProperties.Count != 0)
+                        properties = (from p in argumentProperties
+                                        from p2 in properties
+                                        select p.Union(p2)).ToList();
+                }
+                AddDependences(properties);
+                return node;
+            }
+            if (node.Method.DeclaringType == typeof(Enumerable))
+            {
+                switch (node.Method.Name)
+                {
+                    case "Select":
+                    case "SelectMany":
+                        Visit(node.Arguments[0]);
+                        List<List<PropertyInfo>> argumentProperties = new List<List<PropertyInfo>>();
+                        var visitor = new SelectOptimizerVisitor(null, argumentProperties, _serializableExpressionConverter);
+                        visitor.Visit(node.Arguments[1]);
+                        if (argumentProperties.Count != 0)
+                        {
+                            List<List<PropertyInfo>> dependentProperties;
+                            if (_currentDependentProperties == null || _currentDependentProperties.Count == 0)
+                                dependentProperties = argumentProperties;
+                            else
+                                dependentProperties = _currentDependentProperties.Union(argumentProperties).Select(ps => ps.ToList()).ToList();
+                            AddDependences(argumentProperties, false);
+                            _currentDependentProperties = dependentProperties;
+                        }
+                        return node;
+                    default:
+                        Visit(node.Arguments[0]);
+                        IEnumerable<IEnumerable<PropertyInfo>> argumentPropertiesAggregation = new IEnumerable<PropertyInfo>[0];
+                        foreach (var a in node.Arguments.Skip(1))
+                        {
+                            argumentProperties = new List<List<PropertyInfo>>();
+                            visitor = new SelectOptimizerVisitor(null, argumentProperties, _serializableExpressionConverter);
+                            visitor.Visit(a);
+                            argumentPropertiesAggregation = argumentPropertiesAggregation.Union(argumentProperties);
+                        }
+                        AddDependences(argumentPropertiesAggregation, false);
+                        return node;
+                }
+            }
+            foreach (var a in node.Arguments)
+            {
+                List<List<PropertyInfo>> argumentProperties = new List<List<PropertyInfo>>();
+                var visitor = new SelectOptimizerVisitor(null, argumentProperties, _serializableExpressionConverter);
+                visitor.Visit(a);
+                if (argumentProperties.Count != 0)
+                    properties = (from p in argumentProperties
+                                    from p2 in properties
+                                    select p.Union(p2)).ToList();
+                AddDependences(properties);
+            }
+            return node;
+        }
+        
+        protected override MemberBinding VisitMemberBinding(MemberBinding node)
+        {
+            var memberAssignment = node as MemberAssignment;
+            MemberExpression memberExpression;
+            if (memberAssignment != null && (memberExpression = memberAssignment.Expression as MemberExpression) != null && memberAssignment.Member == memberExpression.Member)
+                return node;
+            return base.VisitMemberBinding(node);
+        }
+        
+        private void AddDependences(PropertyInfo propertyInfo)
+        {
+            AddDependences(new List<IEnumerable<PropertyInfo>>() { new[] { propertyInfo } });
+        }
+        private void AddDependences(IEnumerable<IEnumerable<PropertyInfo>> propertyDependentProperties, bool applyOnCurrent = true)
+        {
+            _isMember = true;
+            if (propertyDependentProperties == null || !propertyDependentProperties.Any())
+                return;
+            if (_currentDependentProperties == null)
+            {
+                var properties = propertyDependentProperties.Select(ps => ps.ToList()).ToList();
+                if (applyOnCurrent)
+                    _currentDependentProperties = properties;
+                _dependentProperties.AddRange(properties);
+            }
+            else
+            {
+                if (applyOnCurrent)
+                {
+                    foreach (var currentDependentProperties in _currentDependentProperties)
+                        _dependentProperties.Remove(currentDependentProperties);
+                    _dependentProperties.AddRange(_currentDependentProperties = (from propertyDependentSubProperties in propertyDependentProperties
+                                                                                    from currentDependentSubProperties in _currentDependentProperties
+                                                                                    select propertyDependentSubProperties.Union(currentDependentSubProperties).ToList()).ToList());
+                }
+                else
+                    _dependentProperties.AddRange((from propertyDependentSubProperties in _currentDependentProperties
+                                                    from currentDependentSubProperties in propertyDependentProperties
+                                                    select propertyDependentSubProperties.Union(currentDependentSubProperties).ToList()).ToList());
+            }
+        }
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("SerializableExpressionToL2EExpressionConverter.cs");
+    WriteHeader(namespaceName + ".L2E", code, "System", "System.Collections.Concurrent", "System.Collections.Generic", "System.Collections.ObjectModel", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Reflection.Emit", "System.Runtime.Serialization", "System.Threading", serverFxCommonNamespace, serverFxSerializableExpressionsNamespace, serverFxDALInterfacesL2ENamespace);
+#>
+public static partial class SerializableExpressionToL2EExpressionConverter
+{
+    public static Expression ToL2EExpression(this SerializableExpression serializableExpression, IEnumerable<string> withSpecificationsProperties, IObjectContext objectContext, ISerializableExpressionConverter serializableExpressionConverter)
+    {
+        var expressionReference = new Reference<Expression>();
+        new Visitor(expressionReference, withSpecificationsProperties, objectContext, serializableExpressionConverter).Visit(serializableExpression);
+        Dictionary<Type, int> constructorIndexes = new Dictionary<Type,int>();
+        return SerializableExpressionToLINQExpressionConverter.OptimizeSelect(expressionReference.Value, serializableExpressionConverter, type =>
+            {
+                if (!serializableExpressionConverter.GetEntityOrComplexTypes().Any(t => t.IsAssignableFrom(type)))
+                    return type;
+                int index;
+                if (constructorIndexes.TryGetValue(type, out index))
+                    constructorIndexes[type] = ++index;
+                else
+                    constructorIndexes.Add(type, index = 0);
+                return Visitor.GetOrBuildNewInheritedType(type, serializableExpressionConverter, index) ?? type;
+            });
+    }
+                                
+    public static object Convert(object obj)
+    {
+        return Visitor.Convert(obj);
+    }
+                    
+    public static Type GetOriginalType(Type t)
+    {
+        return Visitor.GetOriginalType(t);
+    }
+                                
+    public partial class Visitor : SerializableExpressionToLINQExpressionConverter.Visitor
+    {
+        private IObjectContext _objectContext;
+        private static ConcurrentDictionary<Type, BlockingCollection<Type>> _entityToDTOTypeCache = new ConcurrentDictionary<Type, BlockingCollection<Type>>();
+        private static ConcurrentDictionary<Type, Type> _dtoToEntityTypeCache = new ConcurrentDictionary<Type, Type>();
+        private static ConcurrentDictionary<Type, Func<object, object>> _dtoToEntityCache = new ConcurrentDictionary<Type, Func<object, object>>();
+                                
+        public Visitor(Reference<Expression> expressionReference, IEnumerable<string> withSpecificationsProperties, IObjectContext objectContext, ISerializableExpressionConverter serializableExpressionConverter)
+            : base(expressionReference, withSpecificationsProperties, serializableExpressionConverter)
+        {
+            InitVisitorFactory();
+            _objectContext = objectContext;
+        }
+                            
+        protected Visitor(Reference<Expression> expressionReference, IEnumerable<string> withSpecificationsProperties, ISerializableExpressionConverter serializableExpressionConverter, Dictionary<string, ParameterExpression> lambdaParameters, bool isEnumerable, Dictionary<Expression, bool> isEnumerableExpressions)
+            : base(expressionReference, withSpecificationsProperties, serializableExpressionConverter, lambdaParameters, isEnumerable, isEnumerableExpressions)
+        {
+            InitVisitorFactory();
+        }
+                                
+        private void InitVisitorFactory()
+        {
+            VisitorFactory = (er, wsp, sec, lp, ie, iee) => new Visitor(er, wsp, sec, lp, ie, iee) { _objectContext = _objectContext };
+        }
+                                
+        protected override Expression GetConstructorExpression(Type type, SerializableConstructorExpression expression)
+        {
+            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            {
+                if (expression.Arguments.Count != 1)
+                    throw new NotImplementedException();
+                var argumentExpression = new Reference<Expression>();
+                CreateNewVisitor(argumentExpression, _lambdaParameters).Visit(expression.Arguments[0]);
+                return argumentExpression.Value;
+            }
+            return base.GetConstructorExpression(type, expression);
+        }
+                                
+        protected override Type GetConstructorType(Type type)
+        {
+            return GetInheritedType(type, _serializableExpressionConverter) ?? base.GetConstructorType(type);
+        }
+    
+        internal static Type GetInheritedType(Type type, ISerializableExpressionConverter serializableExpressionConverter)
+        {
+            Type inheritedType = serializableExpressionConverter.GetInheritedType(type);
+            if (inheritedType == null)
+                return null;
+            _dtoToEntityTypeCache.TryAdd(inheritedType, type);
+            _dtoToEntityCache.TryAdd(inheritedType, serializableExpressionConverter.GetBaseObject);
+            return inheritedType;
+        }
+    
+        internal static Type GetOrBuildNewInheritedType(Type type, ISerializableExpressionConverter serializableExpressionConverter, int index)
+        {
+            if (index == 0)
+                return GetInheritedType(type, serializableExpressionConverter);
+            BlockingCollection<Type> inheritedTypes;
+            if (_entityToDTOTypeCache.TryGetValue(type, out inheritedTypes) && inheritedTypes.Count >= index)
+                return inheritedTypes.ElementAt(index - 1);
+            var assemblyName = new AssemblyName(type.Name + Guid.NewGuid().ToString());
+            var appDomain = Thread.GetDomain();
+            var assemblyBuilder = appDomain.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+            var moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name);
+            var typeBuilder = moduleBuilder.DefineType(type.Name, TypeAttributes.Public, type);
+            Type value = typeBuilder.CreateType();
+            if (inheritedTypes == null && (!_entityToDTOTypeCache.TryAdd(type, inheritedTypes = new BlockingCollection<Type>()) && !_entityToDTOTypeCache.TryGetValue(type, out inheritedTypes)))
+                throw new InvalidOperationException();
+            inheritedTypes.Add(value);
+            _dtoToEntityTypeCache.TryAdd(value, type);
+            ParameterExpression parameter = Expression.Parameter(typeof(object));
+            ParameterExpression parameterCast = Expression.Parameter(value);
+            _dtoToEntityCache.TryAdd(value, Expression.Lambda<Func<object, object>>(
+                Expression.Block(
+                    new ParameterExpression[] { parameterCast },
+                    Expression.Assign(parameterCast, Expression.Convert(parameter, value)),
+                    Expression.MemberInit(
+                        Expression.New(type),
+                        value.GetProperties().Where(p => p.CanRead && p.CanWrite).Select(p => Expression.Bind(p, Expression.MakeMemberAccess(parameterCast, value.GetProperty(p.Name)))))),
+                parameter).Compile());
+            return value;
+        }
+                                
+        protected override Type[] GetLambdaGenericArguments(SerializableLambdaExpression expression, Expression body)
+        {
+            Type[] genericArgumentTypes = base.GetLambdaGenericArguments(expression, body);
+            for (int i = 0; i < genericArgumentTypes.Length; i++)
+            {
+                Type type = GetEntityType(genericArgumentTypes[i]);
+                if (type != null)
+                    genericArgumentTypes[i] = type;
+            }
+            return genericArgumentTypes;
+        }
+                                
+        protected internal override void VisitMethodCall(SerializableMethodCallExpression expression)
+        {
+            var methodInfo = GetMethodInfo(expression);
+            if (methodInfo.IsGenericMethod && (methodInfo.GetGenericMethodDefinition() == typeof(Enumerable).GetMethod("ToList") || methodInfo.GetGenericMethodDefinition() == typeof(Enumerable).GetMethod("ToArray")))
+            {
+                CreateNewVisitor(_expressionReference, _lambdaParameters).Visit(expression.Parameters[0]);
+                Type parameterType = methodInfo.GetGenericArguments()[0];
+                var expressionParameter = Expression.Parameter(parameterType);
+                _expressionReference.Value = Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Select" && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2).MakeGenericMethod(parameterType, parameterType), _expressionReference.Value, Expression.Lambda(expressionParameter, expressionParameter));
+                return;
+            }
+            base.VisitMethodCall(expression);
+        }
+        
+        protected override Expression VisitMethodCall(Expression source, MethodInfo method, List<Expression> parameters, List<int> isParametersEnumerable)
+        {
+            if (method.DeclaringType == typeof(Queryable))
+            {
+                switch (method.Name)
+                {
+                    case "OrderBy":
+                    case "OrderByDescending":
+                        if (!isParametersEnumerable.Any())
+                        {
+                            Expression previousExpression = parameters[0];
+                            MethodCallExpression previousMethodCallExpression;
+                            MethodInfo previousMethod;
+                            while ((previousMethodCallExpression = previousExpression as MethodCallExpression) != null && (previousMethod = previousMethodCallExpression.Method).DeclaringType == typeof(Queryable))
+                            {
+                                switch (previousMethod.Name)
+                                {
+                                    case "Select":
+                                    case "SelectMany":
+                                    case "GroupBy":
+                                    case "GroupJoin":
+                                    case "Join":
+                                    case "Reverse":
+                                    case "Union":
+                                    case "Take":
+                                    case "Skip":
+                                        return null;
+                                    case "OrderBy":
+                                    case "OrderByDescending":
+                                        return parameters[0].ReplaceMethodCall(previousMethodCallExpression, Expression.Call(typeof(Queryable).GetMethods().First(m => m.Name == previousMethod.Name.Replace("OrderBy", "ThenBy") && m.GetParameters().Length == 2).MakeGenericMethod(previousMethod.GetGenericArguments()), Expression.Call(method, previousMethodCallExpression.Arguments[0], parameters[1]), previousMethodCallExpression.Arguments[1]));
+                                }
+                                if ((previousExpression = previousMethodCallExpression.Arguments.FirstOrDefault()) == null)
+                                    break;
+                            }
+                        }
+                        break;
+                }
+            }
+
+            return WAQSL2EExpressionTransformation.TransformMethodCall(source, method, parameters, _objectContext) ?? base.VisitMethodCall(source, method, parameters, isParametersEnumerable); 
+        }
+                                
+        protected override Expression GetPropertyGetterExpression(Expression source, PropertyInfo property)
+        {
+            if (property.Name == "Count" && source.Type.IsGenericType && typeof(Collection<>).MakeGenericType(source.Type.GetGenericArguments()[0]).IsAssignableFrom(source.Type))
+                return Expression.Call(typeof(Enumerable).GetMethods().First(m => m.Name == "Count" && m.GetParameters().Length == 1).MakeGenericMethod(source.Type.GetGenericArguments()[0]), source);
+            return WAQSL2EExpressionTransformation.TransformProperty(source, property, _objectContext) ?? base.GetPropertyGetterExpression(source, property);
+        }
+                            
+        protected override Expression GetSpecificProperty(string propertyName)
+        {
+            switch (propertyName)
+            {
+                case "DbDateTime":
+                    return _objectContext.GetDbDateTimeExpression();
+            }
+            Expression value = null;
+            GetSpecificProperty(propertyName, ref value);
+            return value ?? base.GetSpecificProperty(propertyName);
+        }
+        partial void GetSpecificProperty(string propertyName, ref Expression expression);
+    
+        protected internal override void VisitUnary(SerializableUnaryExpression expression)
+        {
+            base.VisitUnary(expression);
+            var exp = (UnaryExpression)_expressionReference.Value;
+            if (exp.NodeType == ExpressionType.Convert && exp.Type.GetCustomAttributes(typeof(DataContractAttribute), false).Any())
+                _expressionReference.Value = Expression.TypeAs(exp.Operand, exp.Type);
+        }
+                                
+        public Type GetEntityType(Type type)
+        {
+            return _serializableExpressionConverter.GetBaseType(type) ?? type;
+        }
+                                
+        public static object Convert(object obj)
+        {
+            if (obj == null)
+                return null;
+                                
+            Func<object, object> convert;
+            if (_dtoToEntityCache.TryGetValue(obj.GetType(), out convert))
+                return convert(obj);
+            return obj;
+        }
+                    
+        public static Type GetOriginalType(Type type)
+        {
+            Type value;
+            return _dtoToEntityTypeCache.TryGetValue(type, out value) ? value : type;
+        }
+
+        protected override void MakeBinary(SerializableBinaryExpression source, Expression leftExpression, Expression rightExpression)
+        {
+            if ((_expressionReference.Value = WAQSL2EExpressionTransformation.TransformBinary(source.NodeType, leftExpression, rightExpression, _objectContext)) == null)
+                base.MakeBinary(source, leftExpression, rightExpression);
+        }
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("Reference.cs");
+    WriteHeader(namespaceName, code);
+#>
+public class Reference<T>
+{
+    public T Value { get; set; }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("SerializableExpressionProvider.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System.Linq.Expressions", serverFxServiceInterfacesNamespace, serverFxSerializableExpressionsNamespace);
+#>
+public class SerializableExpressionProvider : ISerializableExpressionProvider
+{
+    private Func<SerializableExpression, IEnumerable<string>, Expression> _expressionConverter;
+    private Func<object, object> _convert;
+    private Func<Type, Type> _getOriginalType;
+    
+    public SerializableExpressionProvider(Func<SerializableExpression, IEnumerable<string>, Expression> expressionConverter, Func<object, object> convert, Func<Type, Type> getOriginalType)
+    {
+        _expressionConverter = expressionConverter;
+        _convert = convert;
+        _getOriginalType = getOriginalType;
+    }
+    
+    public Expression ToExpression(SerializableExpression serializableExpression, IEnumerable<string> withSpecificationsProperties)
+    {
+        return _expressionConverter(serializableExpression, withSpecificationsProperties);
+    }
+
+    public virtual Type GetOriginalType(Type type)
+    {
+        return _getOriginalType(type);
+    }
+
+    public virtual object Convert(object p)
+    {
+        if (p == null)
+            return null;
+        return _convert(p);
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ServiceBase.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections", "System.Collections.Generic", "System.IO", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Runtime.Serialization", serverFxServiceInterfacesNamespace);
+#>
+public abstract partial class ServiceBase
+{
+    protected abstract Func<ISerializableExpressionProvider> SerializableExpressionProviderFactory { get; }
+    
+    protected static bool HasManyResult(Type type)
+    {
+        return type != typeof(string) && typeof(IEnumerable).IsAssignableFrom(type);
+    }
+    
+    protected static bool IsGrouping(Type type)
+    {
+        return type.IsGenericType && (type.GetGenericTypeDefinition() == typeof(IGrouping<,>) || type.GetGenericTypeDefinition().GetInterfaces().Any(i => i == typeof(IGrouping<,>)));
+    }
+    
+    protected Type GetGenericType(Type type)
+    {
+        if (type.IsGenericType)
+            return type.GetGenericArguments()[0];
+        if (type.IsArray)
+            return type.GetElementType();
+        throw new NotImplementedException();
+    }
+    
+    protected bool IsNullable(Type type)
+    {
+        return Expression.Lambda(Expression.Default(type)).Compile().DynamicInvoke() == null;
+    }
+    
+    protected bool IsClientKnownType(Type type)
+    {
+        return type.Namespace != null && type.Namespace.StartsWith("System") && type.Assembly.ManifestModule.Name == "mscorlib.dll" || type.GetCustomAttributes(typeof(DataContractAttribute), true).OfType<DataContractAttribute>().Any();
+    }
+    
+    
+    protected Expression<Func<object, QueryResultRecord>> CreateQueryResultExpression(Type type, Type originalType)
+    {
+        var objectParameter = Expression.Parameter(typeof(object));
+        var typedObjectParameter = Expression.Convert(objectParameter, type);
+        var queryResultVariable = Expression.Variable(typeof(QueryResultRecord));
+        bool isNullable = IsNullable(type);
+    
+        Expression lambdaBody;
+        if (isNullable)
+            lambdaBody = Expression.IfThenElse(
+                Expression.Equal(
+                    objectParameter,
+                    Expression.Constant(null, typeof(object))),
+                Expression.Assign(
+                    queryResultVariable,
+                    Expression.Constant(null, typeof(QueryResultRecord))),
+                GetQueryResultExpression(type, originalType, typedObjectParameter, queryResultVariable));
+        else
+            lambdaBody = GetQueryResultExpression(type, originalType, typedObjectParameter, queryResultVariable);
+    
+        return Expression.Lambda<Func<object, QueryResultRecord>>(
+            Expression.Block(
+                new ParameterExpression[] { queryResultVariable },
+                lambdaBody,
+                queryResultVariable),
+            objectParameter);
+    }
+    
+    protected Expression GetQueryResultExpression(Type type, Type originalType, Expression obj, ParameterExpression queryResultVariable)
+    {
+        bool isNullable = IsNullable(type);
+        var valueVariable = Expression.Variable(originalType);
+        var serializableExpressionProvider = ((Expression<Func<ISerializableExpressionProvider>>)(() => SerializableExpressionProviderFactory())).Body;
+    
+        Expression lambdaBody1;
+        if (isNullable && !IsClientKnownType(type))
+        {
+            if (IsGrouping(originalType))
+                lambdaBody1 =
+                    Expression.Assign(
+                        queryResultVariable,
+                        GetGroupingExpression(originalType, obj));
+            else
+                lambdaBody1 =
+                    Expression.Assign(
+                        queryResultVariable,
+                        Expression.MemberInit(
+                            Expression.New(typeof(QueryResultRecord)),
+                            Expression.Bind(
+                                typeof(QueryResultRecord).GetProperty("Properties"),
+                                GetPropertiesExpression(type, valueVariable))));
+        }
+        else
+            lambdaBody1 =
+                Expression.Assign(
+                    queryResultVariable,
+                    Expression.MemberInit(
+                        Expression.New(typeof(QueryResultRecord)),
+                        Expression.Bind(
+                            typeof(QueryResultRecord).GetProperty("SerializedValue"),
+                            GetSerializedObject(type, valueVariable))));
+    
+        List<Expression> lambdaBodyExpressions = new List<Expression>()
+            {
+                isNullable ? 
+                    Expression.IfThen(
+                        Expression.NotEqual(
+                            valueVariable,
+                            Expression.Constant(null, typeof(object))),
+                        lambdaBody1) : 
+                    lambdaBody1
+            };
+    
+        if (isNullable && originalType.IsClass)
+            lambdaBodyExpressions.Insert(0,
+                Expression.Assign(
+                    valueVariable,
+                    Expression.Convert(
+                        Expression.Call(
+                            serializableExpressionProvider,
+                            typeof(ISerializableExpressionProvider).GetMethod("Convert", new Type[] { typeof(object) }),
+                            obj),
+                        originalType)));
+        else
+            lambdaBodyExpressions.Insert(0,
+                Expression.Assign(
+                    valueVariable,
+                    obj));
+    
+        return Expression.Block(
+            new ParameterExpression[] { valueVariable },
+            lambdaBodyExpressions);
+    }
+    
+    protected ListInitExpression GetPropertiesExpression(Type type, Expression obj)
+    {
+        return Expression.ListInit(
+            Expression.New(typeof(List<QueryResultProperty>).GetConstructor(new Type[0])),
+            type.GetProperties().Select(p =>
+                Expression.ElementInit(
+                    typeof(List<QueryResultProperty>).GetMethod("Add"),
+                    GetPropertyExpression(
+                        p,
+                        obj))).ToArray());
+    }
+    
+    protected Expression GetPropertyExpression(PropertyInfo p, Expression obj)
+    {
+        return GetPropertyExpression(p.Name, p.PropertyType, Expression.MakeMemberAccess(obj, p));
+    }
+    protected Expression GetPropertyExpression(string propertyName, Type propertyType, Expression obj)
+    {
+        var newQueryResultPropertyExpression = Expression.New(typeof(QueryResultProperty));
+    
+        if (!IsNullable(propertyType))
+            return Expression.MemberInit(
+                newQueryResultPropertyExpression,
+                Expression.Bind(
+                    typeof(QueryResultProperty).GetProperty("PropertyName"),
+                    Expression.Constant(propertyName)),
+                Expression.Bind(
+                    typeof(QueryResultProperty).GetProperty("SerializedValue"),
+                    GetSerializedObject(propertyType, obj)));
+    
+        if (HasManyResult(propertyType))
+        {
+            if (IsGrouping(propertyType))
+                return Expression.MemberInit(
+                    newQueryResultPropertyExpression,
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("PropertyName"),
+                        Expression.Constant(propertyName)),
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("Value"),
+                        GetGroupingExpression(propertyType, obj)));
+            else
+            {
+                var elementType = GetGenericType(propertyType);
+                var selectParameter = Expression.Parameter(elementType);
+                var valueVariable = Expression.Variable(typeof(QueryResultRecord));
+                return Expression.MemberInit(
+                    newQueryResultPropertyExpression,
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("PropertyName"),
+                        Expression.Constant(propertyName)),
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("Values"),
+                        Expression.Call(
+                            typeof(Enumerable).GetMethod("ToList").MakeGenericMethod(typeof(QueryResultRecord)),
+                            Expression.Call(
+                                typeof(Enumerable).GetMethods().First(m => m.Name == "Select" && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2).MakeGenericMethod(elementType, typeof(QueryResultRecord)),
+                                obj,
+                                Expression.Lambda(
+                                    Expression.Block(
+                                        new ParameterExpression[] { valueVariable },
+                                        GetQueryResultExpression(elementType, SerializableExpressionProviderFactory().GetOriginalType(elementType), selectParameter, valueVariable),
+                                        valueVariable),
+                                    selectParameter)))));
+            }
+        }
+        else
+        {
+            if (IsClientKnownType(propertyType))
+            {
+                return Expression.MemberInit(
+                    newQueryResultPropertyExpression,
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("PropertyName"),
+                        Expression.Constant(propertyName)),
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("SerializedValue"),
+                        GetSerializedObject(propertyType, obj)));
+            }
+            else
+            {
+                return Expression.MemberInit(
+                    newQueryResultPropertyExpression,
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("PropertyName"),
+                        Expression.Constant(propertyName)),
+                    Expression.Bind(
+                        typeof(QueryResultProperty).GetProperty("Value"),
+                        GetAnonymousType(propertyType, obj)));
+            }
+        }
+    }
+    
+    protected Expression GetValue(Type type, Expression objExpression)
+    {
+        int indexEnumerable = 0;
+        var typeLoop = type;
+        var types = new List<Type>() { type };
+        while (typeLoop.IsGenericType && typeLoop.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+        {
+            indexEnumerable++;
+            typeLoop = typeLoop.GetGenericArguments()[0];
+            types.Insert(0, typeLoop);
+        }
+    
+        var serializableExpressionProvider = SerializableExpressionProviderFactory();
+        var serializableExpressionProviderExpression = ((Expression<Func<ISerializableExpressionProvider>>)(() => SerializableExpressionProviderFactory())).Body;
+    
+        var originalType = serializableExpressionProvider.GetOriginalType(typeLoop);
+    
+        if (!(originalType.IsClass || originalType.IsInterface))
+            return objExpression;
+    
+        if (indexEnumerable == 0)
+            return Expression.Convert(
+                Expression.Call(
+                    serializableExpressionProviderExpression,
+                    typeof(ISerializableExpressionProvider).GetMethod("Convert", new Type[] { typeof(object) }),
+                    objExpression),
+                originalType);
+    
+        var originalTypes = new List<Type>() { originalType };
+        for (int i = 0; i < indexEnumerable - 1; i++)
+            originalTypes.Add(typeof(IEnumerable<>).MakeGenericType(originalTypes[i]));
+    
+        var selectMethod = typeof(Enumerable).GetMethods().First(m => m.Name == "Select" && m.GetParameters().Length == 2 && m.GetParameters()[1].ParameterType.IsGenericType && m.GetParameters()[1].ParameterType.GetGenericArguments().Length == 2);
+    
+        var selectLambdas = new List<LambdaExpression>();
+        var convertParameter = Expression.Parameter(typeLoop);
+        selectLambdas.Add(
+            Expression.Lambda(
+                Expression.Convert(
+                        Expression.Call(
+                            serializableExpressionProviderExpression,
+                            typeof(ISerializableExpressionProvider).GetMethod("Convert", new Type[] { typeof(object) }),
+                            convertParameter),
+                        originalType), 
+                convertParameter));
+        for (int i = 0; i < indexEnumerable - 1; i++)
+        {
+            var parameterLoop = Expression.Parameter(typeof(IEnumerable<>).MakeGenericType(typeLoop));
+            selectLambdas.Add(
+                Expression.Lambda(
+                    Expression.Call(
+                        selectMethod.MakeGenericMethod(types[i], originalTypes[i]),
+                        parameterLoop,
+                        selectLambdas[i]),
+                parameterLoop));
+        }
+        return Expression.Call(selectMethod.MakeGenericMethod(types[indexEnumerable - 1], originalTypes[indexEnumerable - 1]), objExpression, selectLambdas[selectLambdas.Count - 1]);
+    }
+    
+    protected Expression GetSerializedObject(Type type, Expression obj)
+    {
+        obj = GetValue(type, obj);
+    
+        if (!(type.IsClass || type.IsInterface))
+            obj = Expression.Convert(obj, typeof(object));
+    
+        var valueVariable = Expression.Variable(typeof(string));
+        var memoryStreamVariable = Expression.Variable(typeof(MemoryStream));
+        var streamReaderVariable = Expression.Variable(typeof(StreamReader));
+        return Expression.Block(
+            new ParameterExpression[] { valueVariable, memoryStreamVariable, streamReaderVariable },
+            Expression.Assign(
+                memoryStreamVariable,
+                Expression.New(typeof(MemoryStream).GetConstructor(new Type[0]))),
+            Expression.Call(
+                Expression.New(
+                    typeof(DataContractSerializer).GetConstructor(new Type[] { typeof(Type) }),
+                    Expression.Constant(type)),
+                typeof(DataContractSerializer).GetMethod("WriteObject", new Type[] { typeof(Stream), typeof(object) }),
+                memoryStreamVariable,
+                obj),
+            Expression.Call(
+                memoryStreamVariable,
+                typeof(MemoryStream).GetMethod("Flush")),
+            Expression.Call(
+                memoryStreamVariable,
+                typeof(MemoryStream).GetMethod("Seek"),
+                Expression.Constant(0L),
+                Expression.Constant(SeekOrigin.Begin)),
+            Expression.Assign(
+                streamReaderVariable,
+                Expression.New(
+                    typeof(StreamReader).GetConstructor(new Type[] { typeof(Stream) }),
+                    memoryStreamVariable)),
+            Expression.Assign(
+                valueVariable,
+                Expression.Call(
+                    streamReaderVariable,
+                    typeof(StreamReader).GetMethod("ReadToEnd"))),
+            Expression.Call(
+                streamReaderVariable,
+                typeof(StreamReader).GetMethod("Dispose")),
+            Expression.Call(
+                memoryStreamVariable,
+                typeof(MemoryStream).GetMethod("Dispose")),
+            valueVariable);
+    }
+    
+    protected MemberInitExpression GetGroupingExpression(Type type, Expression obj)
+    {
+        var keyProp = type.GetProperty("Key");
+        return Expression.MemberInit(
+            Expression.New(typeof(QueryResultRecord)),
+            Expression.Bind(
+                typeof(QueryResultRecord).GetProperty("Properties"),
+                Expression.ListInit(
+                    Expression.New(typeof(List<QueryResultProperty>).GetConstructor(new Type[0])),
+                        GetPropertyExpression(keyProp, obj),
+                        GetPropertyExpression("Values", typeof(IEnumerable<>).MakeGenericType(type.GetGenericArguments()[1]), obj))));
+    }
+    
+    protected MemberInitExpression GetAnonymousType(Type type, Expression obj)
+    {
+        return Expression.MemberInit(
+            Expression.New(typeof(QueryResultRecord)),
+            Expression.Bind(
+                typeof(QueryResultRecord).GetProperty("Properties"),
+                Expression.ListInit(
+                    Expression.New(typeof(List<QueryResultProperty>).GetConstructor(new Type[0])),
+                    type.GetProperties().Select(p => GetPropertyExpression(p, obj)))));
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("ValidationException.cs");
+    WriteHeader(namespaceName, code, "System", "System.Collections.Generic", serverFxServiceInterfacesNamespace);
+#>
+public class ValidationException : Exception
+{
+    public ValidationException(IEnumerable<Error> errors)
+    {
+        _errors = errors;
+    }
+    
+    private IEnumerable<Error> _errors;
+    public IEnumerable<Error> Errors 
+    { 
+        get { return _errors; } 
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.Process();
+}
+#>

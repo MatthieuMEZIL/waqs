@@ -1,4 +1,4 @@
-﻿using EnvDTE;
+using EnvDTE;
 using Microsoft.Win32;
 using System;
 using System.Collections;
@@ -68,7 +68,7 @@ namespace WAQS
             var templatesProjectItems = (ProjectItems)templates.ProjectItems;
             var existingTTIncludes = new HashSet<string>(templatesProjectItems.Cast<ProjectItem>().Select(pi => pi.Name));
             string ttIncludeName = null;
-            foreach (var ttInclude in Directory.GetFiles(ttincludesFolder).Where(f => (ttIncludeName = Path.GetFileName(f)).StartsWith("WCFAsyncQueryableServices.")))
+            foreach (var ttInclude in Directory.GetFiles(ttincludesFolder).Where(f => (ttIncludeName = Path.GetFileName(f)).StartsWith("WAQS.")))
             {
                 var m = Regex.Match(ttInclude, @".(NET\d+).");
                 if (!m.Success || m.Groups[1].Value == netVersion)
@@ -111,7 +111,7 @@ namespace WAQS
                 }
             }
             var ttIncludesFolderVS = Path.Combine(ttincludesFolder, vsVersion);
-            foreach (var ttInclude in Directory.GetFiles(ttIncludesFolderVS).Where(f => (ttIncludeName = Path.GetFileName(f)).StartsWith("WCFAsyncQueryableServices.")))
+            foreach (var ttInclude in Directory.GetFiles(ttIncludesFolderVS).Where(f => (ttIncludeName = Path.GetFileName(f)).StartsWith("WAQS.")))
             {
                 var m = Regex.Match(ttInclude, @".(NET\d+).");
                 if (!m.Success || m.Groups[1].Value == netVersion)

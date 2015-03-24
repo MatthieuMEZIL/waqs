@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio;
+using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.VisualStudio;
 using System;
@@ -80,8 +80,8 @@ namespace WAQS
         {
             try
             {
-                var lastVersion = new V2FeedContext(new Uri("http://www.nuget.org/api/v2/")).Execute<V2FeedPackage>(new Uri("http://www.nuget.org/api/v2/Packages?$filter=IsAbsoluteLatestVersion and Id eq 'WCFAsyncQueryableServices.Server.Mock'&$skip=0&$top=1&$select=Id,Version&targetFramework=&includePrerelease=true")).Single().Version;
-                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "WCFAsyncQueryableServices.Server.Mock", lastVersion, false);
+                var lastVersion = new V2FeedContext(new Uri("http://www.nuget.org/api/v2/")).Execute<V2FeedPackage>(new Uri("http://www.nuget.org/api/v2/Packages?$filter=IsAbsoluteLatestVersion and Id eq 'WAQS.Server.Mock'&$skip=0&$top=1&$select=Id,Version&targetFramework=&includePrerelease=true")).Single().Version;
+                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "WAQS.Server.Mock", lastVersion, false);
 
                 var edmxPath = edmx.SelectedValue as string;
                 var appKind = _project.Properties.Cast<EnvDTE.Property>().Any(p => p.Name.StartsWith("WebApplication")) ? "Web" : "App";
@@ -120,7 +120,7 @@ namespace WAQS
                 var referencesUIHierarchyItems = projectUIHierarchyItems.Cast<EnvDTE.UIHierarchyItem>().First(uihi => uihi.Name == "References").UIHierarchyItems;
                 var referencesExpanded = referencesUIHierarchyItems.Expanded;
 
-                var toolsPath = Path.Combine(_packageInstallerServices.GetPackageLocation("WCFAsyncQueryableServices.Server.Mock"), "tools");
+                var toolsPath = Path.Combine(_packageInstallerServices.GetPackageLocation("WAQS.Server.Mock"), "tools");
                 var toolsPathServerMock = Path.Combine(toolsPath, "Server.Mock");
                 var defaultNamespace = _project.GetDefaultNamespace();
                 var references = ((VSProject)_project.Object).References;
@@ -159,7 +159,7 @@ namespace WAQS
                 EnvDTE.Project fxProject = null;
                 if (kind.Kind == GenerationOptions.Kind.WithoutGlobalWithoutFramework)
                 {
-                    fxProject = _dte.Solution.FindProjectItem("WCFAsyncQueryableServices.Server.Fx.DAL.Mock.tt")?.ContainingProject;
+                    fxProject = _dte.Solution.FindProjectItem("WAQS.Server.Fx.DAL.Mock.tt")?.ContainingProject;
                     if (fxProject != null)
                     {
                         references.AddProject(fxProject);
@@ -188,7 +188,7 @@ namespace WAQS
                 var entitiesProjectPath = entitiesProject.FullName;
                 var entitiesSolutionPath = entitiesProject == null ? null : _dte.Solution.FileName;
 
-                var exePath = Path.Combine(toolsPathServerMock, "InitWCFAsyncQueryableServicesServerMock.exe");
+                var exePath = Path.Combine(toolsPathServerMock, "InitWAQSServerMock.exe");
                 var exeArgs = new StringBuilder("\"" + edmxPath + "\" \"" + projectDirectoryPath + "\" \"" + toolsPathServerMock + "\" \"" + defaultNamespace + "\" \"" + waqsDirectory + "\" \"" + waqsGeneralDirectory + "\" \"" + entitiesSolutionPath + "\" \"" + entitiesProjectPath + "\" \"" + netVersion + "\" \"" + vsVersion + "\" \"" + kind.Key + "\" \"" + (copyTemplates.IsChecked == true ? "WithSourceControl" : "WithoutSourceControl") + "\" \"" + _dte.Solution.FullName + "\"");
                 if ((kind.Kind & GenerationOptions.Kind.WithoutGlobalWithoutFramework) != 0)
                 {
