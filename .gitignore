@@ -1,21 +1,21 @@
-﻿################################################################################
+################################################################################
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
 /NuGet Programs/InitViewModel/bin/Debug
 /NuGet Programs/InitViewModel/obj/x86/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientPCL/bin/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientPCL/obj/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientPCLGlobal/bin/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientPCLGlobal/obj/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientWPF/bin/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientWPF/obj/x86/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientWPFGlobal/bin/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesClientWPFGlobal/obj/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesServer/bin/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesServer/obj/x86/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesServerMock/bin/Debug
-/NuGet Programs/InitWCFAsyncQueryableServicesServerMock/obj/Debug
+/NuGet Programs/InitWAQSClientPCL/bin/Debug
+/NuGet Programs/InitWAQSClientPCL/obj/Debug
+/NuGet Programs/InitWAQSClientPCLGlobal/bin/Debug
+/NuGet Programs/InitWAQSClientPCLGlobal/obj/Debug
+/NuGet Programs/InitWAQSClientWPF/bin/Debug
+/NuGet Programs/InitWAQSClientWPF/obj/x86/Debug
+/NuGet Programs/InitWAQSClientWPFGlobal/bin/Debug
+/NuGet Programs/InitWAQSClientWPFGlobal/obj/Debug
+/NuGet Programs/InitWAQSServer/bin/Debug
+/NuGet Programs/InitWAQSServer/obj/x86/Debug
+/NuGet Programs/InitWAQSServerMock/bin/Debug
+/NuGet Programs/InitWAQSServerMock/obj/Debug
 /NuGet Programs/WAQSNuGetPrograms.sln.ide
 *.suo
 
@@ -29,8 +29,8 @@
 /New-NuGetPackages
 /NuGet Programs/.vs/WAQSNuGetPrograms/vbcs.cache
 /TestsDependences/.vs/TestsDependences/vbcs.cache
-/NuGet Programs/InitWCFAsyncQueryableServicesServerMock/InitWCFAsyncQueryableServicesServerMock.csproj.user
-/NuGet Programs/InitWCFAsyncQueryableServicesClientWPFGlobal/InitWCFAsyncQueryableServicesClientWPFGlobal.csproj.user
-/NuGet Programs/InitWCFAsyncQueryableServicesClientWPF/InitWCFAsyncQueryableServicesClientWPF.csproj.user
-/NuGet Programs/InitWCFAsyncQueryableServicesClientPCL/InitWCFAsyncQueryableServicesClientPCL.csproj.user
+/NuGet Programs/InitWAQSServerMock/InitWAQSServerMock.csproj.user
+/NuGet Programs/InitWAQSClientWPFGlobal/InitWAQSClientWPFGlobal.csproj.user
+/NuGet Programs/InitWAQSClientWPF/InitWAQSClientWPF.csproj.user
+/NuGet Programs/InitWAQSClientPCL/InitWAQSClientPCL.csproj.user
 /NuGet Programs/InitViewModel/InitViewModel.csproj.user
