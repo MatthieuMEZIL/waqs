@@ -1,4 +1,4 @@
-Developers spent to much time to write "plumbing code".
+Developers spent too much time to write "plumbing code".
 WAQS helps to fix this assumption for data centric application. 
 
 WAQS uses intentional programming apporach in order to improve productivity, maintainability, quality, code readability and reliability.
