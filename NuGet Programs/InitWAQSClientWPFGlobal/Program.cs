@@ -1,4 +1,5 @@
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using System;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -110,7 +111,7 @@ namespace InitWAQSClientWPFGlobal
                 {
                     appXamlCsContent = sr.ReadToEnd();
                 }
-                appXamlCsContent = new ApplicationStartupRewriter(clientContextNamespace).Visit(Syntax.ParseCompilationUnit(appXamlCsContent)).NormalizeWhitespace().ToString();
+                appXamlCsContent = new ApplicationStartupRewriter(clientContextNamespace).Visit(SyntaxFactory.ParseCompilationUnit(appXamlCsContent)).NormalizeWhitespace().ToString();
                 using (var sw = new StreamWriter(appXamlCsFilePath))
                 {
                     sw.Write(appXamlCsContent);

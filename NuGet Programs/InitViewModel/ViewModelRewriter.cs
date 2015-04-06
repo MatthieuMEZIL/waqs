@@ -1,10 +1,11 @@
-﻿using Roslyn.Compilers.CSharp;
-using RoslynHelper;
+﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Linq;
 
 namespace InitViewModel
 {
-    public class ViewModelRewriter : SyntaxRewriter
+    public class ViewModelRewriter : CSharpSyntaxRewriter
     {
         private string _edmxName;
         private string _entitiesNamespace;
@@ -30,7 +31,7 @@ namespace InitViewModel
 
         public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)
         {
-            return ((CompilationUnitSyntax)base.VisitCompilationUnit(node)).AddUsing("System", "System.Collections.Generic", "System.Linq", _entitiesNamespace, _clientContextNamespace, _clientContextInterfacesNamespace, _clientContextInterfacesNamespace + ".Errors", _waqsClientContextNamespace, _waqsClientContextInterfacesNamespace, _waqsClientContextInterfacesNamespace + ".Errors", _waqsClientContextInterfacesNamespace + ".Querying", _waqsComponentModelNamespace);
+            return ((CompilationUnitSyntax)base.VisitCompilationUnit(node)).WithUsings(SyntaxFactory.List(node.Usings.Union( new[] { "System", "System.Collections.Generic", "System.Linq", _entitiesNamespace, _clientContextNamespace, _clientContextInterfacesNamespace, _clientContextInterfacesNamespace + ".Errors", _waqsClientContextNamespace, _waqsClientContextInterfacesNamespace, _waqsClientContextInterfacesNamespace + ".Errors", _waqsClientContextInterfacesNamespace + ".Querying", _waqsComponentModelNamespace }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))))));
         }
 
         public override SyntaxNode VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
@@ -43,34 +44,31 @@ namespace InitViewModel
         {
             TypeName = node.Identifier.ValueText;
 
-            TypeSyntax clientContextInterface = Syntax.ParseTypeName(string.Format("I{0}ClientContext", _edmxName));
+            TypeSyntax clientContextInterface = SyntaxFactory.ParseTypeName(string.Format("I{0}ClientContext", _edmxName));
             var value =  node.AddMembers(
-                Syntax.FieldDeclaration(
-                    null,
-                    modifiers: Syntax.TokenList(
-                        Syntax.Token(SyntaxKind.PrivateKeyword)),
-                    declaration: Syntax.VariableDeclaration(
+                SyntaxFactory.FieldDeclaration(
+                    attributeLists: default(SyntaxList<AttributeListSyntax>),
+                    modifiers: SyntaxFactory.TokenList(
+                        SyntaxFactory.Token(SyntaxKind.PrivateKeyword)),
+                    declaration: SyntaxFactory.VariableDeclaration(
                         clientContextInterface,
-                        SeparatedList.CreateFromSingle(
-                            Syntax.VariableDeclarator(
-                                Syntax.Identifier("_context"))))),
-                Syntax.ConstructorDeclaration(Syntax.Identifier(node.Identifier.ValueText))
-                    .WithModifiers(Syntax.TokenList(Syntax.Token(SyntaxKind.PublicKeyword)))
-                    .WithParameterList(Syntax.ParameterList(
-                        parameters: SeparatedList.CreateFromSingle(
-                            Syntax.Parameter(Syntax.Identifier("context")).WithType(clientContextInterface))))
-                    .WithInitializer(Syntax.ConstructorInitializer(
+                        SyntaxFactory.SeparatedList(
+                            new[] { SyntaxFactory.VariableDeclarator(
+                                SyntaxFactory.Identifier("_context")) }))),
+                SyntaxFactory.ConstructorDeclaration(SyntaxFactory.Identifier(node.Identifier.ValueText))
+                    .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                    .AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.Identifier("context")).WithType(clientContextInterface))
+                    .WithInitializer(SyntaxFactory.ConstructorInitializer(
                         kind: SyntaxKind.BaseConstructorInitializer,
-                        argumentList: Syntax.ArgumentList(
-                            arguments: SeparatedList.CreateFromSingle(
-                                Syntax.Argument(
-                                    expression: Syntax.IdentifierName("context")))))
-                        .WithThisOrBaseKeyword(Syntax.Token(SyntaxKind.BaseKeyword)))
-                    .WithBody(Syntax.Block(
-                        statements: Syntax.List<StatementSyntax>(
-                            Syntax.ParseStatement("_context = context;"))))).DefineBaseClass("ViewModelBase");
-            if (!value.Modifiers.Any(m => m.Kind == SyntaxKind.PublicKeyword || m.Kind == SyntaxKind.InternalKeyword))
-                value = value.WithModifiers(Syntax.TokenList(node.Modifiers.Union(new[] { Syntax.Token(SyntaxKind.PublicKeyword) })));
+                        argumentList: SyntaxFactory.ArgumentList(
+                            arguments: SyntaxFactory.SeparatedList(
+                                new[] { SyntaxFactory.Argument(
+                                    expression: SyntaxFactory.IdentifierName("context")) })))
+                        .WithThisOrBaseKeyword(SyntaxFactory.Token(SyntaxKind.BaseKeyword)))
+                    .WithBody(SyntaxFactory.Block(SyntaxFactory.ParseStatement("_context = context;"))))
+                .AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName("ViewModelBase")));
+            if (!value.Modifiers.Any(m => m.Kind() == SyntaxKind.PublicKeyword || m.Kind() == SyntaxKind.InternalKeyword))
+                value = value.AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword));
             return value;
         }
     }

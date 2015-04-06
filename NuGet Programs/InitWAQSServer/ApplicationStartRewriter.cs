@@ -1,12 +1,12 @@
-using System;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.IO;
 using System.Linq;
-using Roslyn.Compilers.CSharp;
-using RoslynHelper;
 
 namespace InitWAQSServer
 {
-    public class ApplicationStartRewriter : SyntaxRewriter
+    public class ApplicationStartRewriter : CSharpSyntaxRewriter
     {
         private string _edmxName;
         private bool _applicationStart;
@@ -29,7 +29,7 @@ namespace InitWAQSServer
                 var usings = _globalModelCompilationUnit.Usings.Where(u => !value.Usings.Any(u2 => u2.Name.ToString() == u.Name.ToString())).ToList();
                 if (usings.Count != 0)
                 {
-                    value = value.WithUsings(Syntax.List<UsingDirectiveSyntax>(value.Usings.Union(usings).OrderBy(u => u.Name.ToString())));
+                    value = value.WithUsings(SyntaxFactory.List<UsingDirectiveSyntax>(value.Usings.Union(usings).OrderBy(u => u.Name.ToString())));
                 }
             }
             return value;
@@ -37,10 +37,10 @@ namespace InitWAQSServer
 
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
         {
-            if (node.Modifiers.Any(m => m.Kind == SyntaxKind.PartialKeyword))
+            if (node.Modifiers.Any(m => m.Kind() == SyntaxKind.PartialKeyword))
                 return base.VisitClassDeclaration(node);
             _notPartialClass = true;
-            return ((ClassDeclarationSyntax)base.VisitClassDeclaration(node)).WithModifiers(Syntax.TokenList(node.Modifiers.Union(new[] { Syntax.Token(SyntaxKind.PartialKeyword) })));
+            return ((ClassDeclarationSyntax)base.VisitClassDeclaration(node)).WithModifiers(SyntaxFactory.TokenList(node.Modifiers.Union(new[] { SyntaxFactory.Token(SyntaxKind.PartialKeyword) })));
         }
 
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
@@ -61,14 +61,14 @@ namespace InitWAQSServer
                     {
                         _globalModel = globalModelSR.ReadToEnd();
                     }
-                    _globalModelCompilationUnit = Syntax.ParseCompilationUnit(_globalModel);
+                    _globalModelCompilationUnit = SyntaxFactory.ParseCompilationUnit(_globalModel);
                     var globalModelNamespace = _globalModelCompilationUnit.ChildNodes().OfType<NamespaceDeclarationSyntax>().First();
                     var globalModelClass = globalModelNamespace.ChildNodes().OfType<ClassDeclarationSyntax>().First();
                     var globalModelApplicationStart = globalModelClass.ChildNodes().OfType<MethodDeclarationSyntax>().First(m => m.Identifier.ValueText == "Application_Start");
                     var globalModelApplicationStartBody = globalModelApplicationStart.Body;
                     node = node.AddStatements(globalModelApplicationStartBody.Statements.ToArray());
                 }
-                return node.AddStatements(Syntax.ParseExpression("Global." + _edmxName + "ApplicationStart(unityContainer);"));
+                return node.AddStatements(SyntaxFactory.ParseStatement("Global." + _edmxName + "ApplicationStart(unityContainer);"));
             }
             return base.VisitBlock(node);
         }

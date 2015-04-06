@@ -1,13 +1,14 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Roslyn.Compilers.CSharp;
-using RoslynHelper;
 
 namespace InitWAQSClientWPF
 {
-    public class ApplicationStartupRewriter : SyntaxRewriter
+    public class ApplicationStartupRewriter : CSharpSyntaxRewriter
     {
         private string _edmxName;
         private string _rootNamespace;
@@ -33,8 +34,7 @@ namespace InitWAQSClientWPF
         {
             var value = ((CompilationUnitSyntax)base.VisitCompilationUnit(node));
             if (_first)
-                value = value.AddUsing("System.Threading", "Microsoft.Practices.ServiceLocation", "Microsoft.Practices.Unity", _clientContextNamespace, "WAQS.ClientContext.Interfaces.ExpressionSerialization", "WAQS.ComponentModel", "WAQS.Controls");
-            value = value.AddUsing(_clientInterfacesContextNamespace, _clientContextNamespace, _clientContextNamespace + ".ServiceReference");
+                value = value.AddUsings(new[] { "System.Threading", "Microsoft.Practices.ServiceLocation", "Microsoft.Practices.Unity", _clientContextNamespace, "WAQS.ClientContext.Interfaces.ExpressionSerialization", "WAQS.ComponentModel", "WAQS.Controls", _clientInterfacesContextNamespace, _clientContextNamespace, _clientContextNamespace + ".ServiceReference" }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))).ToArray());
             return value;
         }
 
@@ -45,31 +45,31 @@ namespace InitWAQSClientWPF
             {
                 var statements = new[] { string.Format("            unityContainer.RegisterType<I{0}Service, {0}ServiceClient>(new InjectionConstructor());\r\n", _edmxName), string.Format("            unityContainer.RegisterType<I{0}ClientContext, {0}ClientContext>();\r\n", _edmxName) };
                 if (_addApplicationStart)
-                    value = value.AddMember(
-                        Syntax.MethodDeclaration(Syntax.PredefinedType(Syntax.Token(SyntaxKind.VoidKeyword)), "OnStartup")
-                            .WithModifiers(Syntax.TokenList(
-                                Syntax.Token(SyntaxKind.ProtectedKeyword),
-                                Syntax.Token(SyntaxKind.OverrideKeyword)))
-                            .WithParameterList(Syntax.ParameterList(
-                                parameters: Syntax.SeparatedList<ParameterSyntax>(
-                                    Syntax.Parameter(Syntax.Identifier("e")).WithType(Syntax.ParseTypeName("StartupEventArgs")))))
-                            .WithBody(Syntax.Block(
-                                statements: Syntax.List<StatementSyntax>(
-                                    Syntax.ParseStatement("IUnityContainer unityContainer = new UnityContainer();"),
-                                    Syntax.ParseStatement("unityContainer.RegisterType<IMessageBoxService, MessageBoxService>();"),
-                                    Syntax.ParseStatement("DispatcherUnhandledException += (sender, ex) => { unityContainer.Resolve<IMessageBoxService>().ShowError(ex.Exception.Message);ex.Handled = true; };"),
-                                    Syntax.ParseStatement("TaskScheduler.UnobservedTaskException += (sender, ex) => { unityContainer.Resolve<IMessageBoxService>().ShowError(ex.Exception.InnerException.Message);ex.SetObserved(); };"),
-                                    Syntax.ParseStatement("InitWAQSModules(unityContainer);"),
-                                    Syntax.ParseStatement("UIThread.Dispatcher = Application.Current.Dispatcher;"),
-                                    Syntax.ParseStatement("UIThread.TaskScheduler = TaskScheduler.FromCurrentSynchronizationContext();"),
-                                    Syntax.ParseStatement(string.Format("unityContainer.Resolve<{0}>().Show();", _pageTypeName))))));
+                    value = value.AddMembers(
+                        SyntaxFactory.MethodDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)), "OnStartup")
+                            .WithModifiers(SyntaxFactory.TokenList(
+                                SyntaxFactory.Token(SyntaxKind.ProtectedKeyword),
+                                SyntaxFactory.Token(SyntaxKind.OverrideKeyword)))
+                            .AddParameterListParameters(
+                                SyntaxFactory.Parameter(SyntaxFactory.Identifier("e")).WithType(SyntaxFactory.ParseTypeName("StartupEventArgs")))
+                            .WithBody(SyntaxFactory.Block().AddStatements(
+                                SyntaxFactory.ParseStatement("IUnityContainer unityContainer = new UnityContainer();"),
+                                SyntaxFactory.ParseStatement("unityContainer.RegisterType<IMessageBoxService, MessageBoxService>();"),
+                                SyntaxFactory.ParseStatement("DispatcherUnhandledException += (sender, ex) => { unityContainer.Resolve<IMessageBoxService>().ShowError(ex.Exception.Message);ex.Handled = true; };"),
+                                SyntaxFactory.ParseStatement("TaskScheduler.UnobservedTaskException += (sender, ex) => { unityContainer.Resolve<IMessageBoxService>().ShowError(ex.Exception.InnerException.Message);ex.SetObserved(); };"),
+                                SyntaxFactory.ParseStatement("InitWAQSModules(unityContainer);"),
+                                SyntaxFactory.ParseStatement("UIThread.Dispatcher = Application.Current.Dispatcher;"),
+                                SyntaxFactory.ParseStatement("UIThread.TaskScheduler = TaskScheduler.FromCurrentSynchronizationContext();"),
+                                SyntaxFactory.ParseStatement(string.Format("unityContainer.Resolve<{0}>().Show();", _pageTypeName)))));
                 if (_addInitWAQSModules)
-                    return value.AddMember(Syntax.MethodDeclaration(Syntax.PredefinedType(Syntax.Token(SyntaxKind.VoidKeyword)), "InitWAQSModules")
-                        .WithModifiers(Syntax.TokenList(Syntax.Token(SyntaxKind.PrivateKeyword)))
-                        .WithParameterList(Syntax.ParameterList(
-                            parameters: Syntax.SeparatedList<ParameterSyntax>(Syntax.Parameter(Syntax.Identifier("unityContainer")).WithType(Syntax.ParseTypeName("IUnityContainer")))))
-                        .WithBody(Syntax.Block(
-                            statements: Syntax.List<StatementSyntax>(statements.Select(s => Syntax.ParseStatement(s))))));
+                    return value.AddMembers(
+                        SyntaxFactory.MethodDeclaration(
+                            SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)), "InitWAQSModules")
+                            .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword)))
+                            .AddParameterListParameters(
+                                SyntaxFactory.Parameter(SyntaxFactory.Identifier("unityContainer")).WithType(SyntaxFactory.ParseTypeName("IUnityContainer")))
+                            .WithBody(SyntaxFactory.Block().AddStatements(
+                                statements.Select(s => SyntaxFactory.ParseStatement(s)).ToArray())));
             }
             return value;
         }
@@ -94,7 +94,9 @@ namespace InitWAQSClientWPF
             if (_initWAQSModules)
             {
                 var statements = new[] { string.Format("            unityContainer.RegisterType<I{0}Service, {0}ServiceClient>(new InjectionConstructor());\r\n", _edmxName), string.Format("            unityContainer.RegisterType<I{0}ClientContext, {0}ClientContext>();\r\n", _edmxName) };
-                var value = node.InsertStatements(statements.Select(s => Syntax.ParseStatement(s)));
+                var value = node.WithStatements(
+                    SyntaxFactory.List(
+                        statements.Select(s => SyntaxFactory.ParseStatement(s)).Union(node.Statements)));
                 _initWAQSModules = false;
                 return value;
             }

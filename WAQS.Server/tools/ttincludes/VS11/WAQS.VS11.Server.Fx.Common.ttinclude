@@ -1,5 +1,0 @@
-<#@ include file="WAQS.VS11.Edmx.Utility.ttinclude"#>
-<#@ include file="WAQS.Server.Fx.Common.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

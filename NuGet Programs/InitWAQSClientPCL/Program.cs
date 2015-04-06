@@ -1,10 +1,11 @@
 using Microsoft.Win32;
-using Roslyn.Compilers.CSharp;
 using System;
 using System.Linq;
 using System.IO;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Microsoft.CodeAnalysis.CSharp;
+using WAQS;
 
 namespace InitWAQSClientPCL
 {
@@ -69,7 +70,7 @@ namespace InitWAQSClientPCL
                     {
                         entityContent = sr.ReadToEnd();
                     }
-                    serverEntitiesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(entityContent));
+                    serverEntitiesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(entityContent));
                 }
 
                 if (!Directory.Exists(waqsDirectory))
@@ -89,25 +90,25 @@ namespace InitWAQSClientPCL
                         {
                             serviceContractContent = sr.ReadToEnd();
                         }
-                        new GetNamespace().Visit(Syntax.ParseCompilationUnit(serviceContractContent));
+                        new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(serviceContractContent));
                         string entitiesContent;
                         using (var sr = new StreamReader(entitiesPath))
                         {
                             entitiesContent = sr.ReadToEnd();
                         }
-                        entitiesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(entitiesContent));
+                        entitiesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(entitiesContent));
                         string clientContextContent;
                         using (var sr = new StreamReader(clientContextPath))
                         {
                             clientContextContent = sr.ReadToEnd();
                         }
-                        clientContextNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(clientContextContent));
+                        clientContextNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(clientContextContent));
                         string clientContextInterfacesContent;
                         using (var sr = new StreamReader(clientContextInterfacesPath))
                         {
                             clientContextInterfacesContent = sr.ReadToEnd();
                         }
-                        clientContextInterfacesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(clientContextInterfacesContent));
+                        clientContextInterfacesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(clientContextInterfacesContent));
                     }
                     if (kind == "GlobalOnly")
                     {

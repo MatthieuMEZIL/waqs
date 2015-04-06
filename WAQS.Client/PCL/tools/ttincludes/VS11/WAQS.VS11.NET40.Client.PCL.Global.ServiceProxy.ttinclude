@@ -1,5 +1,0 @@
-<#@ include file="WAQS.VS11.Client.PCL.Global.WCFServiceProxy.ttinclude"#>
-<#@ include file="WAQS.VS11.NET40.Client.PCL.WCFServiceProxy.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

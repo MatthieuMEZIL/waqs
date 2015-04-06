@@ -1,5 +1,0 @@
-<#@ include file="WAQS.VS11.Server.DAL.Mock.ttinclude"#>
-<#@ include file="WAQS.NET40.Server.DAL.Mock.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

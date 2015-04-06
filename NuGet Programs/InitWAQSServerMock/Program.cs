@@ -1,12 +1,10 @@
-using Roslyn.Compilers.CSharp;
+using Microsoft.CodeAnalysis.CSharp;
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using System.Xml.Linq;
+using WAQS;
 
 namespace InitWAQSServerMock
 {
@@ -60,19 +58,19 @@ namespace InitWAQSServerMock
                     {
                         entityContent = sr.ReadToEnd();
                     }
-                    serverEntitiesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(entityContent));
+                    serverEntitiesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(entityContent));
                     string dalInterfacesContent;
                     using (var sr = new StreamReader(args[argIndex++]))
                     {
                         dalInterfacesContent = sr.ReadToEnd();
                     }
-                    serverDALInterfacesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(dalInterfacesContent));
+                    serverDALInterfacesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(dalInterfacesContent));
                     string dalContent;
                     using (var sr = new StreamReader(args[argIndex++]))
                     {
                         dalContent = sr.ReadToEnd();
                     }
-                    serverDALNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(dalContent));
+                    serverDALNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(dalContent));
                     edmxProjectPath = args[argIndex++];
                     appConfigPath = args[argIndex++];
                 }

@@ -1,2 +1,0 @@
-<#@ include file="MergeT4Files.ttinclude"#>
-<# LocalTTIncludesMerge("WAQS.VS11.Edmx.Utility.ttinclude"); #>

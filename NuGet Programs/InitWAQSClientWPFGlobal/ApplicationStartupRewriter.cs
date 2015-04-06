@@ -1,13 +1,11 @@
-using System;
-using System.Collections.Generic;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Linq;
-using System.Text;
-using Roslyn.Compilers.CSharp;
-using RoslynHelper;
 
 namespace InitWAQSClientWPFGlobal
 {
-    public class ApplicationStartupRewriter : SyntaxRewriter
+    public class ApplicationStartupRewriter : CSharpSyntaxRewriter
     {
         private string _clientContextNamespace;
         private bool _initWAQSModules;
@@ -21,9 +19,9 @@ namespace InitWAQSClientWPFGlobal
         public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)
         {
             var value = ((CompilationUnitSyntax)base.VisitCompilationUnit(node));
-            value = value.AddUsing(_clientContextNamespace);
-            value = value.AddUsing(_clientContextNamespace + ".ServiceReference");
-            return value;
+            return value.WithUsings(
+                SyntaxFactory.List(
+                    value.Usings.Union(new[] { _clientContextNamespace, _clientContextNamespace + ".ServiceReference" }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))))));
         }
 
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
@@ -42,7 +40,9 @@ namespace InitWAQSClientWPFGlobal
             if (_initWAQSModules)
             {
                 var statements = new[] { "unityContainer.RegisterType<IGlobalWCFService, GlobalWCFServiceClient>(new InjectionConstructor());", "unityContainer.RegisterType<IGlobalClientContext, GlobalClientContext>();" };
-                var value = node.InsertStatements(statements.Select(s => Syntax.ParseStatement(s)));
+                var value = node.WithStatements(
+                    SyntaxFactory.List(
+                        statements.Select(s => SyntaxFactory.ParseStatement(s)).Union(node.Statements)));
                 _initWAQSModules = false;
                 return value;
             }

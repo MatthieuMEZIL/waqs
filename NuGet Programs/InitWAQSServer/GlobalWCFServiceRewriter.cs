@@ -1,11 +1,11 @@
-using System;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Linq;
-using Roslyn.Compilers.CSharp;
-using RoslynHelper;
 
 namespace InitWAQSServer
 {
-    public class GlobalWCFServiceRewriter : SyntaxRewriter
+    public class GlobalWCFServiceRewriter : CSharpSyntaxRewriter
     {
         private string _edmxName;
         private bool _isSaveChanges;
@@ -28,9 +28,9 @@ namespace InitWAQSServer
             {
                 _isSaveChanges = false;
                 return node.WithStatements(
-                    Syntax.List(
+                    SyntaxFactory.List(
                         node.Statements.Take(node.Statements.Count - 2)
-                            .Union(new[] { Syntax.ParseStatement(_edmxName + "SaveChanges(clientContexts);") })
+                            .Union(new[] { SyntaxFactory.ParseStatement(_edmxName + "SaveChanges(clientContexts);") })
                             .Union(node.Statements.Skip(node.Statements.Count - 2))));
             }
             return base.VisitBlock(node);

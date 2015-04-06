@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>WAQS.RoslynDeploy</id>
+    <version>1.0.15</version>
+    <authors>Matthieu MEZIL</authors>
+    <owners>Matthieu MEZIL</owners>
+    <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
+    <projectUrl>https://waqs.codeplex.com/</projectUrl>
+    <requireLicenseAcceptance>true</requireLicenseAcceptance>
+    <description>https://waqs.codeplex.com/documentation</description>
+    <summary>http://msmvps.com/blogs/matthieu/archive/2014/04/14/waqs-write-your-code-faster-and-better.aspx</summary>
+    <copyright>Matthieu MEZIL</copyright>
+    <tags>WAQS</tags>
+    <releaseNotes>Version 1.0.15</releaseNotes>
+  </metadata>
+  <files>
+    <file src="WAQS.RoslynDeploy\tools\**\*" target="tools" />
+  </files>
+</package>

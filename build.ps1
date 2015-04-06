@@ -4,10 +4,11 @@ function Build-NuPkg([string] $nuspecFile)
 
     [xml]$nuspec = Get-Content $nuspecFile
     $digits = $nuspec.package.metadata.version -split '\.'
-    $digits[3] = $($($digits[3] -as [Int32]) + 1) -as [String]
+    $digits[$digits.Length - 1] = $($($digits[$digits.Length - 1] -as [Int32]) + 1) -as [String]
     $version = $digits -join '.'
 
     .\New-NuGetPackage.ps1 -NuSpecFilePath "$nuspecFile" -VersionNumber $version -ReleaseNotes "Version $version" -NoPrompt
+    return $version
 }
 
 function Generate-SpecificationsFile()
@@ -61,6 +62,12 @@ if ($LASTEXITCODE)
 {
     exit $LASTEXITCODE
 }
+Copy-Item -Path ".\NuGet Programs\InitWAQSServer\bin\Debug\InitWAQSServer.exe" -Destination .\WAQS.Server\tools\Server
+Copy-Item -Path ".\NuGet Programs\InitWAQSServerMock\bin\Debug\InitWAQSServerMock.exe" -Destination .\WAQS.Server.Mock\tools\Server
+Copy-Item -Path ".\NuGet Programs\InitWAQSClientWPF\bin\Debug\InitWAQSClientWPF.exe" -Destination .\WAQS.Client\WPF\tools\Client.WPF
+Copy-Item -Path ".\NuGet Programs\InitWAQSClientWPFGlobal\bin\Debug\InitWAQSClientWPFGlobal.exe" -Destination .\WAQS.Client\WPF\tools\Client.WPF
+Copy-Item -Path ".\NuGet Programs\InitWAQSClientPCL\bin\Debug\InitWAQSClientPCL.exe" -Destination .\WAQS.Client\PCL\tools\Client.PCL
+Copy-Item -Path ".\NuGet Programs\InitWAQSClientPCLGlobal\bin\Debug\InitWAQSClientPCLGlobal.exe" -Destination .\WAQS.Client\PCL\tools\Client.PCL
 
 msbuild '.\TestsDependences\TestsDependences.sln' /p:Platform="Any CPU"
 if ($LASTEXITCODE)
@@ -76,4 +83,19 @@ if ($LASTEXITCODE)
 
 Generate-SpecificationsFile
 
-dir *.nuspec | % { Build-NuPkg($_.FullName) }
+$waqsRoslynDeployVersion = dir WAQS.RoslynDeploy.nuspec | % { Build-NuPkg($_.FullName) }
+$match = [System.Text.RegularExpressions.Regex]::Match($waqsRoslynDeployVersion, '.(?<version>(\d+.)?\d+.\d+.\d+$)')
+$waqsRoslynDeployVersion = $match.Groups["version"].Value
+$null = [System.Reflection.Assembly]::Load('System.Xml.Linq, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089')
+foreach ($nuspec in (dir *.nuspec | ?{$_.Name -ne 'WAQS.RoslynDeploy.nuspec' }))
+{
+    if (-not ($nuspec.Name -eq 'WAQS.RoslynDeploy.nuspec'))
+    {
+        $ns = "http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd"
+        $xdoc = [System.Xml.Linq.XDocument]::Load($nuspec.FullName)
+        $waqsRoslynDeployDependency = $xdoc.Root.Element([System.Xml.Linq.XName]::Get("metadata", $ns)).Element([System.Xml.Linq.XName]::Get("dependencies", $ns)).Elements([System.Xml.Linq.XName]::Get("dependency", $ns)) | ?{$_.Attribute("id").Value -eq 'WAQS.RoslynDeploy'}
+        $waqsRoslynDeployDependency.Attribute("version").Value = $waqsRoslynDeployVersion
+        $null = $xdoc.Save($nuspec.FullName)
+        $null = % { Build-NuPkg($nuspec.FullName) }
+    }
+}

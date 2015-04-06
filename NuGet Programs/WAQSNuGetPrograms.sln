@@ -1,7 +1,6 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.22512.0
+VisualStudioVersion = 14.0.22609.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSServer", "InitWAQSServer\InitWAQSServer.csproj", "{ADC1BE3B-FEEC-4DE0-9A59-E3172626D586}"
 EndProject
@@ -16,6 +15,11 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSClientPCLGlobal", "InitWAQSClientPCLGlobal\InitWAQSClientPCLGlobal.csproj", "{0C7A8149-4025-48C3-8194-9A45EFD09B5E}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InitWAQSClientWPF", "InitWAQSClientWPF\InitWAQSClientWPF.csproj", "{A2AB0742-94AF-4A07-B517-45601BD40B85}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shared", "Shared", "{9062A769-4F63-44F5-9B6C-A54D75673F50}"
+	ProjectSection(SolutionItems) = preProject
+		Shared\GetNamespace.cs = Shared\GetNamespace.cs
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

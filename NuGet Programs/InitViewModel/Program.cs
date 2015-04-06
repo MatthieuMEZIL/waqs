@@ -1,7 +1,8 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using System;
 using System.IO;
 using System.Xml.Linq;
-using Roslyn.Compilers.CSharp;
 
 namespace InitViewModel
 {
@@ -47,7 +48,7 @@ namespace InitViewModel
                 XAttribute waqsComponentModelAttribute = waqsComponentModel.Attribute("NamespaceName");
                 string waqsComponentModelNamespace = waqsComponentModelAttribute == null ? "WAQS.ComponentModel" : waqsComponentModelAttribute.Value;
                 var viewModelRewriter = new ViewModelRewriter(edmxName, entitiesNamespace, clientContextNamespace, clientContextInterfacesNamespace, waqsClientContextNamespace, waqsClientContextInterfacesNamespace, waqsComponentModelNamespace);
-                content = viewModelRewriter.Visit(Syntax.ParseCompilationUnit(content)).NormalizeWhitespace().ToString();
+                content = viewModelRewriter.Visit(SyntaxFactory.ParseCompilationUnit(content)).NormalizeWhitespace().ToString();
                 using (var sw = new StreamWriter(filePath))
                 {
                     sw.Write(content);
@@ -64,7 +65,7 @@ namespace InitViewModel
                     string viewModelNamespaceName = viewModelRewriter.NamespaceName;
                     if (!string.IsNullOrEmpty(viewModelNamespaceName))
                         viewModelNamespaceName += ".";
-                    viewContent = new ViewRewriter((viewModelNamespaceName ?? "") + viewModelTypeName).Visit(Syntax.ParseCompilationUnit(viewContent)).NormalizeWhitespace().ToString();
+                    viewContent = new ViewRewriter((viewModelNamespaceName ?? "") + viewModelTypeName).Visit(SyntaxFactory.ParseCompilationUnit(viewContent)).NormalizeWhitespace().ToString();
                     using (var sw = new StreamWriter(xamlCsFilePath))
                     {
                         sw.Write(viewContent);

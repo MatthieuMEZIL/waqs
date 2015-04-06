@@ -1,6 +1,0 @@
-<#@ include file="WAQS.VS11.Specifications.ttinclude"#>
-<#@ include file="WAQS.VS11.Edmx.Utility.ttinclude"#>
-<#@ include file="WAQS.Client.PCL.ClientContext.Interfaces.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>

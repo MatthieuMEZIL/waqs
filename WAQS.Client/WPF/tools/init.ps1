@@ -3,9 +3,10 @@ param($installPath, $toolsPath, $package)
 #Copy .ttinclude
 $path = "HKCU:\Software\Microsoft\VisualStudio\" + $DTE.Version + "_Config"
 $ttIncludePath = (Get-Item (Join-Path $path "TextTemplating\IncludeFolders\.tt")).GetValue("Include18111981-0AEE-0AEE-0AEE-181119810AEE")
+
 if ($ttIncludePath -eq $null)
 {
-	throw "You must install WCF Async Queryable Services vsix first. See WAQS documentation on http://msmvps.com/blogs/matthieu/archive/2013/12/13/how-to-use-waqs.aspx"
+    throw 'You must install WAQS vsix first.'
 }
 
 if (-not (Test-Path $ttIncludePath))

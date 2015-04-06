@@ -1,11 +1,11 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.IO;
-using Roslyn.Compilers.CSharp;
-using System.Xml.Linq;
+using System.Linq;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using WAQS;
 
 namespace InitWAQSServer
 {
@@ -76,7 +76,7 @@ namespace InitWAQSServer
                     {
                         dalInterfaces = sr.ReadToEnd();
                     }
-                    dalInterfacesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(dalInterfaces));
+                    dalInterfacesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(dalInterfaces));
                     string dalFileName = args[argIndex++];
                     if (!string.IsNullOrEmpty(dalFileName))
                     {
@@ -85,7 +85,7 @@ namespace InitWAQSServer
                         {
                             dal = sr.ReadToEnd();
                         }
-                        dalNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(dal));
+                        dalNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(dal));
                     }
                     string serviceInterfacesFileName = args[argIndex++];
                     if (!string.IsNullOrEmpty(serviceInterfacesFileName))
@@ -95,7 +95,7 @@ namespace InitWAQSServer
                         {
                             serviceInterfaces = sr.ReadToEnd();
                         }
-                        serviceInterfacesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(serviceInterfaces));
+                        serviceInterfacesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(serviceInterfaces));
                     }
                     string serviceFileName = args[argIndex++];
                     if (!string.IsNullOrEmpty(serviceFileName))
@@ -105,7 +105,7 @@ namespace InitWAQSServer
                         {
                             service = sr.ReadToEnd();
                         }
-                        serviceNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(service));
+                        serviceNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(service));
                     }
                     if (isWCF)
                     {
@@ -117,7 +117,7 @@ namespace InitWAQSServer
                             {
                                 wcfServiceContract = sr.ReadToEnd();
                             }
-                            wcfServiceContractNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(wcfServiceContract));
+                            wcfServiceContractNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(wcfServiceContract));
                         }
                         string wcfServiceFileName = args[argIndex++];
                         if (!string.IsNullOrEmpty(wcfServiceFileName))
@@ -127,7 +127,7 @@ namespace InitWAQSServer
                             {
                                 wcfService = sr.ReadToEnd();
                             }
-                            wcfServiceNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(wcfService));
+                            wcfServiceNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(wcfService));
                         }
                         string globalDirectoryPath = Path.Combine(projectDirectoryPath, "Global");
                         if (Directory.Exists(globalDirectoryPath))
@@ -142,7 +142,7 @@ namespace InitWAQSServer
                                 }
                                 using (var sw = new StreamWriter(globalWCFServicePath))
                                 {
-                                    sw.WriteLine(new GlobalWCFServiceRewriter(edmxName).Visit(Syntax.ParseCompilationUnit(globalWCFServiceContent)).NormalizeWhitespace().ToString());
+                                    sw.WriteLine(new GlobalWCFServiceRewriter(edmxName).Visit(SyntaxFactory.ParseCompilationUnit(globalWCFServiceContent)).NormalizeWhitespace().ToString());
                                 }
                             }
                         }
@@ -308,7 +308,7 @@ namespace InitWAQSServer
                 string globalAsaxCsContent;
                 using (var sr = new StreamReader(globalAsaxCsFilePath))
                 {
-                    globalAsaxCsContent = new ApplicationStartRewriter(edmxName, globalAsaxCsModelPath).Visit(Syntax.ParseCompilationUnit(sr.ReadToEnd())).NormalizeWhitespace().ToString();
+                    globalAsaxCsContent = new ApplicationStartRewriter(edmxName, globalAsaxCsModelPath).Visit(SyntaxFactory.ParseCompilationUnit(sr.ReadToEnd())).NormalizeWhitespace().ToString();
                 }
                 using (var sw = new StreamWriter(globalAsaxCsFilePath))
                 {

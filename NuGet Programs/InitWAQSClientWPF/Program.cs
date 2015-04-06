@@ -1,10 +1,12 @@
-using System;
-using System.Linq;
-using System.IO;
-using System.Xml.Linq;
-using Roslyn.Compilers.CSharp;
-using System.Text.RegularExpressions;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.Win32;
+using System;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using System.Xml.Linq;
+using WAQS;
 
 namespace InitWAQSClientWPF
 {
@@ -70,7 +72,7 @@ namespace InitWAQSClientWPF
                     {
                         entityContent = sr.ReadToEnd();
                     }
-                    serverEntitiesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(entityContent));
+                    serverEntitiesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(entityContent));
                 }
 
                 if (!Directory.Exists(waqsDirectory))
@@ -91,25 +93,25 @@ namespace InitWAQSClientWPF
                         {
                             serviceContractContent = sr.ReadToEnd();
                         }
-                        serviceContractNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(serviceContractContent));
+                        serviceContractNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(serviceContractContent));
                         string entitiesContent;
                         using (var sr = new StreamReader(entitiesPath))
                         {
                             entitiesContent = sr.ReadToEnd();
                         }
-                        entitiesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(entitiesContent));
+                        entitiesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(entitiesContent));
                         string clientContextContent;
                         using (var sr = new StreamReader(clientContextPath))
                         {
                             clientContextContent = sr.ReadToEnd();
                         }
-                        clientContextNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(clientContextContent));
+                        clientContextNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(clientContextContent));
                         string clientContextInterfacesContent;
                         using (var sr = new StreamReader(clientContextInterfacesPath))
                         {
                             clientContextInterfacesContent = sr.ReadToEnd();
                         }
-                        clientContextInterfacesNamespace = new GetNamespace().Visit(Syntax.ParseCompilationUnit(clientContextInterfacesContent));
+                        clientContextInterfacesNamespace = new GetNamespace().Visit(SyntaxFactory.ParseCompilationUnit(clientContextInterfacesContent));
                     }
 
                     if (kind == "All" || kind == "WithoutFramework" || kind == "GlobalOnly")
@@ -164,11 +166,11 @@ namespace InitWAQSClientWPF
                                 startupUri.Remove();
                                 appXaml.Save(appXamlFilePath);
 
-                                appXamlCsContent = new ApplicationStartupRewriter(edmxName, rootNamespace, clientContextNamespace, clientContextInterfacesNamespace, pageTypeName).Visit(Syntax.ParseCompilationUnit(appXamlCsContent)).NormalizeWhitespace().ToString();
+                                appXamlCsContent = new ApplicationStartupRewriter(edmxName, rootNamespace, clientContextNamespace, clientContextInterfacesNamespace, pageTypeName).Visit(SyntaxFactory.ParseCompilationUnit(appXamlCsContent)).NormalizeWhitespace().ToString();
                             }
                             else
                             {
-                                appXamlCsContent = new ApplicationStartupRewriter(edmxName, rootNamespace, clientContextNamespace, clientContextInterfacesNamespace, first: false).Visit(Syntax.ParseCompilationUnit(appXamlCsContent)).NormalizeWhitespace().ToString();
+                                appXamlCsContent = new ApplicationStartupRewriter(edmxName, rootNamespace, clientContextNamespace, clientContextInterfacesNamespace, first: false).Visit(SyntaxFactory.ParseCompilationUnit(appXamlCsContent)).NormalizeWhitespace().ToString();
                             }
                             using (var sw = new StreamWriter(appXamlCsFilePath))
                             {

@@ -1,5 +1,0 @@
-<#@ include file="WAQS.Client.WPF.ClientContext.ttinclude"#>
-<#@ include file="WAQS.VS11.Client.ClientContext.ttinclude"#>
-<#+
-// Copyright (c) Matthieu MEZIL.  All rights reserved.
-#>
