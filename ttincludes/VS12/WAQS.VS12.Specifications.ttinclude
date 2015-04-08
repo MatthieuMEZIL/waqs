@@ -1,4 +1,4 @@
-<#@ include file="WAQS.Roslyn.Assemblies.ttinclude.ttinclude"#>
+<#@ include file="WAQS.Roslyn.Assemblies.ttinclude"#>
 <#@ assembly name="System.Runtime" #>
 <#@ assembly name="System.Text.Encoding" #>
 <#@ assembly name="System.Threading.Tasks" #>

@@ -119,14 +119,20 @@ function WAQSServerInternal($edmxPath, $kind, $appKind, $netVersion, $sourceCont
 	$null = $references.Add("System.Xml")
 	if ($netVersion -eq 'NET40')
 	{
-    	Install-Package Unity -Version 2.1.505.2
+		Install-Package Unity -Version 2.1.505.2
 	}
 	else
 	{
-    	Install-Package Unity -Version 3.0.1304.1
-    	Install-Package CommonServiceLocator -Version 1.2.0
+		Install-Package Unity -Version 3.0.1304.1
+		Install-Package CommonServiceLocator -Version 1.2.0
 	}
-	Install-Package EntityFramework -Version 6.1.3
+	try
+	{
+		Install-Package EntityFramework -Version 6.1.3
+	}
+	catch (Exception)
+	{
+	}
 	
 	try
 	{
