@@ -130,7 +130,7 @@ function WAQSServerInternal($edmxPath, $kind, $appKind, $netVersion, $sourceCont
 	{
 		Install-Package EntityFramework -Version 6.1.3
 	}
-	catch (Exception)
+	catch
 	{
 	}
 	
