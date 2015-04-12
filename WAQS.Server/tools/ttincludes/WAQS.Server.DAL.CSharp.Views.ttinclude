@@ -3,10 +3,6 @@
 <#@ assembly name="System.Data" #>
 <#@ assembly name="System.Data.Entity" #>
 <#@ assembly name="System.Data.Entity.Design" #>
-<#@ assembly name="Roslyn.Compilers"#>
-<#@ assembly name="Roslyn.Compilers.CSharp"#>
-<#@ assembly name="Roslyn.Services"#>
-<#@ assembly name="Roslyn.Services.CSharp"#>
 <#@ assembly name="System.Xml" #>
 <#@ assembly name="System.Xml.Linq" #>
 <#@ assembly name="EnvDTE" #>
@@ -22,9 +18,6 @@
 <#@ import namespace="System.Data.Mapping" #>
 <#@ import namespace="System.Globalization" #>
 <#@ import namespace="System.Security.Cryptography" #>
-<#@ import namespace="Roslyn.Compilers.Common"#>
-<#@ import namespace="Roslyn.Compilers.CSharp"#>
-<#@ import namespace="Roslyn.Services"#>
 <#@ import namespace="System.Xml" #>
 <#@ import namespace="System.Xml.Linq" #>
 <#@ import namespace="EnvDTE" #>
@@ -44,7 +37,7 @@ void WriteViewGeneration(string edmxPath, string dalNamespace)
         string hashKey = null;
         string contextName = edmxElements.Code.Escape(edmxElements.Container);
         string storeContainerName = edmxElements.StoreContainerName;
-        var value = new DALViewVisitor(edmxElements.EdmxName, dalNamespace, contextName, hashKey, storeContainerName).Visit(Syntax.ParseCompilationUnit(GenerateViews(edmxFilePath))).NormalizeWhitespace().ToString();
+        var value = new DALViewVisitor(edmxElements.EdmxName, dalNamespace, contextName, hashKey, storeContainerName).Visit(SyntaxFactory.ParseCompilationUnit(GenerateViews(edmxFilePath))).NormalizeWhitespace().ToString();
 #>
 <#=value#>
 <#+
@@ -200,14 +193,14 @@ public class DALViewVisitor : SyntaxRewriter
     public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)
     {
         var value = (CompilationUnitSyntax)base.VisitCompilationUnit(node);
-        value = value.WithUsings(Syntax.List(Syntax.UsingDirective(Syntax.ParseName("System")), Syntax.UsingDirective(Syntax.ParseName("System.Data.Entity.Core.Mapping")), Syntax.UsingDirective(Syntax.ParseName("System.Data.Entity.Core.Metadata.Edm")), Syntax.UsingDirective(Syntax.ParseName("System.Data.Entity.Infrastructure.MappingViews"))));
+        value = value.WithUsings(SyntaxFactory.List(new[] { SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System")), SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Data.Entity.Core.Mapping")), SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Data.Entity.Core.Metadata.Edm")), SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Data.Entity.Infrastructure.MappingViews")) }));
         return value;
     }
 
     public override SyntaxNode VisitAttribute(AttributeSyntax node)
     {
         if (node.Name.ToString() == "System.Data.Mapping.EntityViewGenerationAttribute")
-            return node.WithName(Syntax.ParseName("DbMappingViewCacheTypeAttribute")).WithArgumentList(Syntax.AttributeArgumentList(Syntax.SeparatedList(new[] { Syntax.AttributeArgument(Syntax.ParseExpression(string.Concat("typeof(", _dalNamespace, ".", _contextName, ")"))), (AttributeArgumentSyntax)Visit(node.ArgumentList.Arguments.Single()) }, new[] { Syntax.Token(SyntaxKind.CommaToken) })));
+            return node.WithName(SyntaxFactory.ParseName("DbMappingViewCacheTypeAttribute")).WithArgumentList(SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(new[] { SyntaxFactory.AttributeArgument(SyntaxFactory.ParseExpression(string.Concat("typeof(", _dalNamespace, ".", _contextName, ")"))), (AttributeArgumentSyntax)Visit(node.ArgumentList.Arguments.Single()) }, new[] { SyntaxFactory.Token(SyntaxKind.CommaToken) })));
         return base.VisitAttribute(node);
     }
 
@@ -216,11 +209,11 @@ public class DALViewVisitor : SyntaxRewriter
         var value = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
         if (node.Identifier.ValueText.StartsWith("ViewsForBaseEntitySets"))
         {
-            value = value.WithIdentifier(Syntax.Identifier(string.Concat(_edmxName, _contextName, "ViewsForBaseEntitySets")));
+            value = value.WithIdentifier(SyntaxFactory.Identifier(string.Concat(_edmxName, _contextName, "ViewsForBaseEntitySets")));
             if (_hashKey == null)
-                value = value.AddMembers(Syntax.ParseCompilationUnit("private static string _mappingHashValue;").Members[0]).AddMembers(Syntax.ParseCompilationUnit("public override string MappingHashValue { get { return _mappingHashValue ?? ComputeMappingHashValue(); }}").Members[0]).AddMembers(Syntax.ParseCompilationUnit(string.Concat("public static string ComputeMappingHashValue() { return _mappingHashValue = ((StorageMappingItemCollection)new ", _dalNamespace, ".", _contextName, "().MetadataWorkspace.GetItemCollection(DataSpace.CSSpace)).ComputeMappingHashValue(); }")).Members[0]);
+                value = value.AddMembers(SyntaxFactory.ParseCompilationUnit("private static string _mappingHashValue;").Members[0]).AddMembers(SyntaxFactory.ParseCompilationUnit("public override string MappingHashValue { get { return _mappingHashValue ?? ComputeMappingHashValue(); }}").Members[0]).AddMembers(SyntaxFactory.ParseCompilationUnit(string.Concat("public static string ComputeMappingHashValue() { return _mappingHashValue = ((StorageMappingItemCollection)new ", _dalNamespace, ".", _contextName, "().MetadataWorkspace.GetItemCollection(DataSpace.CSSpace)).ComputeMappingHashValue(); }")).Members[0]);
             else
-                value = value.AddMembers(Syntax.ParseCompilationUnit(string.Concat("public override string MappingHashValue { get { return \"", _hashKey, "\"; }}")).Members[0]);
+                value = value.AddMembers(SyntaxFactory.ParseCompilationUnit(string.Concat("public override string MappingHashValue { get { return \"", _hashKey, "\"; }}")).Members[0]);
         }
         return value;
     }
@@ -228,14 +221,14 @@ public class DALViewVisitor : SyntaxRewriter
     public override SyntaxNode VisitQualifiedName(QualifiedNameSyntax node)
     {
         if (node.ToString() == "System.Data.Mapping.EntityViewContainer")
-            return Syntax.ParseName("DbMappingViewCache");
+            return SyntaxFactory.ParseName("DbMappingViewCache");
         return base.VisitQualifiedName(node);
     }
 
     public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
     {
         if (node.ToString().StartsWith("ViewsForBaseEntitySets"))
-            return Syntax.ParseName(string.Concat(_edmxName, _contextName, "ViewsForBaseEntitySets"));
+            return SyntaxFactory.ParseName(string.Concat(_edmxName, _contextName, "ViewsForBaseEntitySets"));
         return node;
     }
 
@@ -250,7 +243,7 @@ public class DALViewVisitor : SyntaxRewriter
         {
             var getViewMethods = node.Parent.ChildNodes().OfType<MethodDeclarationSyntax>().Where(m => Regex.IsMatch(m.Identifier.ValueText, @"GetView\d")).ToList();
             var test = Regex.Match(getViewMethods[0].GetLeadingTrivia().ToString(), @"/// return view for ([^\r]*)").Groups[1].Value;
-            return Syntax.ParseCompilationUnit(string.Concat("public override DbMappingView GetView(EntitySetBase extent){if (extent == null) throw new ArgumentNullException(\"extent\");  var extentName = extent.EntityContainer.Name + \".\" + extent.Name; ", node.Parent.ChildNodes().OfType<MethodDeclarationSyntax>().Where(m => Regex.IsMatch(m.Identifier.ValueText, @"GetView\d")).Select(m => string.Concat("if (extentName == \"", Regex.Match(m.GetLeadingTrivia().ToString(), @"/// return view for ([^\r]*)").Groups[1].Value, "\") return ", m.Identifier.ValueText, "();")).Aggregate((s1, s2) => s1 + s2), "return null;}")).Members[0];
+            return SyntaxFactory.ParseCompilationUnit(string.Concat("public override DbMappingView GetView(EntitySetBase extent){if (extent == null) throw new ArgumentNullException(\"extent\");  var extentName = extent.EntityContainer.Name + \".\" + extent.Name; ", node.Parent.ChildNodes().OfType<MethodDeclarationSyntax>().Where(m => Regex.IsMatch(m.Identifier.ValueText, @"GetView\d")).Select(m => string.Concat("if (extentName == \"", Regex.Match(m.GetLeadingTrivia().ToString(), @"/// return view for ([^\r]*)").Groups[1].Value, "\") return ", m.Identifier.ValueText, "();")).Aggregate((s1, s2) => s1 + s2), "return null;}")).Members[0];
         }
         MethodDeclarationSyntax value;
         if (node.Identifier.ValueText.StartsWith("GetView"))
@@ -258,7 +251,7 @@ public class DALViewVisitor : SyntaxRewriter
             _getView = true;
             value = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
             _getView = false;
-            value = value.WithReturnType(Syntax.ParseTypeName("DbMappingView")).WithModifiers(value.Modifiers.Add(Syntax.Token(SyntaxKind.StaticKeyword)));
+            value = value.WithReturnType(SyntaxFactory.ParseTypeName("DbMappingView")).WithModifiers(value.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword)));
         }
         else
             value = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
@@ -268,7 +261,7 @@ public class DALViewVisitor : SyntaxRewriter
     public override SyntaxNode VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
     {
         if (_getView && node.Type.ToString() == "System.Collections.Generic.KeyValuePair<string, string>")
-            return node.WithType(Syntax.ParseTypeName("DbMappingView")).WithArgumentList(Syntax.ArgumentList(Syntax.SeparatedList(node.ArgumentList.Arguments[1])));
+            return node.WithType(SyntaxFactory.ParseTypeName("DbMappingView")).WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new [] { node.ArgumentList.Arguments[1] })));
         return base.VisitObjectCreationExpression(node);
     }
 }

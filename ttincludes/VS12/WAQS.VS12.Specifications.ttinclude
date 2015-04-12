@@ -34,7 +34,7 @@
 <#+
 // Copyright (c) Matthieu MEZIL.  All rights reserved.
 
-    public static Solution LoadSolution(string path, ITextTemplatingEngineHost host)
+    public static Microsoft.CodeAnalysis.Solution LoadSolution(string path, ITextTemplatingEngineHost host)
     {
         return MSBuildWorkspace.Create().OpenSolutionAsync(path).Result;
     }
@@ -44,22 +44,22 @@
         return SymbolFinder.FindSourceDefinitionAsync(symbol, solution).Result;
     }
 
-    public static SyntaxTree GetSyntaxTree(Document document)
+    public static SyntaxTree GetSyntaxTree(Microsoft.CodeAnalysis.Document document)
     {
         return document.GetSyntaxTreeAsync().Result;
     }
 
-    public static Compilation GetCompilation(Project project)
+    public static Compilation GetCompilation(Microsoft.CodeAnalysis.Project project)
     {
         return project.GetCompilationAsync().Result;
     }
 
-    public static SyntaxNode GetSyntaxRoot(Document document)
+    public static SyntaxNode GetSyntaxRoot(Microsoft.CodeAnalysis.Document document)
     {
         return document.GetSyntaxRootAsync().Result;
     }
 
-    public static SemanticModel GetSemanticModel(Document document)
+    public static SemanticModel GetSemanticModel(Microsoft.CodeAnalysis.Document document)
     {
         return document.GetSemanticModelAsync().Result;
     }
@@ -98,25 +98,25 @@
     public const SyntaxKind SyntaxKindAssignExpression = SyntaxKind.SimpleAssignmentExpression;
     public const SyntaxKind SyntaxKindMemberAccessExpression = SyntaxKind.SimpleMemberAccessExpression;
 
-    public static Project AddDocument(Project project, string name, string text, IEnumerable<string> folders, out DocumentId documentId)
+    public static Microsoft.CodeAnalysis.Project AddDocument(Microsoft.CodeAnalysis.Project project, string name, string text, IEnumerable<string> folders, out DocumentId documentId)
     {
         var document = project.AddDocument(name, text, folders);
         documentId = document.Id;
         return document.Project;
     }
 
-	public static bool IsSwitchDefaultLabel(SwitchLabelSyntax switchLabel)
-	{
-		return switchLabel is DefaultSwitchLabelSyntax;
-	}
+    public static bool IsSwitchDefaultLabel(SwitchLabelSyntax switchLabel)
+    {
+        return switchLabel is DefaultSwitchLabelSyntax;
+    }
 
-	public static BaseTypeSyntax GetBaseType(TypeSyntax t)
-	{
-		return SyntaxFactory.SimpleBaseType(t);
-	}
+    public static BaseTypeSyntax GetBaseType(TypeSyntax t)
+    {
+        return SyntaxFactory.SimpleBaseType(t);
+    }
 
-	public static TypeKind TypeKindArrayType
-	{
-		get { return TypeKind.Array; }
-	}
+    public static TypeKind TypeKindArrayType
+    {
+        get { return TypeKind.Array; }
+    }
 #>

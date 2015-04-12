@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>WAQS.Client.WPF</id>
-    <version>1.9.2.45</version>
+    <version>1.9.2.49</version>
     <authors>Matthieu MEZIL</authors>
     <owners>Matthieu MEZIL</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
@@ -13,11 +13,11 @@
     <copyright>Matthieu MEZIL</copyright>
     <tags>WAQS</tags>
     <dependencies>
-      <dependency id="WAQS.RoslynDeploy" version="1.0.28" />
+      <dependency id="WAQS.RoslynDeploy" version="1.0.32" />
       <dependency id="T4.Helper" version="1.0.10" />
       <dependency id="EnvDTE.Helper" version="1.0.0" />
     </dependencies>
-    <releaseNotes>Version 1.9.2.45</releaseNotes>
+    <releaseNotes>Version 1.9.2.49</releaseNotes>
   </metadata>
   <files>
     <file src="WAQS.Client\WPF\lib\**\*" target="lib" />

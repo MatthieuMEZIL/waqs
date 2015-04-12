@@ -1,5 +1,6 @@
 <#@ include file="WAQS.Server.DAL.CSharp.Views.ttinclude"#>
 <#@ include file="WAQS.VS12.Edmx.Utility.ttinclude"#>
+<#@ include file="WAQS.VS12.Specifications.ttinclude"#>
 <#+
 // Copyright (c) Microsoft Corporation.  All rights reserved.
 // Copyright (c) Matthieu MEZIL.  All rights reserved.
