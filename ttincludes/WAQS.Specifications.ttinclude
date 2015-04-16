@@ -2908,7 +2908,7 @@ public abstract class SpecificationMethodBodyRewriter : DTOAndInterfacesTypesRew
         var value = ((ObjectCreationExpressionSyntax)base.VisitObjectCreationExpression(node)).WithType((TypeSyntax)Visit(node.Type));
         if (_returnNewError)
         {
-            var initializers = new List<BinaryExpressionSyntax>();
+            var initializers = new List<AssignmentExpressionSyntax>();
             if (!_hasErrorDetails && _dependentProperties != null && _dependentProperties.Count != 0)
             {
                 var dependentProperties = _dependentProperties.Select(ps => ps.Select(p => p.Name).Aggregate((p1, p2) => string.Concat(p1, ".", p2)));
@@ -2918,10 +2918,10 @@ public abstract class SpecificationMethodBodyRewriter : DTOAndInterfacesTypesRew
                     string ifConditionString = ifParent.Condition.ToString();
                     dependentProperties = dependentProperties.Where(p => ifConditionString.Contains(p));
                 }
-                initializers.Add(SyntaxFactory.BinaryExpression(SyntaxKindAssignExpression, SyntaxFactory.IdentifierName("ErrorDetails"), SyntaxFactory.ParseExpression(string.Concat("new ErrorDetail[] { ", dependentProperties.Select(p => string.Concat("new ErrorDetail { EntityKey = ", GetDataTransfertEntityKeyParameter(), "DataTransferEntityKey, PropertyName = \"", p, "\" }")).Aggregate((ps1, ps2) => string.Concat(ps1, ", ", ps2)), " }"))));
+                initializers.Add(SyntaxFactory.AssignmentExpression(SyntaxKindAssignExpression, SyntaxFactory.IdentifierName("ErrorDetails"), SyntaxFactory.ParseExpression(string.Concat("new ErrorDetail[] { ", dependentProperties.Select(p => string.Concat("new ErrorDetail { EntityKey = ", GetDataTransfertEntityKeyParameter(), "DataTransferEntityKey, PropertyName = \"", p, "\" }")).Aggregate((ps1, ps2) => string.Concat(ps1, ", ", ps2)), " }"))));
             }
             if (! _hasKey && _validateMethodName != null)
-                initializers.Add(SyntaxFactory.BinaryExpression(SyntaxKindAssignExpression, SyntaxFactory.IdentifierName("Key"), SyntaxFactory.ParseExpression(string.Concat("\"", _validateMethodName, "\""))));
+                initializers.Add(SyntaxFactory.AssignmentExpression(SyntaxKindAssignExpression, SyntaxFactory.IdentifierName("Key"), SyntaxFactory.ParseExpression(string.Concat("\"", _validateMethodName, "\""))));
             if (initializers.Count != 0)
                 return SyntaxFactory.ObjectCreationExpression(node.Type).WithInitializer(SyntaxFactory.InitializerExpression(SyntaxKind.ObjectInitializerExpression, SyntaxFactory.SeparatedList(value.Initializer.Expressions.Union(initializers), value.Initializer.Expressions.Union(initializers.Skip(1)).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
         }
@@ -4373,7 +4373,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                         _expressionsToTest.Add(valueName);
                         AddStatement(BuildIfFromExpressionsToTest());
 
-                        return SyntaxFactory.BinaryExpression(
+                        return SyntaxFactory.AssignmentExpression(
                             SyntaxKindAssignExpression,
                             value.Left,
                             SyntaxFactory.IdentifierName(valueName));
@@ -4466,7 +4466,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
             ifNotLeftStatements.Add(rightTestNull.BuildIfFromExpressionsToTest());
             ifNotLeftStatements.Add(
                 SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.BinaryExpression(
+                    SyntaxFactory.AssignmentExpression(
                         SyntaxKindAssignExpression,
                         SyntaxFactory.IdentifierName(waqsLogicalName),
                         rightExpression)));
@@ -4581,7 +4581,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                 else if (!IsLINQ(node.Right))
                     RemoveAlreadyTestedVariable(variableName);
             }
-            return SyntaxFactory.BinaryExpression(
+            return SyntaxFactory.AssignmentExpression(
                 SyntaxKindAssignExpression,
                 node.Left,
                 right);
@@ -4642,7 +4642,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                 rightStatements.AddRange(rightAdditionalStatements);
             rightStatements.Add(
                 SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.BinaryExpression(
+                    SyntaxFactory.AssignmentExpression(
                         SyntaxKindAssignExpression,
                         SyntaxFactory.IdentifierName(valueName),
                         rightExpression)));
@@ -4731,7 +4731,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                 ifTrueStatements.Add(ifTrueTestNull.BuildIfFromExpressionsToTest());
             ifTrueStatements.Add(
                 SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.BinaryExpression(
+                    SyntaxFactory.AssignmentExpression(
                         SyntaxKindAssignExpression,
                         SyntaxFactory.IdentifierName(valueName),
                         whenTrueExpression)));
@@ -4742,7 +4742,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                 ifFalseStatements.Add(ifFalseTestNull.BuildIfFromExpressionsToTest());
             ifFalseStatements.Add(
                 SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.BinaryExpression(
+                    SyntaxFactory.AssignmentExpression(
                         SyntaxKindAssignExpression,
                         SyntaxFactory.IdentifierName(valueName),
                         whenFalseExpression)));
@@ -4789,7 +4789,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                                     new SyntaxToken[0]))));
                     statements.Add(
                         SyntaxFactory.ExpressionStatement(
-                            SyntaxFactory.BinaryExpression(
+                            SyntaxFactory.AssignmentExpression(
                                 SyntaxKindAssignExpression,
                                 SyntaxFactory.IdentifierName(variableName),
                                 condition)));
@@ -4929,7 +4929,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                         statementAdditionalStatements.AddRange(conditionAdditionalStatements);
                     statementAdditionalStatements.Add(
                         SyntaxFactory.ExpressionStatement(
-                            SyntaxFactory.BinaryExpression(
+                            SyntaxFactory.AssignmentExpression(
                                 SyntaxKindAssignExpression,
                                 SyntaxFactory.IdentifierName(testVariableName),
                                 newCondition

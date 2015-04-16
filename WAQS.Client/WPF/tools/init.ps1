@@ -11,35 +11,35 @@ if ($ttIncludePath -eq $null)
 
 if (-not (Test-Path $ttIncludePath))
 {
-	New-Item $ttincludePath -ItemType directory
+    New-Item $ttincludePath -ItemType directory
 }
 
 switch($DTE.Version)
 {
-	"10.0" { $vsVersion = "VS10" }
-	"11.0" { $vsVersion = "VS11" }
-	"12.0" { $vsVersion = "VS12" }
-	"14.0" { $vsVersion = "VS14" }
+    "10.0" { $vsVersion = "VS10" }
+    "11.0" { $vsVersion = "VS11" }
+    "12.0" { $vsVersion = "VS12" }
+    "14.0" { $vsVersion = "VS14" }
 }
 
 $ttIncludeSource = "$toolsPath\ttincludes" 
 foreach ($file in [System.IO.Directory]::GetFiles($ttIncludeSource))
 {
     $ttIncludeFile = Join-Path $ttincludePath ([System.IO.Path]::GetFileName($file))
-	if ((-not (Test-Path $ttIncludeFile)) -or ([System.IO.File]::ReadAllText($ttIncludeFile) -ne [System.IO.File]::ReadAllText($file)))
-	{
-		copy $file $ttincludePath
-	}
+    if ((-not (Test-Path $ttIncludeFile)) -or ([System.IO.File]::ReadAllText($ttIncludeFile) -ne [System.IO.File]::ReadAllText($file)))
+    {
+        copy $file $ttincludePath
+    }
 
 }
 $ttIncludeSource = Join-Path $ttIncludeSource $vsVersion
 foreach ($file in [System.IO.Directory]::GetFiles($ttIncludeSource))
 {
     $ttIncludeFile = Join-Path $ttincludePath ([System.IO.Path]::GetFileName($file))
-	if ((-not (Test-Path $ttIncludeFile)) -or ([System.IO.File]::ReadAllText($ttIncludeFile) -ne [System.IO.File]::ReadAllText($file)))
-	{
-		copy $file $ttincludePath
-	}
+    if ((-not (Test-Path $ttIncludeFile)) -or ([System.IO.File]::ReadAllText($ttIncludeFile) -ne [System.IO.File]::ReadAllText($file)))
+    {
+        copy $file $ttincludePath
+    }
 
 }
 

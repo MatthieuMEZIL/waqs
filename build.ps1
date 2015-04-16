@@ -63,7 +63,7 @@ if ($LASTEXITCODE)
     exit $LASTEXITCODE
 }
 Copy-Item -Path ".\NuGet Programs\InitWAQSServer\bin\Debug\InitWAQSServer.exe" -Destination .\WAQS.Server\tools\Server
-Copy-Item -Path ".\NuGet Programs\InitWAQSServerMock\bin\Debug\InitWAQSServerMock.exe" -Destination .\WAQS.Server.Mock\tools\Server
+Copy-Item -Path ".\NuGet Programs\InitWAQSServerMock\bin\Debug\InitWAQSServerMock.exe" -Destination .\WAQS.Server.Mock\tools\Server.Mock
 Copy-Item -Path ".\NuGet Programs\InitWAQSClientWPF\bin\Debug\InitWAQSClientWPF.exe" -Destination .\WAQS.Client\WPF\tools\Client.WPF
 Copy-Item -Path ".\NuGet Programs\InitWAQSClientWPFGlobal\bin\Debug\InitWAQSClientWPFGlobal.exe" -Destination .\WAQS.Client\WPF\tools\Client.WPF
 Copy-Item -Path ".\NuGet Programs\InitWAQSClientPCL\bin\Debug\InitWAQSClientPCL.exe" -Destination .\WAQS.Client\PCL\tools\Client.PCL
