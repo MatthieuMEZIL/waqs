@@ -69,29 +69,29 @@ namespace WAQS
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
             {
-                //CommandID waqsCommandID = new CommandID(GuidList.guidWAQSCmdSet, (int)PkgCmdIDList.WAQSId);
-                //MenuCommand waqsItem = new MenuCommand(null, waqsCommandID);
-                //mcs.AddCommand(waqsItem);
-
-                CommandID waqsServerCommandID = new CommandID(GuidList.guidWAQSCmdSet, (int)PkgCmdIDList.WAQSServerId);
+                CommandID waqsServerCommandID = new CommandID(GuidList.guidWAQSProjectCmdSet, (int)PkgCmdIDList.WAQSServerId);
                 MenuCommand waqsServerItem = new MenuCommand(WAQSServerCallback, waqsServerCommandID);
                 mcs.AddCommand(waqsServerItem);
 
-                CommandID waqsServerMockCommandID = new CommandID(GuidList.guidWAQSCmdSet, (int)PkgCmdIDList.WAQSServerMockId);
+                CommandID waqsServerMockCommandID = new CommandID(GuidList.guidWAQSProjectCmdSet, (int)PkgCmdIDList.WAQSServerMockId);
                 MenuCommand waqsServerMockItem = new MenuCommand(WAQSServerMockCallback, waqsServerMockCommandID);
                 mcs.AddCommand(waqsServerMockItem);
 
-                CommandID waqsClientWPFCommandID = new CommandID(GuidList.guidWAQSCmdSet, (int)PkgCmdIDList.WAQSClientWPFId);
+                CommandID waqsClientWPFCommandID = new CommandID(GuidList.guidWAQSProjectCmdSet, (int)PkgCmdIDList.WAQSClientWPFId);
                 MenuCommand waqsClientWPFItem = new MenuCommand(WAQSClientWPFCallback, waqsClientWPFCommandID);
                 mcs.AddCommand(waqsClientWPFItem);
 
-                CommandID waqsClientPCLCommandID = new CommandID(GuidList.guidWAQSCmdSet, (int)PkgCmdIDList.WAQSClientPCLId);
+                CommandID waqsClientPCLCommandID = new CommandID(GuidList.guidWAQSProjectCmdSet, (int)PkgCmdIDList.WAQSClientPCLId);
                 MenuCommand waqsClientPCLItem = new MenuCommand(WAQSClientPCLCallback, waqsClientPCLCommandID);
                 mcs.AddCommand(waqsClientPCLItem);
 
-                CommandID waqsUpdateGeneratedCodeCommandID = new CommandID(GuidList.guidWAQSCmdSet, (int)PkgCmdIDList.WAQSUpdateGeneratedCodeId);
+                CommandID waqsUpdateGeneratedCodeCommandID = new CommandID(GuidList.guidWAQSProjectCmdSet, (int)PkgCmdIDList.WAQSUpdateGeneratedCodeId);
                 MenuCommand waqsUpdateGeneratedCodeItem = new MenuCommand(WAQSUpdateGeneratedCodeCallback, waqsUpdateGeneratedCodeCommandID);
                 mcs.AddCommand(waqsUpdateGeneratedCodeItem);
+
+                CommandID waqsInitVMCommandID = new CommandID(GuidList.guidWAQSFileCmdSet, (int)PkgCmdIDList.WAQSInitVMId);
+                MenuCommand waqsInitVMItem = new MenuCommand(WAQSInitVMCallback, waqsInitVMCommandID);
+                mcs.AddCommand(waqsInitVMItem);
             }
         }
         #endregion
@@ -143,6 +143,23 @@ namespace WAQS
         {
             var dte = GetService(typeof(DTE)) as DTE;
             var wizard = new UpdateGeneratedCodeWizard(dte);
+            wizard.Owner = Application.Current.MainWindow;
+            wizard.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            wizard.ShowDialog();
+        }
+
+        private void WAQSInitVMCallback(object sender, EventArgs e)
+        {
+            var dte = GetService(typeof(DTE)) as DTE;
+            var viewModel = dte.SelectedItems.Item(1).ProjectItem;
+            if (! viewModel.Name.EndsWith(".cs"))
+            {
+                MessageBox.Show(Application.Current.MainWindow, "The view model must be a C# file", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            var componentModel = (IComponentModel)GetService(typeof(SComponentModel));
+            var installerServices = componentModel.GetService<IVsPackageInstallerServices>();
+            var wizard = new ViewModelWizard(dte, viewModel, installerServices);
             wizard.Owner = Application.Current.MainWindow;
             wizard.WindowStartupLocation = WindowStartupLocation.CenterOwner;
             wizard.ShowDialog();

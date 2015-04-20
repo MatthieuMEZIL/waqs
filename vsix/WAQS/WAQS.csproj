@@ -73,6 +73,13 @@
     <Reference Include="Microsoft.VisualStudio.Shell.Immutable.10.0" />
     <Reference Include="Microsoft.VisualStudio.Shell.Immutable.11.0" />
     <Reference Include="Microsoft.VisualStudio.Shell.Immutable.12.0" />
+    <Reference Include="Microsoft.Web.XmlTransform">
+      <HintPath>..\packages\Microsoft.Web.Xdt.2.1.0\lib\net40\Microsoft.Web.XmlTransform.dll</HintPath>
+    </Reference>
+    <Reference Include="NuGet.Core, Version=2.8.60318.667, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\NuGet.Core.2.8.5\lib\net40-Client\NuGet.Core.dll</HintPath>
+    </Reference>
     <Reference Include="NuGet.VisualStudio">
       <HintPath>..\packages\NuGet.VisualStudio.2.8.3\lib\net40\NuGet.VisualStudio.dll</HintPath>
       <EmbedInteropTypes>True</EmbedInteropTypes>
@@ -161,6 +168,7 @@
     <Compile Include="ForegroundColorConverter.cs" />
     <Compile Include="GenerationOptions.cs" />
     <Compile Include="Guids.cs" />
+    <Compile Include="NuGetExtensions.cs" />
     <Compile Include="PackageInstallerServicesExtensions.cs" />
     <Compile Include="Resources.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -179,6 +187,9 @@
     <Compile Include="TemplatesCopying.cs" />
     <Compile Include="UpdateGeneratedCodeWizard.xaml.cs">
       <DependentUpon>UpdateGeneratedCodeWizard.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="ViewModelWizard.xaml.cs">
+      <DependentUpon>ViewModelWizard.xaml</DependentUpon>
     </Compile>
     <Compile Include="WAQSPackage.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -239,6 +250,10 @@
       <Generator>MSBuild:Compile</Generator>
     </Page>
     <Page Include="UpdateGeneratedCodeWizard.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+    <Page Include="ViewModelWizard.xaml">
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>

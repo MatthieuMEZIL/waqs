@@ -34,33 +34,48 @@
     group; your package should define its own command set in order to avoid collisions  
     with command ids defined by other packages. -->
 
-    
+
     <!-- In this section you can define new menu groups. A menu group is a container for 
          other menus or buttons (commands); from a visual point of view you can see the 
          group as the part of a menu contained between two lines. The parent of a group 
          must be a menu. -->
     <Groups>
 
-      <Group guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuGroup" priority="0x0600">
+      <Group guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuGroup" priority="0x0600">
         <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE"/>
       </Group>
 
-      <Group guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuItemsGroup" priority="0x0100">
-        <Parent guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenu" />
+      <Group guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuItemsGroup" priority="0x0100">
+        <Parent guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenu" />
+      </Group>
+
+      <Group guid="guidWAQSFileCmdSet" id="cmdidWAQSFileMenuGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_ITEMNODE"/>
+      </Group>
+
+      <Group guid="guidWAQSFileCmdSet" id="cmdidWAQSFileMenuItemsGroup" priority="0x0100">
+        <Parent guid="guidWAQSFileCmdSet" id="cmdidWAQSFileMenu" />
       </Group>
 
     </Groups>
 
     <Menus>
-      <Menu guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenu" priority="0x0100" type="Menu">
-        <Parent guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuGroup" />
+      <Menu guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenu" priority="0x0100" type="Menu">
+        <Parent guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuGroup" />
+        <Strings>
+          <CommandName>WAQS</CommandName>
+          <ButtonText>WAQS</ButtonText>
+        </Strings>
+      </Menu>
+      <Menu guid="guidWAQSFileCmdSet" id="cmdidWAQSFileMenu" priority="0x0100" type="Menu">
+        <Parent guid="guidWAQSFileCmdSet" id="cmdidWAQSFileMenuGroup" />
         <Strings>
           <CommandName>WAQS</CommandName>
           <ButtonText>WAQS</ButtonText>
         </Strings>
       </Menu>
     </Menus>
-    
+
     <!--Buttons section. -->
     <!--This section defines the elements the user can interact with, like a menu command or a button 
         or combo box in a toolbar. -->
@@ -73,49 +88,56 @@
               <CommandFlag>DynamicVisibility</CommandFlag>
           If you do not want an image next to your command, remove the Icon node /> -->
 
-      <!--<Button guid="guidWAQSCmdSet" id="WAQSId" priority="0x0100" type="MenuButton">
-        <Parent guid="guidWAQSCmdSet" id="WAQSMenuGroup" />
+      <!--<Button guid="guidWAQSProjectCmdSet" id="WAQSId" priority="0x0100" type="MenuButton">
+        <Parent guid="guidWAQSProjectCmdSet" id="WAQSMenuGroup" />
         <Strings>
           <ButtonText>WAQS</ButtonText>
         </Strings>
       </Button>-->
 
-      <Button guid="guidWAQSCmdSet" id="WAQSServerId" priority="0x0100" type="Button">
-        <Parent guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
+      <Button guid="guidWAQSProjectCmdSet" id="WAQSServerId" priority="0x0100" type="Button">
+        <Parent guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
         <Strings>
           <ButtonText>Server Generation</ButtonText>
         </Strings>
       </Button>
 
-      <Button guid="guidWAQSCmdSet" id="WAQSServerMockId" priority="0x0100" type="Button">
-        <Parent guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
+      <Button guid="guidWAQSProjectCmdSet" id="WAQSServerMockId" priority="0x0100" type="Button">
+        <Parent guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
         <Strings>
           <ButtonText>Server Mock Generation</ButtonText>
         </Strings>
       </Button>
 
-      <Button guid="guidWAQSCmdSet" id="WAQSClientWPFId" priority="0x0100" type="Button">
-        <Parent guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
+      <Button guid="guidWAQSProjectCmdSet" id="WAQSClientWPFId" priority="0x0100" type="Button">
+        <Parent guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
         <Strings>
           <ButtonText>WPF Client Generation</ButtonText>
         </Strings>
       </Button>
 
-      <Button guid="guidWAQSCmdSet" id="WAQSClientPCLId" priority="0x0100" type="Button">
-        <Parent guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
+      <Button guid="guidWAQSProjectCmdSet" id="WAQSClientPCLId" priority="0x0100" type="Button">
+        <Parent guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
         <Strings>
           <ButtonText>PCL Client Generation</ButtonText>
         </Strings>
       </Button>
 
-      <Button guid="guidWAQSCmdSet" id="WAQSUpdateGeneratedCodeId" priority="0x0100" type="Button">
-        <Parent guid="guidWAQSCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
+      <Button guid="guidWAQSProjectCmdSet" id="WAQSUpdateGeneratedCodeId" priority="0x0100" type="Button">
+        <Parent guid="guidWAQSProjectCmdSet" id="cmdidWAQSProjectMenuItemsGroup" />
         <Strings>
           <ButtonText>Update Solution Generated Code</ButtonText>
         </Strings>
       </Button>
+
+      <Button guid="guidWAQSFileCmdSet" id="WAQSInitVMId" priority="0x0100" type="Button">
+        <Parent guid="guidWAQSFileCmdSet" id="cmdidWAQSFileMenuItemsGroup" />
+        <Strings>
+          <ButtonText>Init view model</ButtonText>
+        </Strings>
+      </Button>
     </Buttons>
-   
+
     <!--The bitmaps section is used to define the bitmaps that are used for the commands.-->
     <Bitmaps>
       <!--  The bitmap id is defined in a way that is a little bit different from the others: 
@@ -124,9 +146,9 @@
             inside a button definition. An important aspect of this declaration is that the element id 
             must be the actual index (1-based) of the bitmap inside the bitmap strip. -->
       <Bitmap guid="guidImages" href="Resources\Images.png" usedList="bmpPic1, bmpPic2, bmpPicSearch, bmpPicX, bmpPicArrows"/>
-      
+
     </Bitmaps>
- 
+
   </Commands>
 
 
@@ -136,20 +158,26 @@
   <Symbols>
     <!-- This is the package guid. -->
     <GuidSymbol name="guidWAQSPkg" value="{5ad58966-3cff-4af7-9009-15e13cfb963a}" />
-    
-    <!-- This is the guid used to group the menu commands together -->
-    <GuidSymbol name="guidWAQSCmdSet" value="{9ac3e3e3-c740-4fdb-8619-1965158e2ee6}">
 
+    <!-- This is the guid used to group the menu commands together -->
+    <GuidSymbol name="guidWAQSProjectCmdSet" value="{9ac3e3e3-c740-4fdb-8619-1965158e2ee6}">
       <IDSymbol name="cmdidWAQSProjectMenu" value="0x1020" />
       <IDSymbol name="cmdidWAQSProjectMenuGroup" value="0x1021" />
-      <IDSymbol name="cmdidWAQSProjectMenuItemsGroup" value="0x0100" />
+      <IDSymbol name="cmdidWAQSProjectMenuItemsGroup" value="0x1022" />
       <IDSymbol name="WAQSServerId" value="0x0101" />
       <IDSymbol name="WAQSServerMockId" value="0x0102" />
       <IDSymbol name="WAQSClientWPFId" value="0x0103" />
       <IDSymbol name="WAQSClientPCLId" value="0x0104" />
       <IDSymbol name="WAQSUpdateGeneratedCodeId" value="0x0105" />
     </GuidSymbol>
-    
+
+    <GuidSymbol name="guidWAQSFileCmdSet" value="{9ac3e3e3-c740-4fdb-8619-1965158e2ee7}">
+      <IDSymbol name="cmdidWAQSFileMenu" value="0x1030" />
+      <IDSymbol name="cmdidWAQSFileMenuGroup" value="0x1031" />
+      <IDSymbol name="cmdidWAQSFileMenuItemsGroup" value="0x1032" />
+      <IDSymbol name="WAQSInitVMId" value="0x0201" />
+    </GuidSymbol>
+
     <GuidSymbol name="guidImages" value="{7249dc84-3d3e-4184-9de3-b6e1944c857d}" >
       <IDSymbol name="bmpPic1" value="1" />
       <IDSymbol name="bmpPic2" value="2" />

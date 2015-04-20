@@ -2,15 +2,15 @@ using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.VisualStudio;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using VSLangProj;
-using WAQS.NuGetOData;
 
 namespace WAQS
 {
@@ -78,10 +78,11 @@ namespace WAQS
 
         private void GenerateClick(object sender, RoutedEventArgs e)
         {
+            var originalCursor = Cursor;
             try
             {
-                var lastVersion = new V2FeedContext(new Uri("http://www.nuget.org/api/v2/")).Execute<V2FeedPackage>(new Uri("http://www.nuget.org/api/v2/Packages?$filter=IsAbsoluteLatestVersion and Id eq 'WAQS.Server.Mock'&$skip=0&$top=1&$select=Id,Version&targetFramework=&includePrerelease=true")).Single().Version;
-                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "WAQS.Server.Mock", lastVersion, false);
+                Cursor = Cursors.Wait;
+                _packageInstaller.InstallPackage(_project, "WAQS.Server.Mock", _packageInstallerServices);
 
                 var edmxPath = edmx.SelectedValue as string;
                 var appKind = _project.Properties.Cast<EnvDTE.Property>().Any(p => p.Name.StartsWith("WebApplication")) ? "Web" : "App";
@@ -217,7 +218,13 @@ namespace WAQS
 
                 if (copyTemplates.IsChecked == true)
                 {
-                    TemplatesCopying.CopyTemplates(_dte, "ServerMockTemplates", netVersion, toolsPath, vsVersion);
+                    string templatesFolder;
+                    HashSet<string> existingTTIncludes;
+                    EnvDTE.ProjectItems templatesProjectItems;
+                    TemplatesCopying.CopyTemplates(_dte, "ServerMockTemplates", netVersion, toolsPath, vsVersion, out templatesFolder, out existingTTIncludes, out templatesProjectItems);
+                    var ttInclude = @"%AppData%\WAQS\Templates\Includes\WAQS.Roslyn.Assemblies.ttinclude";
+                    var ttIncludeName = Path.GetFileName(ttInclude);
+                    TemplatesCopying.AddItem(ttInclude, vsVersion, netVersion, ttIncludeName, templatesFolder, existingTTIncludes, templatesProjectItems);
                 }
 
                 if (kind.Kind == GenerationOptions.Kind.FrameworkOnly)
@@ -246,6 +253,10 @@ namespace WAQS
             catch (Exception ex)
             {
                 MessageBox.Show(ex.GetType().ToString() + "\r\n" + ex.Message + "\r\n" + ex.StackTrace);
+            }
+            finally
+            {
+                Cursor = originalCursor;
             }
         }
 

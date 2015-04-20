@@ -201,6 +201,11 @@ namespace WAQS
             return (string)project.Properties.Cast<Property>().First(p => p.Name == "RootNamespace").Value;
         }
 
+        public static string GetTargetFrameworkMoniker(this Project project)
+        {
+            return (string)project.Properties.Cast<Property>().First(p => p.Name == "TargetFrameworkMoniker").Value;
+        }
+
         public static void RecursiveT4RunCustomTool(this ProjectItem item, Action<ProjectItem, Exception> error, Action<ProjectItem> generated)
         {
             if (item != null)
@@ -241,22 +246,27 @@ namespace WAQS
             }
         }
 
-        public static IEnumerable<FilePathes> GetSolutionEdmx(this DTE dte, Project defaultProject)
+        public static IEnumerable<FilePathes> GetSolutionEdmx(this DTE dte, Project defaultProject, bool skipWaqsAlreadyUsed = true)
         {
-            return (from f in dte.GetProjects().SelectMany(p => p.GetAllProjectItems()).Where(pi => pi.Name.EndsWith(".edmx"))
-                    let path = f.GetFilePath()
-                    let projectDirectory = Path.GetDirectoryName(defaultProject.FullName)
-                    where !Directory.Exists(Path.Combine(projectDirectory, "WAQS." + Path.GetFileNameWithoutExtension(path)))
-                    orderby path.StartsWith(projectDirectory + "\\") descending, path
-                    select new FilePathes { FullPath = path, DisplayPath = f.GetDisplayPath() });
+            return GetSolutionFiles(dte, defaultProject, ".edmx", skipWaqsAlreadyUsed);
         }
 
-        public static IEnumerable<FilePathes> GetSolutionSvc(this DTE dte, Project defaultProject)
+        public static IEnumerable<FilePathes> GetSolutionSvc(this DTE dte, Project defaultProject, bool skipWaqsAlreadyUsed = true)
         {
-            return (from f in dte.GetProjects().SelectMany(p => p.GetAllProjectItems()).Where(pi => pi.Name.EndsWith(".svc"))
+            return GetSolutionFiles(dte, defaultProject, ".svc", skipWaqsAlreadyUsed);
+        }
+
+        public static IEnumerable<FilePathes> GetSolutionXaml(this DTE dte, Project defaultProject, bool skipWaqsAlreadyUsed = true)
+        {
+            return GetSolutionFiles(dte, defaultProject, ".xaml", skipWaqsAlreadyUsed);
+        }
+
+        private static IEnumerable<FilePathes> GetSolutionFiles(this DTE dte, Project defaultProject, string extension, bool skipWaqsAlreadyUsed)
+        {
+            return (from f in dte.GetProjects().SelectMany(p => p.GetAllProjectItems()).Where(pi => pi.Name.EndsWith(extension))
                     let path = f.GetFilePath()
                     let projectDirectory = Path.GetDirectoryName(defaultProject.FullName)
-                    where !Directory.Exists(Path.Combine(projectDirectory, "WAQS." + Path.GetFileNameWithoutExtension(path)))
+                    where ! (skipWaqsAlreadyUsed && Directory.Exists(Path.Combine(projectDirectory, "WAQS." + Path.GetFileNameWithoutExtension(path))))
                     orderby path.StartsWith(projectDirectory + "\\") descending, path
                     select new FilePathes { FullPath = path, DisplayPath = f.GetDisplayPath() });
         }

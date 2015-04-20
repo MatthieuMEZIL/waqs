@@ -16,7 +16,7 @@ namespace InitViewModel
                 string rootNamespace = args[1];
                 string filePath = args[2];
                 string waqsFilePath = args[3];
-                string xamlCsFilePath = args[4];
+                string xamlCsFilePath = args.Length > 4 ? args[4] : null;
                 if (string.IsNullOrEmpty(xamlCsFilePath))
                     xamlCsFilePath = null;
                 else

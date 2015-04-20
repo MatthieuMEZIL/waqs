@@ -17,7 +17,7 @@
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition />
         </Grid.ColumnDefinitions>
-        <TextBlock Text="Edmx:" Margin="5" VerticalAlignment="Center" />
+        <TextBlock Text="Edmx" Margin="5" VerticalAlignment="Center" />
         <ComboBox x:Name="edmx" Grid.Column="1" Margin="0,5,5,5"  SelectionChanged="EdmxSelectedChanged"  DisplayMemberPath="DisplayPath" SelectedValuePath="FullPath" />
         <TextBlock Grid.Row="1" Text="Generation option" Margin="5" VerticalAlignment="Center" />
         <ComboBox x:Name="generationOptions" Grid.Row="1" Grid.Column="1" Margin="0,5,5,5" SelectionChanged="GenerationOptionsSelectedChanged" SelectedValuePath="Kind" />

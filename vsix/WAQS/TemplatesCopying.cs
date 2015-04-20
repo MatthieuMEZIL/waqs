@@ -14,10 +14,10 @@ namespace WAQS
 {
     public static class TemplatesCopying
     {
-        public static void CopyTemplates(DTE dte, string templatesFolderName, string netVersion, string toolsPath, string vsVersion)
+        public static void CopyTemplates(DTE dte, string templatesFolderName, string netVersion, string toolsPath, string vsVersion, out string templatesFolder, out HashSet<string> existingTTIncludes, out ProjectItems templatesProjectItems)
         {
             var slnFolder = Path.GetDirectoryName(dte.Solution.FullName);
-            var templatesFolder = Path.Combine(slnFolder, templatesFolderName);
+            templatesFolder = Path.Combine(slnFolder, templatesFolderName);
             if (!Directory.Exists(templatesFolder))
             {
                 Directory.CreateDirectory(templatesFolder);
@@ -65,72 +65,17 @@ namespace WAQS
             }
 
             var ttincludesFolder = Path.Combine(toolsPath, "ttincludes");
-            var templatesProjectItems = (ProjectItems)templates.ProjectItems;
-            var existingTTIncludes = new HashSet<string>(templatesProjectItems.Cast<ProjectItem>().Select(pi => pi.Name));
+            templatesProjectItems = (ProjectItems)templates.ProjectItems;
+            existingTTIncludes = new HashSet<string>(templatesProjectItems.Cast<ProjectItem>().Select(pi => pi.Name));
             string ttIncludeName = null;
             foreach (var ttInclude in Directory.GetFiles(ttincludesFolder).Where(f => (ttIncludeName = Path.GetFileName(f)).StartsWith("WAQS.")))
             {
-                var m = Regex.Match(ttInclude, @".(NET\d+).");
-                if (!m.Success || m.Groups[1].Value == netVersion)
-                {
-                    const string x64Key = @"Software\Wow6432Node\Microsoft\Microsoft SDKs\Windows";
-                    if (ttIncludeName.EndsWith(".x64"))
-                    {
-                        try
-                        {
-                            if (Registry.LocalMachine.OpenSubKey(x64Key) == null)
-                            {
-                                continue;
-                            }
-                            ttIncludeName = ttIncludeName.Substring(0, ttIncludeName.Length - 4);
-                        }
-                        catch
-                        {
-                            continue;
-                        }
-                    }
-                    else if (ttIncludeName.EndsWith(".x86"))
-                    {
-                        try
-                        {
-                            if (Registry.LocalMachine.OpenSubKey(x64Key) != null)
-                            {
-                                continue;
-                            }
-                        }
-                        catch
-                        {
-                        }
-                        ttIncludeName = ttIncludeName.Substring(0, ttIncludeName.Length - 4);
-                    }
-                    var ttIncludeCopy = Path.Combine(templatesFolder, ttIncludeName);
-                    if (!existingTTIncludes.Contains(ttIncludeName))
-                    {
-                        templatesProjectItems.AddFromFile(ttIncludeCopy);
-                    }
-                }
+                AddItem(ttInclude, vsVersion, netVersion, ttIncludeName, templatesFolder, existingTTIncludes, templatesProjectItems);
             }
             var ttIncludesFolderVS = Path.Combine(ttincludesFolder, vsVersion);
             foreach (var ttInclude in Directory.GetFiles(ttIncludesFolderVS).Where(f => (ttIncludeName = Path.GetFileName(f)).StartsWith("WAQS.")))
             {
-                var m = Regex.Match(ttInclude, @".(NET\d+).");
-                if (!m.Success || m.Groups[1].Value == netVersion)
-                {
-                    var ttIncludeCopy = Path.Combine(templatesFolder, ttIncludeName);
-                    if (!existingTTIncludes.Contains(ttIncludeName))
-                    {
-                        templatesProjectItems.AddFromFile(ttIncludeCopy);
-                    }
-                    if (ttIncludeName.Contains("." + vsVersion + "." + netVersion + "."))
-                    {
-                        ttIncludeCopy = ttIncludeCopy.Substring(0, ttIncludeCopy.Length - 10) + ".merge.tt";
-                        ttIncludeName = Path.GetFileName(ttIncludeCopy);
-                        if (!existingTTIncludes.Contains(ttIncludeName))
-                        {
-                            templatesProjectItems.AddFromFile(ttIncludeCopy);
-                        }
-                    }
-                }
+                AddItem(ttInclude, vsVersion, netVersion, ttIncludeName, templatesFolder, existingTTIncludes, templatesProjectItems);
             }
             const string mergeTTIncludeFileName = "MergeT4Files.ttinclude";
             File.Copy(Path.Combine(ttincludesFolder, mergeTTIncludeFileName), Path.Combine(templatesFolder, mergeTTIncludeFileName), true);
@@ -155,6 +100,58 @@ namespace WAQS
             {
             }
             MergeTTIncludes(dte, templates, templatesFolder);
+        }
+
+        public static void AddItem(string ttInclude, string vsVersion, string netVersion, string ttIncludeName, string templatesFolder, HashSet<string> existingTTIncludes, ProjectItems templatesProjectItems)
+        {
+            var m = Regex.Match(ttInclude, @".(NET\d+).");
+            if (!m.Success || m.Groups[1].Value == netVersion)
+            {
+                const string x64Key = @"Software\Wow6432Node\Microsoft\Microsoft SDKs\Windows";
+                if (ttIncludeName.EndsWith(".x64"))
+                {
+                    try
+                    {
+                        if (Registry.LocalMachine.OpenSubKey(x64Key) == null)
+                        {
+                            return;
+                        }
+                        ttIncludeName = ttIncludeName.Substring(0, ttIncludeName.Length - 4);
+                    }
+                    catch
+                    {
+                        return;
+                    }
+                }
+                else if (ttIncludeName.EndsWith(".x86"))
+                {
+                    try
+                    {
+                        if (Registry.LocalMachine.OpenSubKey(x64Key) != null)
+                        {
+                            return;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                    ttIncludeName = ttIncludeName.Substring(0, ttIncludeName.Length - 4);
+                }
+                var ttIncludeCopy = Path.Combine(templatesFolder, ttIncludeName);
+                if (!existingTTIncludes.Contains(ttIncludeName))
+                {
+                    templatesProjectItems.AddFromFile(ttIncludeCopy);
+                }
+                if (ttIncludeName.Contains("." + vsVersion + "." + netVersion + "."))
+                {
+                    ttIncludeCopy = ttIncludeCopy.Substring(0, ttIncludeCopy.Length - 10) + ".merge.tt";
+                    ttIncludeName = Path.GetFileName(ttIncludeCopy);
+                    if (!existingTTIncludes.Contains(ttIncludeName))
+                    {
+                        templatesProjectItems.AddFromFile(ttIncludeCopy);
+                    }
+                }
+            }
         }
 
         private static void MergeTTIncludes(DTE dte, Project templates, string templatesFolder)

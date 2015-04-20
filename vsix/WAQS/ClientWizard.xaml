@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:WAQS"
         mc:Ignorable="d"
-        Title="ClientWPFWizard" Height="210" Width="600">
+        Title="ClientWPFWizard" Height="219.936" Width="600">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
