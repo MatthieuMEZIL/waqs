@@ -27,5 +27,9 @@ namespace WAQS
                 InstallPackage(packageInstaller, project, dependency.Id, packageInstallerServices, dependency.VersionSpec.ToString());
             }
         }
+        public static string GetPackageLocation(this IVsPackageInstallerServices packageInstallerServices, string packageName)
+        {
+            return packageInstallerServices.GetInstalledPackages().Where(p => p.Id == packageName).OrderByDescending(p => p.VersionString).First().InstallPath;
+        }
     }
 }

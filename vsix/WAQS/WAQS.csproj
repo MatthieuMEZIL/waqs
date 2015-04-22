@@ -169,7 +169,6 @@
     <Compile Include="GenerationOptions.cs" />
     <Compile Include="Guids.cs" />
     <Compile Include="NuGetExtensions.cs" />
-    <Compile Include="PackageInstallerServicesExtensions.cs" />
     <Compile Include="Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
