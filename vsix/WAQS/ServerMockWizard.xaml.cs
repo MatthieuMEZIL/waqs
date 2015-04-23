@@ -17,7 +17,7 @@ namespace WAQS
     /// <summary>
     /// Interaction logic for ServerMockWizard.xaml
     /// </summary>
-    public partial class ServerMockWizard : Window
+    public partial class ServerMockWizard
     {
         private EnvDTE.DTE _dte;
         private EnvDTE.Project _project;

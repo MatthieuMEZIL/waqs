@@ -14,7 +14,7 @@ public class WCFProxyNetRewriter : SyntaxRewriter
 		var baseType = node.BaseList.Types.FirstOrDefault();
 		if (baseType != null)
 		{
-			var genericBaseType = baseType as GenericNameSyntax;
+			var genericBaseType = baseType.Type as GenericNameSyntax;
 			string baseClassName;
 			if (genericBaseType == null)
 				baseClassName = baseType.GetText().ToString();

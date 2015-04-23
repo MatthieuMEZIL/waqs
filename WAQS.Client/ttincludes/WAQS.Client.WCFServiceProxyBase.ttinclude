@@ -3,8 +3,6 @@
 <#@ assembly name="EnvDTE"#>
 <#@ assembly name="System.Runtime.Serialization"#>
 <#@ assembly name="System.ServiceModel"#>
-<#@ assembly name="Roslyn.Compilers"#>
-<#@ assembly name="Roslyn.Compilers.CSharp"#>
 <#@ import namespace="System"#>
 <#@ import namespace="System.CodeDom.Compiler"#>
 <#@ import namespace="System.Collections.ObjectModel"#>
@@ -23,7 +21,6 @@
 <#@ import namespace="System.Xml.Linq"#>
 <#@ import namespace="Microsoft.VisualStudio.TextTemplating"#>
 <#@ import namespace="Microsoft.Silverlight.ServiceReference"#>
-<#@ import namespace="Roslyn.Compilers.CSharp"#>
 <#+
 // Copyright (c) Matthieu MEZIL.  All rights reserved.
 
@@ -101,12 +98,12 @@ void WriteClientWCFServiceProxy(string servicePath, Dictionary<string, string> n
 	}
 	string value = sb.ToString();
 
-	var codeExpression = Syntax.ParseCompilationUnit(value);
+	var codeExpression = SyntaxFactory.ParseCompilationUnit(value);
 	value = GetProxyTransformationValue(namespaces, codeExpression);
 
 	EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileManager.Create(this);
 
-	var documentTree = Syntax.ParseCompilationUnit(value);
+	var documentTree = SyntaxFactory.ParseCompilationUnit(value);
 	foreach (var type in new SplitClasses().Visit(documentTree))
 	{
 		fileManager.StartNewFile(type.Key + ".cs");
@@ -115,18 +112,22 @@ void WriteClientWCFServiceProxy(string servicePath, Dictionary<string, string> n
 		var @interface = @namespace.ChildNodes().OfType<InterfaceDeclarationSyntax>().FirstOrDefault();
 		if (@interface != null && @interface.BaseList == null)
 			typeValue =  typeValue.WithMembers(
-				Syntax.List(
+				SyntaxFactory.List(
 					typeValue.Members.Select(m => 
 						m == @namespace ? 
 						@namespace.WithMembers(
-							Syntax.List(@namespace.Members.Select(m2 => 
+							SyntaxFactory.List(@namespace.Members.Select(m2 => 
 								m2 == @interface ?
 								@interface.WithBaseList(
-									Syntax.BaseList(
-										Syntax.SeparatedList<TypeSyntax>(
-											Syntax.ParseTypeName("System.ServiceModel.ICommunicationObject"),
-											Syntax.Token(SyntaxKind.CommaToken),
-											Syntax.ParseTypeName("System.IDisposable")))) : 
+									SyntaxFactory.BaseList(
+										SyntaxFactory.SeparatedList<BaseTypeSyntax>(
+											new[] 
+											{ 
+												SyntaxFactory.SimpleBaseType(
+													SyntaxFactory.ParseTypeName("System.ServiceModel.ICommunicationObject")),
+												SyntaxFactory.SimpleBaseType(
+													SyntaxFactory.ParseTypeName("System.IDisposable"))
+											}))) : 
 								m2))) :
 						m)));
 #>
@@ -156,7 +157,7 @@ class NamespaceFilter : SyntaxRewriter
 	}
 }
 
-class SplitClasses : SyntaxVisitor<IEnumerable<KeyValuePair<string, SyntaxNode>>>
+class SplitClasses : SyntaxVisitorOfIEnumerableOfKeyValuePairStringSyntaxNode
 {
 	public override IEnumerable<KeyValuePair<string, SyntaxNode>> VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)
 	{
@@ -181,21 +182,24 @@ class SplitClasses : SyntaxVisitor<IEnumerable<KeyValuePair<string, SyntaxNode>>
 			else
 				throw new NotImplementedException();
 
-			yield return new KeyValuePair<string, SyntaxNode>(identifier.ValueText, Syntax.CompilationUnit(
+			yield return new KeyValuePair<string, SyntaxNode>(identifier.ValueText, SyntaxFactory.CompilationUnit(
 				compilationUnit.Externs, 
 				compilationUnit.Usings, 
 				compilationUnit.AttributeLists, 
-				Syntax.List<MemberDeclarationSyntax>(
-					Syntax.NamespaceDeclaration(
-						node.NamespaceKeyword, 
-						node.Name, 
-						node.OpenBraceToken,
-						node.Externs,
-						node.Usings,
-						Syntax.List<MemberDeclarationSyntax>(
-							memberDeclaration),
-						node.CloseBraceToken,
-						node.SemicolonToken)), 
+				SyntaxFactory.List<MemberDeclarationSyntax>(
+					new [] 
+					{ 
+						SyntaxFactory.NamespaceDeclaration(
+							node.NamespaceKeyword, 
+							node.Name, 
+							node.OpenBraceToken,
+							node.Externs,
+							node.Usings,
+							SyntaxFactory.List<MemberDeclarationSyntax>(
+								new [] { memberDeclaration }),
+							node.CloseBraceToken,
+							node.SemicolonToken )
+					}), 
 				compilationUnit.EndOfFileToken));
 		}
 	}
@@ -210,7 +214,7 @@ public static class ClassDeclaration
 {
 	public static ClassDeclarationSyntax DefineMembers(ClassDeclarationSyntax node, IEnumerable<MemberDeclarationSyntax> members)
 	{
-		return Syntax.ClassDeclaration(
+		return SyntaxFactory.ClassDeclaration(
 			attributeLists: node.AttributeLists,
 			modifiers: node.Modifiers,
 			keyword: node.Keyword,
@@ -219,7 +223,7 @@ public static class ClassDeclaration
 			baseList: node.BaseList,
 			constraintClauses: node.ConstraintClauses,
 			openBraceToken: node.OpenBraceToken,
-			members: Syntax.List(members),
+			members: SyntaxFactory.List(members),
 			closeBraceToken: node.CloseBraceToken,
 			semicolonToken: node.SemicolonToken);
 	}	

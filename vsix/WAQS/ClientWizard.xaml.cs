@@ -19,7 +19,7 @@ namespace WAQS
     /// <summary>
     /// Interaction logic for ClientWizard.xaml
     /// </summary>
-    public partial class ClientWizard : Window
+    public partial class ClientWizard
     {
         private string _clientKind;
         private EnvDTE.DTE _dte;

@@ -17,7 +17,7 @@ namespace WAQS
     /// <summary>
     /// Interaction logic for Wizard.xaml
     /// </summary>
-    public partial class ServerWizard : Window
+    public partial class ServerWizard
     {
         private EnvDTE.DTE _dte;
         private EnvDTE.Project _project;

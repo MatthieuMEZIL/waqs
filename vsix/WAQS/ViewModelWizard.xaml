@@ -1,9 +1,10 @@
-﻿<Window x:Class="WAQS.ViewModelWizard"
+﻿<platformUI:DialogWindow x:Class="WAQS.ViewModelWizard"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:WAQS"
+        xmlns:platformUI="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.14.0"
         mc:Ignorable="d"
         Title="WAQS ViewModel initialization"  Height="155.615" Width="600">
     <Grid Margin="10">
@@ -25,4 +26,4 @@
             <Button x:Name="cancel" Content="Cancel" Width="65" Height="24" Margin="5" Click="CancelClick" IsCancel="True" />
         </StackPanel>
     </Grid>
-</Window>
+</platformUI:DialogWindow>

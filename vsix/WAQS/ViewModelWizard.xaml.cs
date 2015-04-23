@@ -12,7 +12,7 @@ namespace WAQS
     /// <summary>
     /// Interaction logic for ViewModelWizard.xaml
     /// </summary>
-    public partial class ViewModelWizard : Window
+    public partial class ViewModelWizard
     {
         private EnvDTE.DTE _dte;
         private EnvDTE.ProjectItem _viewModel;

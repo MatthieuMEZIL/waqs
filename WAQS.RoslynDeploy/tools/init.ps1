@@ -10,7 +10,7 @@ if ($ttIncludePath -eq $null)
 
 if ($ttIncludePath.EndsWith("\"))
 { 
-    $ttIncludePath = $ttIncludePath.SubString(0, $ttIncludePath.Length - 1) 
+    $ttIncludePath = $ttIncludePath.Substring(0, $ttIncludePath.Length - 1) 
 }
 
 $roslynAssemblies = Join-Path $ttIncludePath 'WAQS.Roslyn.Assemblies.ttinclude'

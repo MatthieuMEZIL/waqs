@@ -14,6 +14,8 @@ using System.Windows;
 using NuGet.VisualStudio;
 using Microsoft.VisualStudio.ComponentModelHost;
 using System.Collections.Generic;
+using Microsoft.VisualStudio.PlatformUI;
+using System.IO;
 
 namespace WAQS
 {
@@ -69,6 +71,24 @@ namespace WAQS
             OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
             if (null != mcs)
             {
+                // There is a very strange bug on the first vsix installation and WAQS.RoslynDeploy NuGet package does not deploy WAQS.Roslyn.Assemblies.ttinclude. So I create it here as a workaround 
+                var ttIncludePath = (string)Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\14.0_config\TextTemplating\IncludeFolders\.tt").GetValue("Include18111981-0AEE-0AEE-0AEE-181119810AEE");
+                var waqsRoslynAssembliesPath = Path.Combine(ttIncludePath, "WAQS.Roslyn.Assemblies.ttinclude");
+                if (!File.Exists(waqsRoslynAssembliesPath))
+                {
+                    var missingDirectories = new Stack<string>();
+                    for (var ttIncudePathLoop = ttIncludePath; !Directory.Exists(ttIncudePathLoop); ttIncudePathLoop = Path.GetDirectoryName(ttIncudePathLoop))
+                    {
+                        missingDirectories.Push(ttIncudePathLoop);
+                    }
+                    while (missingDirectories.Count != 0)
+                    {
+                        Directory.CreateDirectory(missingDirectories.Pop());
+                    }
+                    var roslynAssembliesPath = Path.Combine((string)Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\VisualStudio\14.0_Config").GetValue("InstallDir"), "PrivateAssemblies");
+                    File.WriteAllText(waqsRoslynAssembliesPath, "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "System.Reflection.Metadata.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "System.Collections.Immutable.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.Desktop.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.CSharp.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.CSharp.Desktop.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.Workspaces.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.Workspaces.Desktop.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.CSharp.Workspaces.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "Microsoft.CodeAnalysis.CSharp.Workspaces.Desktop.dll") + "\" #>" + Environment.NewLine + "<#@ assembly name=\"" + Path.Combine(roslynAssembliesPath, "System.Composition.TypedParts.dll") + "\" #>");
+                }
+
                 CommandID waqsServerCommandID = new CommandID(GuidList.guidWAQSProjectCmdSet, (int)PkgCmdIDList.WAQSServerId);
                 MenuCommand waqsServerItem = new MenuCommand(WAQSServerCallback, waqsServerCommandID);
                 mcs.AddCommand(waqsServerItem);
@@ -118,7 +138,7 @@ namespace WAQS
             WAQSWizardCallback((project, uiShell, packageInstaller, installerServices) => new ClientWizard(GenerationOptions.PCL, project, uiShell, packageInstaller, installerServices));
         }
 
-        private void WAQSWizardCallback(Func<Project, IVsUIShell, IVsPackageInstaller, IVsPackageInstallerServices, System.Windows.Window> createWizard)
+        private void WAQSWizardCallback(Func<Project, IVsUIShell, IVsPackageInstaller, IVsPackageInstallerServices, DialogWindow> createWizard)
         {
             var dte = GetService(typeof(DTE)) as DTE;
             if (dte.SelectedItems.Count != 1)
@@ -136,7 +156,7 @@ namespace WAQS
             var wizard = createWizard(project, uiShell, packageInstaller, installerServices);
             wizard.Owner = Application.Current.MainWindow;
             wizard.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            wizard.ShowDialog();
+            wizard.ShowModal();
         }
 
         private void WAQSUpdateGeneratedCodeCallback(object sender, EventArgs e)
@@ -145,7 +165,7 @@ namespace WAQS
             var wizard = new UpdateGeneratedCodeWizard(dte);
             wizard.Owner = Application.Current.MainWindow;
             wizard.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            wizard.ShowDialog();
+            wizard.ShowModal();
         }
 
         private void WAQSInitVMCallback(object sender, EventArgs e)
@@ -162,7 +182,7 @@ namespace WAQS
             var wizard = new ViewModelWizard(dte, viewModel, installerServices);
             wizard.Owner = Application.Current.MainWindow;
             wizard.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            wizard.ShowDialog();
+            wizard.ShowModal();
         }
     }
 }

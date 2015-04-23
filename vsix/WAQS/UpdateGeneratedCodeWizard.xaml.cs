@@ -9,7 +9,7 @@ namespace WAQS
     /// <summary>
     /// Interaction logic for UpdateGeneratedCodeWizard.xaml
     /// </summary>
-    public partial class UpdateGeneratedCodeWizard : Window
+    public partial class UpdateGeneratedCodeWizard
     {
         private EnvDTE.DTE _dte;
         private bool _cancel;
