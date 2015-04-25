@@ -172,10 +172,8 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
     private int? GetIndex(IObjectWithChangeTracker entity)
     {
         int index = 0;
-		var entities = Entities.OfType<IObjectWithChangeTracker>().Where(e => (e.ChangeTracker.State & ObjectState.Deleted) == 0 || e == entity).ToArray();
-        for (int ei = 0 ; ei < entities.Length ; ei ++)
+        foreach (var e in Entities.OfType<IObjectWithChangeTracker>().Where(e => (e.ChangeTracker.State & ObjectState.Deleted) == 0 || e == entity))
         {
-			var e = entities[ei];
             if (e == entity)
                 return index;
             index++;
@@ -310,7 +308,7 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
         if (disposing)
         {
 			var allEntities = AllEntities.ToArray();
-            for (var ei = 0 ; ei < allEntities.Length ; ei++)
+			for (var ei = 0 ; ei < allEntities.Length ; ei++)
             {
 				var entity = allEntities[ei];
                 entity.ChangeTracker.AcceptChanges(false); 
@@ -2656,10 +2654,9 @@ public static class AsyncQueryableExtensions
     {
         var froms = ((IEnumerable<object>)fromValues).Cast<FromT>().ToArray();
         var tos = ((IEnumerable<object>)toValues[0]).Cast<ToT>().ToArray();
-        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>().ToArray();
-        for (int ki = 0 ; ki < keys.Length ; ki++)
+        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>();
+        foreach (var key in keys)
         {
-			var key = keys[ki];
             FromT fromValue = froms.FirstOrDefault(f => fromFkTest(key, f));
             ToT toValue;
             if (fromValue != null && (toValue = tos.FirstOrDefault(t => toFkTest(key, t))) != null)
@@ -2672,10 +2669,9 @@ public static class AsyncQueryableExtensions
     {
         var froms = ((IEnumerable<object>)fromValues).Cast<FromT>().ToArray();
         var to = (ToT)toValues[0];
-        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>().ToArray();
-        for (int ki = 0 ; ki < keys.Length ; ki++)
+        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>();
+        foreach (var key in keys)
         {
-			var key = keys[ki];
             var @from = froms.FirstOrDefault(f => fromFkTest(key, f));
             if (@from != null && toFkTest(key, to))
                 getTrackableCollection(@from).Attach(to);
@@ -2687,10 +2683,9 @@ public static class AsyncQueryableExtensions
     {
         var @from = (FromT)fromValues;
         var tos = ((IEnumerable<object>)toValues[0]).Cast<ToT>().ToArray();
-        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>().ToArray();
-        for (int ki = 0 ; ki < keys.Length ; ki++)
+        var keys = ((IEnumerable<object>)toValues[1]).Cast<KeysT>();
+        foreach (var key in keys)
         {
-			var key = keys[ki];
             var toValue = tos.FirstOrDefault(t => toFkTest(key, t));
             if (toValue != null && fromFkTest(key, @from))
                 getTrackableCollection(@from).Attach(toValue);
@@ -3079,10 +3074,8 @@ public static partial class ClientEntitySetExtensions
     {
         foreach (var entitySetPerEntityForEntityType in _entitySetPerEntity.Values)
 		{
-			var es = entitySetPerEntityForEntityType.Where(kv => !kv.Value.IsAlive || ((IClientEntitySet)kv.Value.Target).Context == context).Select(kv => kv.Key).ToArray();
-            for (int ei = 0 ; ei < es.Length ; ei ++)
+            foreach (var e in entitySetPerEntityForEntityType.Where(kv => !kv.Value.IsAlive || ((IClientEntitySet)kv.Value.Target).Context == context).Select(kv => kv.Key))
             {
-				var e = es[ei];
 <#+
         if (concurrentDictionaryTry)
         {

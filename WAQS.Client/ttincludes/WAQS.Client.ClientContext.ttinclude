@@ -446,8 +446,9 @@ if (utc)
                 else if ((ctor = type.GetConstructor(new Type[0])) != null)
                 {
                     var value = ctor.Invoke(new object[0]);
-                    foreach (var recordProperty in record.Properties)
+                    for (int rpi = 0 ; rpi < record.Properties.Count ; rpi++)
                     {
+						var recordProperty = record.Properties[rpi];
                         var prop = type.GetProperty(recordProperty.PropertyName);
                         prop.SetValue(value, instanciateWithConstructorWithParameters(recordProperty, prop.PropertyType), null);
                     }
@@ -763,8 +764,10 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
 #>
         List<<#=clientEntitiesNamespace#>.<#=npEntityTypeName#>> <#=npNameCamelCase#>;
         if (<#=GetPlurial(code, container, npEntityType)#><#=otherNavPropName#>FKsDico.TryGetValue(<#=code.CamelCase(entitySetEntityTypeName)#>Keys, out <#=npNameCamelCase#>))
-            foreach (var e in <#=npNameCamelCase#>)
-                e.<#=otherNavPropName#> = entity;
+            for (int ei = 0 ; ei < <#=npNameCamelCase#>.Count ; ei++)
+			{
+                <#=npNameCamelCase#>[ei].<#=otherNavPropName#> = entity;
+			}
 <#+
                 }
             }
@@ -793,9 +796,12 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
             {
 #>
 
-        foreach (var se in entity.<#=npName#>)
+        for (int sei = 0 ; sei < entity.<#=npName#>.Count ; sei++)
+		{
+			var se = entity.<#=npName#>[sei];
             if (! <#=npToEntityTypePlurial#>Internal.Contains(se))
                 <#=npToEntityTypePlurial#>Internal.AttachWithoutChangingState(se, entity.ChangeTracker.State);
+		}
 
 <#+
                 continue;
@@ -967,8 +973,9 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
     private void <#=entityTypeName#>_<#=code.Escape(navigationProperty)#>CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
     {
         if (e.NewItems != null)
-            foreach (<#=clientEntitiesNamespace#>.<#=subEntityTypeName#> subEntity in e.NewItems)
+            for (int sei = 0 ; sei < e.NewItems.Count ; sei++)
             {
+				var subEntity = (<#=clientEntitiesNamespace#>.<#=subEntityTypeName#>)e.NewItems[sei];
                 <#=clientEntitiesNamespace#>.<#=subEntityTypeName#> se = null;
                 if (!subEntity.IsInitializingRelationships && (se = GetEntityInCache(subEntity)) == null)
                     AttachWithoutChangingState(subEntity);
@@ -1325,8 +1332,9 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
         var npName = code.Escape(otherNavProp);
         var npEntityTypeNamePlurial = GetPlurial(code, container, np.ToEndMember.GetEntityType());
 #>
-        foreach (var subEntity in <#=npEntityTypeNamePlurial#>Internal)
+        for (int sei = 0 ; sei < <#=npEntityTypeNamePlurial#>Internal.Count ; sei++)
         {
+			var subEntity = <#=npEntityTypeNamePlurial#>Internal[sei];
 <#+
         if (np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
         {
@@ -1384,8 +1392,12 @@ foreach (var navigationProperty in navigationPropertiesCascadeDelete)
     if (navigationProperty.ToEndMember.RelationshipMultiplicity == System.Data.Metadata.Edm.RelationshipMultiplicity.Many)
     {
 #>
-        foreach (<#=clientEntitiesNamespace#>.<#=subEntityTypeName#> subEntity in entity.<#=navigationPropertyName#>.ToList())
+		var entity<#=navigationPropertyName#>Array = entity.<#=navigationPropertyName#>.ToArray();
+        for (sei = 0 ; sei < entity<#=navigationPropertyName#>Array.Length; sei++)
+		{
+			<#=clientEntitiesNamespace#>.<#=subEntityTypeName#> subEntity = entity<#=navigationPropertyName#>Array[sei];
             <#=subEntityTypeNamePlurial#>Internal.RemoveCascade(subEntity);
+		}
 <#+
     }
     else // 1-1 Table Splitting
@@ -1463,8 +1475,10 @@ if (useEntityremovings)
                 otherNPName = null;
             }
 #>
-        foreach (var subEntity in entity.<#=code.Escape(navigationProperty)#>.ToList())
+		var entity<#=code.Escape(navigationProperty)#>Array = entity.<#=code.Escape(navigationProperty)#>.ToArray();
+        for (int sei = 0 ; sei < entity<#=code.Escape(navigationProperty)#>Array.Length ; sei++)
         {
+			var subEntity = entity<#=code.Escape(navigationProperty)#>Array[sei];
             <#=clientEntitiesNamespace#>.<#=code.Escape(navigationProperty.ToEndMember.GetEntityType())#> subEntityInCache;
             if (<#=GetPlurial(code, container, navigationProperty.ToEndMember.GetEntityType())#>.Contains(subEntity))
                 subEntityInCache = subEntity;
@@ -1504,8 +1518,9 @@ if (useEntityremovings)
 #>, <#+
                 }
 #> }, out subEntities))
-                foreach (var subEntity in subEntities)
+                for (int sei = 0 ; sei < subEntities.Count ; sei++)
                 {
+					var subEntity = subEntities[sei];
 <#+
             if(!string.IsNullOrEmpty(otherNPName))
             {
@@ -1778,8 +1793,9 @@ if (cascadeDeleteTo)
                 if (np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
                 {
 #>
-            foreach (var e in entity<#=code.Escape(np)#>)
+            for (int ei = 0 ; ei < entity<#=code.Escape(np)#>.Count ; ei++)
             {
+				var e = entity<#=code.Escape(np)#>[ei];
                 if (value.ChangeTracker.State == ObjectState.Detached)
                     GetEntity(e, applyState, defaultState:defaultState, applyDataTransfer:applyDataTransfer);
                 else
@@ -1805,9 +1821,15 @@ if (cascadeDeleteTo)
 
             if (applyState && originalChangeTracker != null && originalChangeTracker != value.ChangeTracker)
             {
-                foreach (var modifiedProperty in originalChangeTracker.ModifiedProperties)
+				
+                for (int mpi = 0 ; mpi < originalChangeTracker.ModifiedProperties.Count ; mpi ++)
+				{
+					var modifiedProperty = originalChangeTracker.ModifiedProperties[mpi];
                     if (! value.ChangeTracker.ModifiedProperties.Contains(modifiedProperty))
+					{
                         value.ChangeTracker.ModifiedProperties.Add(modifiedProperty);
+					}
+				}
                 foreach (var originalValue in originalChangeTracker.OriginalValues)
                 {
                     var originalValueEntity = originalValue.Value as IEntity;
@@ -1823,7 +1845,10 @@ if (cascadeDeleteTo)
                     }
                 }
                 foreach (var objectsRemovedToCollectionProperties in originalChangeTracker.ObjectsRemovedFromCollectionProperties)
-                    foreach (IEntity objectsRemovedToCollectionProperty in objectsRemovedToCollectionProperties.Value)
+				{
+                    for (int orcpvi = 0 ; orcpvi < objectsRemovedToCollectionProperties.Value.Count ; orcpvi++)
+					{
+						var objectsRemovedToCollectionProperty = (IEntity)objectsRemovedToCollectionProperties.Value[orcpvi];
                         if (objectsRemovedToCollectionProperty != null)
                         {
                             var originalState = objectsRemovedToCollectionProperty.ChangeTracker.State;
@@ -1840,8 +1865,8 @@ if (cascadeDeleteTo)
                 {
 #>
                                 case "<#=code.Escape(toManyNavigationProperty)#>":
-                                        value.<#=code.Escape(toManyNavigationProperty)#>.Remove((<#=clientEntitiesNamespace#>.<#=code.Escape(toManyNavigationProperty.ToEndMember.GetEntityType())#>)removedEntity);
-                                        break;
+									value.<#=code.Escape(toManyNavigationProperty)#>.Remove((<#=clientEntitiesNamespace#>.<#=code.Escape(toManyNavigationProperty.ToEndMember.GetEntityType())#>)removedEntity);
+                                    break;
 <#+
                 }
 #>
@@ -1854,14 +1879,21 @@ if (cascadeDeleteTo)
                             if (originalState == ObjectState.Detached)
                                 Detach(removedEntity);
                         }
+					}
+				}
                 foreach (var objectsAddedToCollectionProperties in originalChangeTracker.ObjectsAddedToCollectionProperties)
-                    foreach (var objectsAddedToCollectionProperty in objectsAddedToCollectionProperties.Value)
+				{
+                    for (int oacpvi = 0 ; oacpvi < objectsAddedToCollectionProperties.Value.Count ; oacpvi++)
+					{
+						var objectsAddedToCollectionProperty = objectsAddedToCollectionProperties.Value[oacpvi];
                         if (objectsAddedToCollectionProperty != null)
                         {
                             var addedEntity = (IObjectWithChangeTracker)GetEntity(objectsAddedToCollectionProperty, true, defaultState, applyDataTransfer);
                             if (value.ChangeTracker.State != ObjectState.Detached)
                                 value.ChangeTracker.RecordAdditionToCollectionProperties(objectsAddedToCollectionProperties.Key, addedEntity);
                         }
+					}
+				}
             }
 
             value.IsInitializingRelationships = false;
@@ -2233,6 +2265,7 @@ if (cascadeDeleteTo)
                     {
 #>
                 foreach (var modifiedPropery in entity.ChangeTracker.ModifiedProperties.Union(entity.ChangeTracker.ValidationProperties))
+				{
                     switch (modifiedPropery)
                     {
 <#+
@@ -2269,6 +2302,7 @@ if (cascadeDeleteTo)
 <#+
         }
 #>
+				}
                 break;
             case ObjectState.Unchanged:
             case ObjectState.CascadeDeleted:
@@ -2315,8 +2349,9 @@ if (cascadeDeleteTo)
     if (manyToManyRelationships.Any())
     {
 #>
-        foreach (var relatedEntityAdded in originalValue.ChangeTracker.ObjectsAddedToCollectionProperties)
+        for (int reai = 0 ; reai < originalValue.ChangeTracker.ObjectsAddedToCollectionProperties.Count ; reai++)
         {
+			var relatedEntityAdded in originalValue.ChangeTracker.ObjectsAddedToCollectionProperties[reai];
             switch (relatedEntityAdded.Key)
             {
 <#+ 
@@ -2325,18 +2360,23 @@ if (cascadeDeleteTo)
             string relationShipName = code.Escape(manyToManyRelationship);
             var subEntityType = manyToManyRelationship.ToEndMember.GetEntityType();
 #>				case "<#=code.Escape(manyToManyRelationship)#>":
-                    foreach (<#=clientEntitiesNamespace#>.<#=code.Escape(subEntityType)#> subEntity in originalValue.ChangeTracker.ObjectsAddedToCollectionProperties["<#=relationShipName#>"])
+					var subEntities = originalValue.ChangeTracker.ObjectsAddedToCollectionProperties["<#=relationShipName#>"];
+                    for (int sei = 0 ; sei < subEntities.Count ; sei++)
+					{
+						var subEntity = (<#=clientEntitiesNamespace#>.<#=code.Escape(subEntityType)#>)subEntities[sei]
 <#+
             var subEntityTypeEntitySet = GetEntitySet(container, subEntityType);
 #>
                         newValue.<#=relationShipName#>.Add(<#+if (subEntityTypeEntitySet.ElementType != subEntityType){#>(<#=clientEntitiesNamespace#>.<#=code.Escape(subEntityType)#>)<#+}#>reduced<#=code.Escape(subEntityTypeEntitySet)#>Dictionary[subEntity]);
+					}
                 break;
 <#+
         }
 #>			}
         }
-        foreach (var relatedEntityRemoved in originalValue.ChangeTracker.ObjectsRemovedFromCollectionProperties)
+        for (int reri = 0 ; reri < originalValue.ChangeTracker.ObjectsRemovedFromCollectionProperties.Count ; reri++)
         {
+			var relatedEntityRemoved in originalValue.ChangeTracker.ObjectsRemovedFromCollectionProperties[reri];
             switch (relatedEntityRemoved.Key)
             {
 <#+ 
@@ -2346,12 +2386,16 @@ if (cascadeDeleteTo)
             var subEntityType = manyToManyRelationship.ToEndMember.GetEntityType();
             var subEntityTypeEntitySet = GetEntitySet(container, subEntityType);
 #>				case "<#=code.Escape(manyToManyRelationship)#>":
-                    foreach (<#=clientEntitiesNamespace#>.<#=code.Escape(subEntityType)#> subEntity in originalValue.ChangeTracker.ObjectsRemovedFromCollectionProperties["<#=relationShipName#>"])
+				{
+					var subEntities = originalValue.ChangeTracker.ObjectsRemovedFromCollectionProperties["<#=relationShipName#>"];
+                    for (int sei = 0 ; sei < subEntities.Count ; sei++)
                     {
+						var subEntity = (<#=clientEntitiesNamespace#>.<#=code.Escape(subEntityType)#>)subEntities[sei];
                         var relatedEntity = <#+if (subEntityTypeEntitySet.ElementType != subEntityType){#>(<#=clientEntitiesNamespace#>.<#=code.Escape(subEntityType)#>)<#+}#>reduced<#=code.Escape(subEntityTypeEntitySet)#>Dictionary[subEntity];
                         newValue.<#=relationShipName#>.Attach(relatedEntity, true);
                         newValue.<#=relationShipName#>.Remove(relatedEntity);
                     }
+				}
                 break;
 <#+
             }
@@ -2613,8 +2657,10 @@ if (((AssociationType)np.RelationshipType).ReferentialConstraints.Any())
     {
         if (<#=fieldClientEntitySetName#> != null)
         {
-            foreach (var entity in <#=fieldClientEntitySetName#>.AllEntities.ToList())
+			var allEntities = <#=fieldClientEntitySetName#>.AllEntities.ToArray();
+            for (int ei = 0 ; ei < allEntities.Length ; ei++)
             {
+				var entity = allEntities[ei];
 <#+
     foreach (var navigationProperty in entityType.NavigationProperties.Where(np => IsPublic(np)))
     {
