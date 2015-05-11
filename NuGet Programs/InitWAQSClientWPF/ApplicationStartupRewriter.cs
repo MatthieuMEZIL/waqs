@@ -34,7 +34,7 @@ namespace InitWAQSClientWPF
         {
             var value = ((CompilationUnitSyntax)base.VisitCompilationUnit(node));
             if (_first)
-                value = value.AddUsings(new[] { "System.Threading", "Microsoft.Practices.ServiceLocation", "Microsoft.Practices.Unity", _clientContextNamespace, "WAQS.ClientContext.Interfaces.ExpressionSerialization", "WAQS.ComponentModel", "WAQS.Controls", _clientInterfacesContextNamespace, _clientContextNamespace, _clientContextNamespace + ".ServiceReference" }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))).ToArray());
+                value = value.AddUsings(new[] { "System.Threading", "Microsoft.Practices.Unity", "WAQS.ComponentModel", "WAQS.Controls", _clientInterfacesContextNamespace, _clientContextNamespace, _clientContextNamespace + ".ServiceReference" }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))).ToArray());
             return value;
         }
 
