@@ -13,7 +13,7 @@
     <copyright>Matthieu MEZIL</copyright>
     <tags>WAQS</tags>
     <dependencies>
-      <dependency id="WAQS.RoslynDeploy" version="1.0.48" />
+      <dependency id="WAQS.RoslynDeploy" version="1.0.45" />
       <dependency id="T4.Helper" version="1.0.10" />
       <dependency id="EnvDTE.Helper" version="1.0.0" />
     </dependencies>
