@@ -134,7 +134,6 @@ function WAQSClientWPFInternal($edmxPath, $svcUrl, $kind, $sourceControl, $netVe
     else
     {
         Install-Package Unity -Version 3.0.1304.1
-        Install-Package CommonServiceLocator -Version 1.2.0
     }
     Install-Package Rx-WPF -Version 1.0.11226 
     
