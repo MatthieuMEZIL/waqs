@@ -139,11 +139,11 @@ WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System
 public interface IClientContextBase : IDisposable
 {
     string Name { get; }
-    Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null);
-    Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null);
+    Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly);
+    Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly);
     Task<object[]> ExecuteQueries<#=asyncSuffix#>(params IAsyncQueryableBase[] queries);
-    Task<object[]> ExecuteQueries<#=asyncSuffix#>(IEnumerable<IAsyncQueryableBase> queries, MergeOption? mergeOption = null, Func<bool> cancel = null);
-    Task<QueryPage<T>> LoadPage<#=asyncSuffix#><T>(int pageSize, IAsyncQueryable<T> query, LoadPageParameter[] identifiers, MergeOption? mergeOption = null, Func<bool> cancel = null);
+    Task<object[]> ExecuteQueries<#=asyncSuffix#>(IEnumerable<IAsyncQueryableBase> queries, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly);
+    Task<QueryPage<T>> LoadPage<#=asyncSuffix#><T>(int pageSize, IAsyncQueryable<T> query, LoadPageParameter[] identifiers, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly);
     IExpressionTransformer GetTransformer();
 <#+AddAddPropertyMethods();#>
 }
@@ -1478,6 +1478,18 @@ public enum MergeOption
     OverwriteChanges,
     PreserveChanges,
     NoTracking
+}
+<#+
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("GetEntityAsyncOption.cs");
+WriteHeader(namespaceName, code);
+#>
+public enum GetEntityAsyncOption
+{
+	None = 0,
+	NoTrackingOnly = 1,
+	AllMergeOption = 2
 }
 <#+
     WriteFooter(queryNamespaceName);

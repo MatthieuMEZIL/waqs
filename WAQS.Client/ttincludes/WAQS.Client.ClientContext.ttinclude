@@ -95,21 +95,21 @@ public abstract partial class <#=contextBaseName#> : IClientContextBase
     }
 #>
 
-    public virtual async Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public virtual async Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     {
-        var value = await ExecuteQueryInternal<#=asyncSuffix#>(query, mergeOption ?? MergeOption.NoTracking, cancel);
+        var value = await ExecuteQueryInternal<#=asyncSuffix#>(query, mergeOption ?? MergeOption.NoTracking, cancel, getEntityOption);
         if (value == null)
             return new T[0];
         return ((IEnumerable<object>)value).Cast<T>();
     }
     
-    public virtual async Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public virtual async Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     {
-        var value = await ExecuteQueryInternal<#=asyncSuffix#>(query, mergeOption ?? MergeOption.NoTracking, cancel);
+        var value = await ExecuteQueryInternal<#=asyncSuffix#>(query, mergeOption ?? MergeOption.NoTracking, cancel, getEntityOption);
         return value == null ? default(T) : (T)value;
     }
 
-    public virtual async Task<QueryPage<T>> LoadPage<#=asyncSuffix#><T>(int pageSize, IAsyncQueryable<T> query, LoadPageParameter[] identifiers, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public virtual async Task<QueryPage<T>> LoadPage<#=asyncSuffix#><T>(int pageSize, IAsyncQueryable<T> query, LoadPageParameter[] identifiers, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     {
         if (identifiers.Length == 0)
             throw new InvalidOperationException();
@@ -138,7 +138,7 @@ public abstract partial class <#=contextBaseName#> : IClientContextBase
         return ExecuteQueries<#=asyncSuffix#>(queries.AsEnumerable());
     }
 
-    public virtual async Task<object[]> ExecuteQueries<#=asyncSuffix#>(IEnumerable<IAsyncQueryableBase> queries, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public virtual async Task<object[]> ExecuteQueries<#=asyncSuffix#>(IEnumerable<IAsyncQueryableBase> queries, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     {
         if (mergeOption == null)
             mergeOption = MergeOption.NoTracking;
@@ -149,7 +149,15 @@ public abstract partial class <#=contextBaseName#> : IClientContextBase
             var result = await ProxyHelper.ExecuteFunc<#=asyncSuffix#>(ServiceFactory, service => Task.Factory.FromAsync(service.BeginExecuteMany(MakeQueriesSerialization(queries, out includes), null, null), ar => service.EndExecuteMany(ar)), <#=nbRetryOnTimeout#>);
             if (IsDisposed || cancel != null && cancel())
                 return null;
-            return GetQueriesResults(queries, includes, result, mergeOption.Value);
+
+			if (getEntityOption == GetEntityAsyncOption.AllMergeOption || (mergeOption.Value == MergeOption.NoTracking && (int)getEntityOption >= (int)GetEntityAsyncOption.NoTrackingOnly))
+            {
+				return await Task.Factory.StartNew(() => GetQueriesResults(queries, includes, result, mergeOption.Value));
+            }
+            else
+            {
+				return GetQueriesResults(queries, includes, result, mergeOption.Value);
+			}
         }
         catch (Exception e)
         {
@@ -179,7 +187,7 @@ public abstract partial class <#=contextBaseName#> : IClientContextBase
         return value;
     }
     
-    private async Task<object> ExecuteQueryInternal<#=asyncSuffix#>(IAsyncQueryableBase query, MergeOption mergeOption, Func<bool> cancel)
+    private async Task<object> ExecuteQueryInternal<#=asyncSuffix#>(IAsyncQueryableBase query, MergeOption mergeOption, Func<bool> cancel, GetEntityAsyncOption getEntityOption)
     {
         ExecutingQuery(query, mergeOption);
         if (IsDisposed || cancel != null && cancel())
@@ -193,15 +201,30 @@ public abstract partial class <#=contextBaseName#> : IClientContextBase
                 if (IsDisposed || cancel != null && cancel())
                     return null;
                 EntitiesGot.Clear();
-                var value = InstanciateAndAttach(query, result.QueryResults[0], mergeOption);
-                LoadIncludes(query, value, includes, result, mergeOption);
-                return value;
+				if (getEntityOption == GetEntityAsyncOption.AllMergeOption || (mergeOption == MergeOption.NoTracking && (int)getEntityOption >= (int)GetEntityAsyncOption.NoTrackingOnly))
+				{
+					return await Task.Factory.StartNew(() => 
+					{
+						var value = InstanciateAndAttach(query, result.QueryResults[0], mergeOption);
+						LoadIncludes(query, value, includes, result, mergeOption);
+						return value;
+					});
+				} else {
+					var value = InstanciateAndAttach(query, result.QueryResults[0], mergeOption);
+					LoadIncludes(query, value, includes, result, mergeOption);
+					return value;
+				}
             }
             else
             {
                 var result = await ProxyHelper.ExecuteFunc<#=asyncSuffix#>(ServiceFactory, service => Task.Factory.FromAsync(service.BeginExecute(MakeQuerySerialization(query), null, null), ar => service.EndExecute(ar)), <#=nbRetryOnTimeout#>);
                 EntitiesGot.Clear();
-                return InstanciateAndAttach(query, result, mergeOption);
+                if (getEntityOption == GetEntityAsyncOption.AllMergeOption || (mergeOption == MergeOption.NoTracking && (int)getEntityOption >= (int)GetEntityAsyncOption.NoTrackingOnly)) 
+				{
+					return await Task.Factory.StartNew(() => InstanciateAndAttach(query, result, mergeOption));
+				} else {
+					return InstanciateAndAttach(query, result, mergeOption);
+				}
             }
         }
         catch (Exception e)
@@ -2748,42 +2771,42 @@ foreach (EntityType entityType in itemCollection.GetItems<EntityType>().OrderBy(
         }
     }
 
-    public override async Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public override async Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     { 
         if (mergeOption == null)
             mergeOption = MergeOption;
         if (mergeOption == MergeOption.NoTracking)
-            return await new <#=contextName#>NoTracking(ServiceFactory).ExecuteQuery<#=asyncSuffix#>(query);
+            return await new <#=contextName#>NoTracking(ServiceFactory).ExecuteQuery<#=asyncSuffix#>(query, getEntityOption: getEntityOption);
         else
-            return await base.ExecuteQuery<#=asyncSuffix#>(query, mergeOption);
+            return await base.ExecuteQuery<#=asyncSuffix#>(query, mergeOption, getEntityOption: getEntityOption);
     }
     
-    public override async Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public override async Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     {
         if (mergeOption == null)
             mergeOption = MergeOption;
         if (mergeOption == MergeOption.NoTracking)
-            return await new <#=contextName#>NoTracking(ServiceFactory).ExecuteQuery<#=asyncSuffix#>(query);
+            return await new <#=contextName#>NoTracking(ServiceFactory).ExecuteQuery<#=asyncSuffix#>(query, getEntityOption: getEntityOption);
         else
-            return await base.ExecuteQuery<#=asyncSuffix#>(query, mergeOption);
+            return await base.ExecuteQuery<#=asyncSuffix#>(query, mergeOption, getEntityOption: getEntityOption);
     }
 
-    public override async Task<QueryPage<T>> LoadPage<#=asyncSuffix#><T>(int pageSize, IAsyncQueryable<T> query, LoadPageParameter[] identifiers, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public override async Task<QueryPage<T>> LoadPage<#=asyncSuffix#><T>(int pageSize, IAsyncQueryable<T> query, LoadPageParameter[] identifiers, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     {
         if (mergeOption == null)
             mergeOption = MergeOption;
         if (mergeOption == MergeOption.NoTracking)
-            return await new <#=contextName#>NoTracking(ServiceFactory).LoadPage<#=asyncSuffix#><T>(pageSize, query, identifiers, mergeOption);
-        return await base.LoadPage<#=asyncSuffix#><T>(pageSize, query, identifiers, mergeOption);
+            return await new <#=contextName#>NoTracking(ServiceFactory).LoadPage<#=asyncSuffix#><T>(pageSize, query, identifiers, mergeOption, getEntityOption: getEntityOption);
+        return await base.LoadPage<#=asyncSuffix#><T>(pageSize, query, identifiers, mergeOption, getEntityOption: getEntityOption);
     }
 
-    public override async Task<object[]> ExecuteQueries<#=asyncSuffix#>(IEnumerable<IAsyncQueryableBase> queries, MergeOption? mergeOption = null, Func<bool> cancel = null)
+    public override async Task<object[]> ExecuteQueries<#=asyncSuffix#>(IEnumerable<IAsyncQueryableBase> queries, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly)
     {
         if (mergeOption == null)
             mergeOption = MergeOption;
         if (mergeOption == MergeOption.NoTracking)
-            return await new <#=contextName#>NoTracking(ServiceFactory).ExecuteQueries<#=asyncSuffix#>(queries, mergeOption, cancel);
-        return await base.ExecuteQueries<#=asyncSuffix#>(queries, mergeOption, cancel);
+            return await new <#=contextName#>NoTracking(ServiceFactory).ExecuteQueries<#=asyncSuffix#>(queries, mergeOption, cancel, getEntityOption: getEntityOption);
+        return await base.ExecuteQueries<#=asyncSuffix#>(queries, mergeOption, cancel, getEntityOption: getEntityOption);
     }
 
     protected override object InstanciateAndAttach(Func<object> getValue, MergeOption? mergeOption)
