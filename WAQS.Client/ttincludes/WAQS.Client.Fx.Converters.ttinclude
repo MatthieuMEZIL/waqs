@@ -87,6 +87,34 @@ public class IntToVisibilityCollapsedIfZeroConverter : IValueConverter
 <#+
 WriteFooter(namespaceName);
 
+fileManager.StartNewFile("NumberRoundConverter.cs");
+WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows", "System.Windows.Data");
+#>
+public class NumberRoundConverter : IValueConverter
+{
+	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+        double doubleValue;
+        if (double.TryParse(value.ToString(), out doubleValue))
+        {
+            var decimals = parameter == null ? 2 : (int)parameter;
+            var roundValue = Math.Round(doubleValue, decimals);
+            if (roundValue == doubleValue)
+                return roundValue;
+            else
+                return roundValue.ToString("0.00");
+        }
+        return value;
+	}
+
+	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		throw new NotImplementedException();
+	}
+}
+<#+
+WriteFooter(namespaceName);
+
 fileManager.Process();
 }
 #>

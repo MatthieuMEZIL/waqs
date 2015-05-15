@@ -1,12 +1,22 @@
+param (
+    [Parameter(Mandatory=$false)]
+    [AllowEmptyString()]
+    [String] $BuildKind
+)
+
 function Build-NuPkg([string] $nuspecFile)
 {
-    Write-Host -ForegroundColor Cyan "Building '$([IO.Path]::GetFileName($nuspecFile))'"
+	Write-Host -ForegroundColor Cyan "Building '$([IO.Path]::GetFileName($nuspecFile))'"
 
     [xml]$nuspec = Get-Content $nuspecFile
-    $digits = $nuspec.package.metadata.version -split '\.'
-    $digits[$digits.Length - 1] = $($($digits[$digits.Length - 1] -as [Int32]) + 1) -as [String]
-    $version = $digits -join '.'
+	$version = $nuspec.package.metadata.version
 
+    if (($BuildKind -eq 'All') -or ([IO.Path]::GetFileName($nuspecFile) -ne 'WAQS.RoslynDeploy.nuspec'))
+    {
+		$digits = $version -split '\.'
+		$digits[$digits.Length - 1] = $($($digits[$digits.Length - 1] -as [Int32]) + 1) -as [String]
+		$version = $digits -join '.'
+    }
     .\New-NuGetPackage.ps1 -NuSpecFilePath "$nuspecFile" -VersionNumber $version -ReleaseNotes "Version $version" -NoPrompt
     return $version
 }
