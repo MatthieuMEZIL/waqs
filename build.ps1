@@ -97,15 +97,28 @@ $waqsRoslynDeployVersion = dir WAQS.RoslynDeploy.nuspec | % { Build-NuPkg($_.Ful
 $match = [System.Text.RegularExpressions.Regex]::Match($waqsRoslynDeployVersion, '.(?<version>(\d+.)?\d+.\d+.\d+$)')
 $waqsRoslynDeployVersion = $match.Groups["version"].Value
 $null = [System.Reflection.Assembly]::Load('System.Xml.Linq, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089')
-foreach ($nuspec in (dir *.nuspec | ?{$_.Name -ne 'WAQS.RoslynDeploy.nuspec' }))
+$ns = "http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd"
+$waqsNuspec = dir WAQS.nuspec
+$waqsXdoc = [System.Xml.Linq.XDocument]::Load($waqsNuspec.FullName)
+$waqsDependencies = $waqsXdoc.Root.Element([System.Xml.Linq.XName]::Get("metadata", $ns)).Element([System.Xml.Linq.XName]::Get("dependencies", $ns)).Elements([System.Xml.Linq.XName]::Get("dependency", $ns))
+foreach ($nuspec in (dir *.nuspec | ?{ $_.Name -ne 'WAQS.RoslynDeploy.nuspec' -and $_.Name -ne 'WAQS.nuspec' }))
 {
     if (-not ($nuspec.Name -eq 'WAQS.RoslynDeploy.nuspec'))
     {
-        $ns = "http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd"
         $xdoc = [System.Xml.Linq.XDocument]::Load($nuspec.FullName)
         $waqsRoslynDeployDependency = $xdoc.Root.Element([System.Xml.Linq.XName]::Get("metadata", $ns)).Element([System.Xml.Linq.XName]::Get("dependencies", $ns)).Elements([System.Xml.Linq.XName]::Get("dependency", $ns)) | ?{$_.Attribute("id").Value -eq 'WAQS.RoslynDeploy'}
         $waqsRoslynDeployDependency.Attribute("version").Value = $waqsRoslynDeployVersion
         $null = $xdoc.Save($nuspec.FullName)
-        $null = % { Build-NuPkg($nuspec.FullName) }
+        $version = % { Build-NuPkg($nuspec.FullName) }
+		$match = [System.Text.RegularExpressions.Regex]::Match($version, '.(?<version>(\d+.)?\d+.\d+.\d+$)')
+		$version = $match.Groups["version"].Value
+		$waqsDependencyElement = $waqsDependencies | ?{ $_.Attribute("id").Value -eq ([IO.Path]::GetFileNameWithoutExtension($nuspec.Name))}
+		if ($waqsDependencyElement -ne $null)
+		{
+			$waqsDependencyElement.Attribute("version").Value = $version
+		}
     }
 }
+$null = $waqsXdoc.Save($waqsNuspec.FullName)
+$null = % { Build-NuPkg($waqsNuspec.FullName) }
+
