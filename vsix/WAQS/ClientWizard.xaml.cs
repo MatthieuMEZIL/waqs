@@ -244,17 +244,7 @@ namespace WAQS
                 {
                     entitiesSolutionPath = _dte.Solution.FileName;
                 }
-                string vsVersion;
-                switch (_dte.Version)
-                {
-                    case "12.0":
-                        vsVersion = "VS12";
-                        break;
-                    case "14.0":
-                    default:
-                        vsVersion = "VS14";
-                        break;
-                }
+                string vsVersion = _dte.GetVsVersion();
 
                 string svcUrl = null;
                 if (servicePathIsUrl)
@@ -376,38 +366,11 @@ namespace WAQS
                 Cursor = originalCursor;
             }
         }
-        private string StartService(string servicePath, string vsVersion, System.Collections.Generic.IEnumerable<EnvDTE.Property> svcProjectProperties)
+
+        private string StartService(string servicePath, string vsVersion, IEnumerable<EnvDTE.Property> svcProjectProperties)
         {
-            string svcUrl;
             _dte.Solution.SolutionBuild.Build(true);
-            int svcPort = 0;
-            string webServerPath = null;
-            var svcProjectPath = svcProjectProperties.First(p => p.Name == "LocalPath").Value + "\\";
-            if ((bool)svcProjectProperties.First(pi => pi.Name == "WebApplication.UseIIS").Value)
-            {
-                if ((bool)svcProjectProperties.First(pi => pi.Name == "WebApplication.UseIISExpress").Value)
-                {
-                    svcPort = int.Parse(Regex.Match((string)svcProjectProperties.First(pi => pi.Name == "WebApplication.IISUrl").Value, @":(\d+)(?:/|$)").Groups[1].Value);
-                    webServerPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"IIS Express\iisexpress.exe");
-                }
-            }
-            else
-            {
-                svcPort = (int)svcProjectProperties.First(pi => pi.Name == "WebApplication.DevelopmentServerPort").Value;
-                webServerPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Common Files\microsoft shared\DevServer\" + vsVersion + @"\WebDev.WebServer40.exe");
-            }
-            if (webServerPath != null && File.Exists(webServerPath))
-            {
-                if (!(IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections().Any(c => c.LocalEndPoint.Port == svcPort) || IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Any(l => l.Port == svcPort)))
-                {
-                    var process = new Process();
-                    process.StartInfo.FileName = webServerPath;
-                    process.StartInfo.Arguments = "/port:" + svcPort + " /path:\"" + svcProjectPath + "\"";
-                    process.Start();
-                }
-            }
-            svcUrl = svcProjectProperties.First(p => p.Name == "WebApplication.BrowseURL").Value + "/" + servicePath.Substring(((string)svcProjectProperties.First(p => p.Name == "LocalPath").Value).Length).Replace("\\", "/");
-            return svcUrl;
+            return DTEExtensions.StartService(servicePath, vsVersion, svcProjectProperties);
         }
 
         private void ShowError(string message)

@@ -1,8 +1,10 @@
 ﻿using EnvDTE;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -263,12 +265,72 @@ namespace WAQS
 
         private static IEnumerable<FilePathes> GetSolutionFiles(this DTE dte, Project defaultProject, string extension, bool skipWaqsAlreadyUsed)
         {
-            return (from f in dte.GetProjects().SelectMany(p => p.GetAllProjectItems()).Where(pi => pi.Name.EndsWith(extension))
-                    let path = f.GetFilePath()
-                    let projectDirectory = Path.GetDirectoryName(defaultProject.FullName)
-                    where ! (skipWaqsAlreadyUsed && Directory.Exists(Path.Combine(projectDirectory, "WAQS." + Path.GetFileNameWithoutExtension(path))))
-                    orderby path.StartsWith(projectDirectory + "\\") descending, path
-                    select new FilePathes { FullPath = path, DisplayPath = f.GetDisplayPath() });
+            return from p in dte.GetProjects()
+                   from f in p.GetAllProjectItems()
+                   where f.Name.EndsWith(extension)
+                   let path = f.GetFilePath()
+                   where !(skipWaqsAlreadyUsed && Path.GetFileName(Path.GetDirectoryName(path)).StartsWith("WAQS."))
+                   orderby defaultProject != null && path.StartsWith(Path.GetDirectoryName(defaultProject.FullName) + "\\") descending, path
+                   select new FilePathes { FullPath = path, DisplayPath = f.GetDisplayPath() };
+        }
+
+        public static void StartServices(this DTE dte)
+        {
+            foreach (var svc in GetSolutionFiles(dte, null, ".svc", true))
+            {
+                StartService(svc.FullPath, GetVsVersion(dte), dte.Solution.FindProjectItem(svc.FullPath).ContainingProject.Properties.Cast<Property>());
+            }
+        }
+
+        public static string StartService(string servicePath, string vsVersion, IEnumerable<Property> svcProjectProperties)
+        {
+            string svcUrl;
+            int svcPort = 0;
+            string webServerPath = null;
+            var svcProjectPath = svcProjectProperties.First(p => p.Name == "LocalPath").Value + "\\";
+            Action<ProcessStartInfo> specialProcessStartInfo = null;
+            if ((bool)svcProjectProperties.First(pi => pi.Name == "WebApplication.UseIIS").Value)
+            {
+                if ((bool)svcProjectProperties.First(pi => pi.Name == "WebApplication.UseIISExpress").Value)
+                {
+                    svcPort = int.Parse(Regex.Match((string)svcProjectProperties.First(pi => pi.Name == "WebApplication.IISUrl").Value, @":(\d+)(?:/|$)").Groups[1].Value);
+                    webServerPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"IIS Express\iisexpress.exe");
+                    specialProcessStartInfo = si => si.WindowStyle = ProcessWindowStyle.Hidden;
+                }
+            }
+            else
+            {
+                svcPort = (int)svcProjectProperties.First(pi => pi.Name == "WebApplication.DevelopmentServerPort").Value;
+                webServerPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Common Files\microsoft shared\DevServer\" + vsVersion + @"\WebDev.WebServer40.exe");
+            }
+            if (webServerPath != null && File.Exists(webServerPath))
+            {
+                if (!(IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections().Any(c => c.LocalEndPoint.Port == svcPort) || IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Any(l => l.Port == svcPort)))
+                {
+                    var process = new System.Diagnostics.Process();
+                    process.StartInfo.FileName = webServerPath;
+                    process.StartInfo.Arguments = "/port:" + svcPort + " /path:\"" + svcProjectPath + "\"";
+                    if (specialProcessStartInfo != null)
+                    {
+                        specialProcessStartInfo(process.StartInfo);
+                    }
+                    process.Start();
+                }
+            }
+            svcUrl = svcProjectProperties.First(p => p.Name == "WebApplication.BrowseURL").Value + "/" + servicePath.Substring(((string)svcProjectProperties.First(p => p.Name == "LocalPath").Value).Length).Replace("\\", "/");
+            return svcUrl;
+        }
+
+        public static string GetVsVersion(this DTE dte)
+        {
+            switch (dte.Version)
+            {
+                case "12.0":
+                    return "VS12";
+                case "14.0":
+                default:
+                    return "VS14";
+            }
         }
 
         public class FilePathes

@@ -61,6 +61,8 @@ namespace WAQS
             Logs.Add(new LogViewModel()); //Empty line
             Logs.Add(new LogViewModel { Message = "Build solution" });
             _dte.Solution.SolutionBuild.Build(true);
+            Logs.Add(new LogViewModel { Message = "Run services" });
+            _dte.StartServices();
             Logs.Add(new LogViewModel()); //Empty line
             foreach (var project in _dte.GetProjects().Where(p => ! serverProjects.Contains(p)))
             {
