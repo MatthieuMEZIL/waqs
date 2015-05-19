@@ -15,7 +15,7 @@ EntityFrameworkTemplateFileManager fileManager = EntityFrameworkTemplateFileMana
 fileManager.StartNewFile("BoolToVisibilityConverter.cs");
 WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows", "System.Windows.Data");
 #>
-public class BoolToVisibilityConverter : IValueConverter
+public partial class BoolToVisibilityConverter : IValueConverter
 {
 	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
 	{
@@ -27,8 +27,18 @@ public class BoolToVisibilityConverter : IValueConverter
 
 	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
 	{
-		throw new NotImplementedException();
-	}
+        object result = null;
+        bool proceed = false;
+        CustomConvertBack(value, targetType, parameter, culture, ref result, ref proceed);
+        if (proceed || result != null)
+        {
+            return result;
+        }
+
+        throw new NotImplementedException();
+    }
+
+    partial void CustomConvertBack(object value, Type targetType, object parameter, CultureInfo culture, ref object result, ref bool proceed);
 }
 <#+
 WriteFooter(namespaceName);
@@ -54,7 +64,7 @@ WriteFooter(namespaceName);
 fileManager.StartNewFile("TimeConverter.cs");
 WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows.Data");
 #>
-public class TimeConverter : IValueConverter
+public partial class TimeConverter : IValueConverter
 {
 	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
 	{
@@ -63,8 +73,18 @@ public class TimeConverter : IValueConverter
 
 	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
 	{
-		throw new NotImplementedException();
-	}
+        object result = null;
+        bool proceed = false;
+        CustomConvertBack(value, targetType, parameter, culture, ref result, ref proceed);
+        if (proceed || result != null)
+        {
+            return result;
+        }
+
+        throw new NotImplementedException();
+    }
+
+    partial void CustomConvertBack(object value, Type targetType, object parameter, CultureInfo culture, ref object result, ref bool proceed);
 }
 <#+
 WriteFooter(namespaceName);
@@ -72,7 +92,7 @@ WriteFooter(namespaceName);
 fileManager.StartNewFile("IntToVisibilityCollapsedIfZeroConverter.cs");
 WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows", "System.Windows.Data");
 #>
-public class IntToVisibilityCollapsedIfZeroConverter : IValueConverter
+public partial class IntToVisibilityCollapsedIfZeroConverter : IValueConverter
 {
 	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
 	{
@@ -81,8 +101,18 @@ public class IntToVisibilityCollapsedIfZeroConverter : IValueConverter
 
 	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
 	{
-		throw new NotImplementedException();
-	}
+        object result = null;
+        bool proceed = false;
+        CustomConvertBack(value, targetType, parameter, culture, ref result, ref proceed);
+        if (proceed || result != null)
+        {
+            return result;
+        }
+
+        throw new NotImplementedException();
+    }
+
+    partial void CustomConvertBack(object value, Type targetType, object parameter, CultureInfo culture, ref object result, ref bool proceed);
 }
 <#+
 WriteFooter(namespaceName);
@@ -90,7 +120,7 @@ WriteFooter(namespaceName);
 fileManager.StartNewFile("NumberRoundConverter.cs");
 WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows", "System.Windows.Data");
 #>
-public class NumberRoundConverter : IValueConverter
+public partial class NumberRoundConverter : IValueConverter
 {
 	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
 	{
@@ -109,8 +139,62 @@ public class NumberRoundConverter : IValueConverter
 
 	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
 	{
-		throw new NotImplementedException();
-	}
+        object result = null;
+        bool proceed = false;
+        CustomConvertBack(value, targetType, parameter, culture, ref result, ref proceed);
+        if (proceed || result != null)
+        {
+            return result;
+        }
+
+        var valueString = value.ToString();
+        double valueDouble;
+        if (double.TryParse(valueString, out valueDouble))
+        {
+            if (targetType == typeof(double))
+            {
+                return valueDouble;
+            }
+            if (targetType == typeof(decimal))
+            {
+                return (decimal)valueDouble;
+            }
+            if (targetType == typeof(float))
+            {
+                return (float)valueDouble;
+            }
+            if (targetType == typeof(double?))
+            {
+                return (double?)valueDouble;
+            }
+            if (targetType == typeof(decimal?))
+            {
+                return (decimal?)valueDouble;
+            }
+            if (targetType == typeof(float?))
+            {
+                return (float?)valueDouble;
+            }
+        }
+        if (string.IsNullOrWhiteSpace(valueString))
+        {
+            if (targetType == typeof(decimal?))
+            {
+                return (decimal?)null;
+            }
+            if (targetType == typeof(float?))
+            {
+                return (float?)null;
+            }
+            if (targetType == typeof(double?))
+            {
+                return (double?)null;
+            }
+        }
+        throw new NotImplementedException();
+    }
+
+    partial void CustomConvertBack(object value, Type targetType, object parameter, CultureInfo culture, ref object result, ref bool proceed);
 }
 <#+
 WriteFooter(namespaceName);
