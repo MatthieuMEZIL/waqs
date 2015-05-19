@@ -2659,50 +2659,178 @@ IEnumerable<Task> GetSpecifications(string edmxName, SpecificationsElements spec
                     bool hasError = false;
                     var propertyValidateMethodStatements = new List<StatementSyntax>();
                     var propertyName = code.Escape(edmProperty);
+					var dependentProperties = metadata.Where(m => m.DependentProperties.Any(dp => dp.FirstOrDefault().Name == propertyName)).ToList();
                     bool isRequired = ! edmProperty.Nullable;
                     var isNullableMetadata = metadata.FirstOrDefault(m => m.Property == propertyName && m.MethodName == "IsNullable");
                     if ((isRequired && (edmProperty.TypeUsage.ToString() == "Edm.String" || edmProperty.TypeUsage.ToString() == "Edm.Binary") || isNullableMetadata != null) && ! (entityType.KeyMembers.Contains(edmProperty) && GetCSDLIdentityProperties(entityType).Contains(edmProperty)))
                     {
                         string requiredType = edmProperty.TypeUsage.ToString() == "Edm.String" ? "String" : "Object";
                         propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("Error error = Validate", propertyName, "Required(", propertyName, ");")));
-                        propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						if (isNullableMetadata == null || isNullableMetadata.DependentProperties.Count == 0)
+						{
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						}
+						else
+						{
+							globalValidateMethodStatements.Insert(0, SyntaxFactory.ParseStatement(string.Concat("bool yield", propertyName, "Required = false;")));
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", propertyName, "Required)){yield", propertyName, "Required = true;yield return error;}")));							
+						}
                         hasError = true;
                     }
+					foreach (var dependentIsNullable in dependentProperties.Where(m => m.MethodName == "IsNullable"))
+					{
+						var dependentPropertyName = dependentIsNullable.Property;
+						var dependentProperty = entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)).FirstOrDefault(p => code.Escape(p) == dependentPropertyName);
+						if (dependentProperty == null)
+						{
+							continue;
+						}
+						string requiredType = dependentProperty.TypeUsage.ToString() == "Edm.String" ? "String" : "Object";
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", dependentPropertyName, "Required(", dependentPropertyName, ");")));
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", dependentPropertyName, "Required)){yield", dependentPropertyName, "Required = true;yield return error;}")));
+                        hasError = true;
+					}
                     var minValueMetadata = metadata.FirstOrDefault(m => m.Property == propertyName && m.MethodName == "DefineMinValue");
                     if (minValueMetadata != null)
                     {
                         propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", propertyName, "MinValue(", propertyName, ");")));
-                        propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						if (minValueMetadata == null || minValueMetadata.DependentProperties.Count == 0)
+						{
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						}
+						else
+						{
+							globalValidateMethodStatements.Insert(0, SyntaxFactory.ParseStatement(string.Concat("bool yield", propertyName, "MinValue = false;")));
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", propertyName, "MinValue)){yield", propertyName, "MinValue = true;yield return error;}")));							
+						}
                         hasError = true;
                     }
+					foreach (var dependentMinValue in dependentProperties.Where(m => m.MethodName == "DefineMinValue"))
+					{
+						var dependentPropertyName = dependentMinValue.Property;
+						var dependentProperty = entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)).FirstOrDefault(p => code.Escape(p) == dependentPropertyName);
+						if (dependentProperty == null)
+						{
+							continue;
+						}
+						string requiredType = dependentProperty.TypeUsage.ToString() == "Edm.String" ? "String" : "Object";
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", dependentPropertyName, "MinValue(", dependentPropertyName, ");")));
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", dependentPropertyName, "MinValue)){yield", dependentPropertyName, "MinValue = true;yield return error;}")));
+                        hasError = true;
+					}
                     var maxValueMetadata = metadata.FirstOrDefault(m => m.Property == propertyName && m.MethodName == "DefineMaxValue");
                     if (maxValueMetadata != null)
                     {
                         propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", propertyName, "MaxValue(", propertyName, ");")));
-                        propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						if (maxValueMetadata == null || maxValueMetadata.DependentProperties.Count == 0)
+						{
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						}
+						else
+						{
+							globalValidateMethodStatements.Insert(0, SyntaxFactory.ParseStatement(string.Concat("bool yield", propertyName, "MaxValue = false;")));
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", propertyName, "MaxValue)){yield", propertyName, "MaxValue = true;yield return error;}")));							
+						}
                         hasError = true;
                     }
+					foreach (var dependentMaxValue in dependentProperties.Where(m => m.MethodName == "DefineMaxValue"))
+					{
+						var dependentPropertyName = dependentMaxValue.Property;
+						var dependentProperty = entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)).FirstOrDefault(p => code.Escape(p) == dependentPropertyName);
+						if (dependentProperty == null)
+						{
+							continue;
+						}
+						string requiredType = dependentProperty.TypeUsage.ToString() == "Edm.String" ? "String" : "Object";
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", dependentPropertyName, "MaxValue(", dependentPropertyName, ");")));
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", dependentPropertyName, "MaxValue)){yield", dependentPropertyName, "MaxValue = true;yield return error;}")));
+                        hasError = true;
+					}
                     var minLengthMetadata = metadata.FirstOrDefault(m => m.Property == propertyName && m.MethodName == "DefineMinLength");
                     if (minLengthMetadata != null)
                     {
                         propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", propertyName, "MinLength(", propertyName, ");")));
-                        propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						if (minLengthMetadata == null || minLengthMetadata.DependentProperties.Count == 0)
+						{
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						}
+						else
+						{
+							globalValidateMethodStatements.Insert(0, SyntaxFactory.ParseStatement(string.Concat("bool yield", propertyName, "MinLength = false;")));
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", propertyName, "MinLength)){yield", propertyName, "MinLength = true;yield return error;}")));							
+						}
                         hasError = true;
                     }
+					foreach (var dependentMinLength in dependentProperties.Where(m => m.MethodName == "DefineMinLength"))
+					{
+						var dependentPropertyName = dependentMinLength.Property;
+						var dependentProperty = entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)).FirstOrDefault(p => code.Escape(p) == dependentPropertyName);
+						if (dependentProperty == null)
+						{
+							continue;
+						}
+						string requiredType = dependentProperty.TypeUsage.ToString() == "Edm.String" ? "String" : "Object";
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", dependentPropertyName, "MinLength(", dependentPropertyName, ");")));
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", dependentPropertyName, "MinLength)){yield", dependentPropertyName, "MinLength = true;yield return error;}")));
+                        hasError = true;
+					}
                     int? maxLength = MaxLength(edmProperty);
                     var maxLengthMetadata = metadata.FirstOrDefault(m => m.Property == propertyName && m.MethodName == "DefineMaxLength");
                     if (maxLength.HasValue || maxLengthMetadata != null)
                     {
                         propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", propertyName, "MaxLength(", propertyName, ");")));
-                        propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						if (maxLengthMetadata == null || maxLengthMetadata.DependentProperties.Count == 0)
+						{
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						}
+						else
+						{
+							globalValidateMethodStatements.Insert(0, SyntaxFactory.ParseStatement(string.Concat("bool yield", propertyName, "MaxLength = false;")));
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", propertyName, "MaxLength)){yield", propertyName, "MaxLength = true;yield return error;}")));							
+						}
                         hasError = true;
                     }
+					foreach (var dependentMaxLength in dependentProperties.Where(m => m.MethodName == "DefineMaxLength"))
+					{
+						var dependentPropertyName = dependentMaxLength.Property;
+						var dependentProperty = entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)).FirstOrDefault(p => code.Escape(p) == dependentPropertyName);
+						if (dependentProperty == null)
+						{
+							continue;
+						}
+						string requiredType = dependentProperty.TypeUsage.ToString() == "Edm.String" ? "String" : "Object";
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", dependentPropertyName, "MaxLength(", dependentPropertyName, ");")));
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", dependentPropertyName, "MaxLength)){yield", dependentPropertyName, "MaxLength = true;yield return error;}")));
+                        hasError = true;
+					}
                     var patternMetadata = metadata.FirstOrDefault(m => m.Property == propertyName && m.MethodName == "DefinePattern");
                     if (patternMetadata != null)
                     {
                         propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", propertyName, "Pattern(", propertyName, ");")));
-                        propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						if (patternMetadata == null || patternMetadata.DependentProperties.Count == 0)
+						{
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (error != null)yield return error;")));
+						}
+						else
+						{
+							globalValidateMethodStatements.Insert(0, SyntaxFactory.ParseStatement(string.Concat("bool yield", propertyName, "Pattern = false;")));
+							propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", propertyName, "Pattern)){yield", propertyName, "Pattern = true;yield return error;}")));							
+						}
+                        hasError = true;
                     }
+					foreach (var dependentPattern in dependentProperties.Where(m => m.MethodName == "DefinePattern"))
+					{
+						var dependentPropertyName = dependentPattern.Property;
+						var dependentProperty = entityType.Properties.Where(p => p.TypeUsage.EdmType is SimpleType && p.DeclaringType == entityType && IsPublic(p)).FirstOrDefault(p => code.Escape(p) == dependentPropertyName);
+						if (dependentProperty == null)
+						{
+							continue;
+						}
+						string requiredType = dependentProperty.TypeUsage.ToString() == "Edm.String" ? "String" : "Object";
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat(hasError ? "" : "Error ", "error = Validate", dependentPropertyName, "Pattern(", dependentPropertyName, ");")));
+						propertyValidateMethodStatements.Add(SyntaxFactory.ParseStatement(string.Concat("if (! (error == null || yield", dependentPropertyName, "Pattern)){yield", dependentPropertyName, "Pattern = true;yield return error;}")));
+                        hasError = true;
+					}
                     if (propertyValidateMethodStatements.Count != 0)
                     {
                         if (entityType.KeyMembers.Contains(edmProperty))
