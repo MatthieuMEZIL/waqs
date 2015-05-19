@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="5ad58966-3cff-4af7-9009-15e13cfb963b" Version="2.2" Language="en-US" Publisher="WAQS" />
+    <Identity Id="5ad58966-3cff-4af7-9009-15e13cfb963b" Version="2.3" Language="en-US" Publisher="WAQS" />
     <DisplayName>WAQS</DisplayName>
     <Description xml:space="preserve">WAQS is a super useful open source technology that mixes meta-programming and intentional programming using massively T4 and Roslyn in order to leverage the way to code a data-centric software improving productivity, maintainability, code readability and reliability.</Description>
     <MoreInfo>https://github.com/MatthieuMEZIL/waqs</MoreInfo>
