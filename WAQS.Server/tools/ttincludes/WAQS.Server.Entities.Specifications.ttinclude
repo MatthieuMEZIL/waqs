@@ -223,7 +223,7 @@
                         {
                             validateOutTransactionOverride =
                                 allValidateMethods.Except(validateMethods)
-                                    .Any(m => specificationsElements.IsValidatableOnInsertOutsideTransaction(m, edmType, edmxElements));
+                                    .Any(m => specificationsElements.IsValidableOnInsertOutsideTransaction(m, edmType, edmxElements));
                             validateInTranscationOverride =
                                 allValidateMethods.Except(validateMethods)
                                     .Any(m => specificationsElements.IsValidateFunc(m));
@@ -238,12 +238,10 @@
                                         statement = SyntaxFactory.IfStatement(SyntaxFactory.ParseExpression("! onlyError"), statement);
                                     if (specificationsElements.IsValidateFunc(method))
                                         globalTransactionalValidateMethodStatements.Add(statement);
-                                    else if (specificationsElements.IsValidatableOnInsertOutsideTransaction(method, edmType, edmxElements))
+                                    else if (specificationsElements.IsValidableOnInsertOutsideTransaction(method, edmType, edmxElements))
                                         globalValidateMethodStatements.Add(statement);
                                 }, dtoTypes, dtoNamespace, true,
-                                insert:
-                                    m =>
-                                        specificationsElements.IsValidatableOnInsertOutsideTransaction(m, edmType, edmxElements, false));
+                                insert: m => specificationsElements.IsValidableOnInsertOutsideTransaction(m, edmType, edmxElements, false));
                         }
                         bool hasValidateGlobalValidateMethodStatements = globalValidateMethodStatements.Count > 1;
 
@@ -409,8 +407,7 @@
                                                     SyntaxFactory.IfStatement(
                                                         SyntaxFactory.ParseExpression(
                                                             string.Concat(
-                                                                "ChangeTracker.State == ObjectState.Added || ChangeTracker.State == ObjectState.Modified && ChangeTracker.ModifiedProperties.Contains(\"",
-                                                                metadata.Property, "\")")),
+                                                                "ChangeTracker.State == ObjectState.Added || ChangeTracker.State == ObjectState.Modified && ChangeTracker.ModifiedProperties.Intersect(new [] { \"", metadata.Property, string.Concat(metadata.DependentProperties.Select(dp => "\", \"" + dp.First().Name)), "\" }).Any()")),
                                                         SyntaxFactory.Block(
                                                             statements)),
                                                     SyntaxFactory.ParseStatement("return null;")))

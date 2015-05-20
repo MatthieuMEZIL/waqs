@@ -2108,12 +2108,17 @@ if (cascadeDeleteTo)
     }
     if (string.IsNullOrEmpty(code.AbstractOption(entityType))) 
     {
+		List<WAQSMetadata> metadata;
+		if (!specificationsElements.Metadata.TryGetValue(code.Escape(entityType), out metadata))
+			metadata = new List<WAQSMetadata>();
+
 #>
         <#=entityTypeFullName#> value = new <#=entityTypeFullName#> { <#+
         InitKeys(code, entityType, "entity"); 
         foreach (var concurrencyModeFixedProperties in entityType.Members.Except(entityType.KeyMembers).Where(m => IsConcurrencyFixed(m)))
         {
-#>, <#=code.Escape(concurrencyModeFixedProperties)#> = entity.<#=code.Escape(concurrencyModeFixedProperties)#><#+
+			var concurrencyModeFixedPropertiesName = code.Escape(concurrencyModeFixedProperties);
+#>, <#=concurrencyModeFixedPropertiesName#> = entity.<#=concurrencyModeFixedPropertiesName#><#+
         }
 #> };
         value.ChangeTracker.Saving = true;
@@ -2125,24 +2130,7 @@ if (cascadeDeleteTo)
 <#+
             foreach (var edmProperty in entityType.Properties.Cast<EdmMember>().Where(p => IsPublic(p)).Except(entityType.KeyMembers).OfType<EdmProperty>())
             {
-                if (utc && edmProperty.TypeUsage.ToString() == "Edm.DateTime")
-                {
-                    if (edmProperty.Nullable)
-                    {
-#>
-                if (entity.<#=code.Escape(edmProperty)#>.HasValue)
-    <#+	
-                    }
-#>
-                value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#><#+if (edmProperty.Nullable){#>.Value<#+}#>.ToUniversalTime();
-<#+
-                }
-                else
-                {
-#>
-                value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#>;
-<#+
-                }
+				SetValuePropertyFromEntityProperty(edmProperty, code.Escape(edmProperty), utc);
             }
 #>				break;
             case ObjectState.Deleted:
@@ -2150,37 +2138,21 @@ if (cascadeDeleteTo)
 <#+
         foreach (var edmProperty in entityType.Properties.OfType<EdmProperty>().Where(p => IsPublic(p)).Except(entityType.KeyMembers.OfType<EdmProperty>()))
         {
+			var propertyName = code.Escape(edmProperty);
             if (entityType.NavigationProperties.Where(np=>np.GetDependentProperties().Contains(edmProperty) && IsPublic(np)).Any())
             {
-                if (utc && edmProperty.TypeUsage.ToString() == "Edm.DateTime")
-                {
-                    if (edmProperty.Nullable)
-                    {
-#>
-                            if (entity.<#=code.Escape(edmProperty)#>.HasValue)
-    <#+	
-                    }
-#>
-                            value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#><#+if (edmProperty.Nullable){#>.Value<#+}#>.ToUniversalTime();
-<#+
-                }
-                else
-                {
-#>
-                            value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#>;
-<#+
-                }
+				SetValuePropertyFromEntityProperty(edmProperty, propertyName, utc);
             }
             else
             {
                 if (IsHorizontalEntitySplittingCondition(edmxPath, entityType, edmProperty, edm_ns, msl_ns, runtime))
                 {
 #>
-                object value<#=code.Escape(edmProperty)#>OriginalValue;
-                if (value.ChangeTracker.TryGetValue("<#=code.Escape(edmProperty)#>", out value<#=code.Escape(edmProperty)#>OriginalValue))
-                    value.<#=code.Escape(edmProperty)#> = (<#=code.Escape(edmProperty.TypeUsage)#>)value<#=code.Escape(edmProperty)#>OriginalValue;
+                object value<#=propertyName#>OriginalValue;
+                if (value.ChangeTracker.TryGetValue("<#=propertyName#>", out value<#=propertyName#>OriginalValue))
+                    value.<#=propertyName#> = (<#=code.Escape(edmProperty.TypeUsage)#>)value<#=propertyName#>OriginalValue;
                 else
-                    value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#>;
+                    value.<#=propertyName#> = entity.<#=propertyName#>;
 <#+
                 }
                 else
@@ -2210,8 +2182,9 @@ if (cascadeDeleteTo)
 <#+
         foreach (var edmProperty in entityType.Members.Except(entityType.KeyMembers).OfType<EdmProperty>().Where(p => IsConcurrencyFixed(p)))
         {
+			var propertyName = code.Escape(edmProperty);
 #>
-                value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#>;
+                value.<#=propertyName#> = entity.<#=propertyName#>;
 <#+
         }
         foreach (var edmProperty in entityType.Members.Except(entityType.KeyMembers).OfType<EdmProperty>().Where(p => IsHorizontalEntitySplittingCondition(edmxPath, entityType, p, edm_ns, msl_ns, runtime)))
@@ -2229,31 +2202,32 @@ if (cascadeDeleteTo)
 <#+
         foreach (var edmProperty in possibleModifiedProps.ToList())
         {
-                if (entityType.NavigationProperties.Where(np=>np.GetDependentProperties().Contains(edmProperty) && IsPublic(np)).Any())
-                {
-                    possibleModifiedProps.Remove(edmProperty);
-                if (utc && edmProperty.TypeUsage.ToString() == "Edm.DateTime")
-                {
-                    if (edmProperty.Nullable)
-                    {
+			var propertyName = code.Escape(edmProperty);
+            if (entityType.NavigationProperties.Where(np=>np.GetDependentProperties().Contains(edmProperty) && IsPublic(np)).Any())
+            {
+                possibleModifiedProps.Remove(edmProperty);
+				if (utc && edmProperty.TypeUsage.ToString() == "Edm.DateTime")
+				{
+					if (edmProperty.Nullable)
+					{
 #>
                 if (entity.<#=code.Escape(edmProperty)#>.HasValue)
     <#+	
-                    }
+	                }
 #>
                 value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#><#+if (edmProperty.Nullable){#>.Value<#+}#>.ToUniversalTime();
 <#+
-                }
-                else
-                {
+				}
+				else
+				{
 #>
                 value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#>;
 <#+
                 }
             }
         }
-                    if (possibleModifiedProps.Any())
-                    {
+        if (possibleModifiedProps.Any())
+        {
 #>
                 foreach (var modifiedPropery in entity.ChangeTracker.ModifiedProperties.Union(entity.ChangeTracker.ValidationProperties))
                     switch (modifiedPropery)
@@ -2261,28 +2235,16 @@ if (cascadeDeleteTo)
 <#+
                 foreach (var edmProperty in possibleModifiedProps) 
                 { 
+					var propertyName = code.Escape(edmProperty);
 #>
-                        case "<#=code.Escape(edmProperty)#>":
+                        case "<#=propertyName#>":
 <#+
-                if (utc && edmProperty.TypeUsage.ToString() == "Edm.DateTime")
-                {
-                    if (edmProperty.Nullable)
-                    {
-#>
-                            if (entity.<#=code.Escape(edmProperty)#>.HasValue)
-    <#+	
-                    }
-#>
-                            value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#><#+if (edmProperty.Nullable){#>.Value<#+}#>.ToUniversalTime();
-<#+
-                }
-                else
-                {
-#>
-                            value.<#=code.Escape(edmProperty)#> = entity.<#=code.Escape(edmProperty)#>;
-<#+
-                }
-        
+				SetValuePropertyFromEntityProperty(edmProperty, propertyName, utc);
+
+				foreach (var dp in metadata.Where(m => m.Property == propertyName || m.DependentProperties.Any(dps => dps.First().Name == propertyName)).SelectMany(m => m.DependentProperties.Select(dps => dps.First().Name).Union(new [] { m.Property }).Where(p => p != propertyName).Distinct()))
+				{
+					SetValuePropertyFromEntityProperty(entityType.Properties.First(p => code.Escape(p) == dp), dp, utc);
+				}
 #>
                             break;
 <#+
@@ -5005,4 +4967,25 @@ public class GetQueryableExtensionUsings : SyntaxVisitorOfIEnumerableOfString
         }
     }
 
+	void SetValuePropertyFromEntityProperty(EdmProperty edmProperty, string propertyName, bool utc)
+	{
+        if (utc && edmProperty.TypeUsage.ToString() == "Edm.DateTime")
+        {
+            if (edmProperty.Nullable)
+            {
+#>
+                            if (entity.<#=propertyName#>.HasValue)
+    <#+	
+            }
+#>
+                            value.<#=propertyName#> = entity.<#=propertyName#><#+if (edmProperty.Nullable){#>.Value<#+}#>.ToUniversalTime();
+<#+
+        }
+        else
+        {
+#>
+                            value.<#=propertyName#> = entity.<#=propertyName#>;
+<#+
+		}
+	}
 #>

@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>WAQS</id>
-    <version>1.9.2.3</version>
+    <version>1.9.2.4</version>
     <authors>Matthieu MEZIL</authors>
     <owners>Matthieu MEZIL</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
@@ -13,12 +13,12 @@
     <copyright>Matthieu MEZIL</copyright>
     <tags>WAQS</tags>
     <dependencies>
-      <dependency id="WAQS.Client.PCL" version="1.9.2.74" />
-      <dependency id="WAQS.Client.WPF" version="1.9.2.69" />
-      <dependency id="WAQS.Server.Mock" version="1.9.2.69" />
-      <dependency id="WAQS.Server" version="1.9.2.71" />
+      <dependency id="WAQS.Client.PCL" version="1.9.2.75" />
+      <dependency id="WAQS.Client.WPF" version="1.9.2.70" />
+      <dependency id="WAQS.Server.Mock" version="1.9.2.70" />
+      <dependency id="WAQS.Server" version="1.9.2.72" />
     </dependencies>
-    <releaseNotes>Version 1.9.2.3</releaseNotes>
+    <releaseNotes>Version 1.9.2.4</releaseNotes>
   </metadata>
   <files />
 </package>

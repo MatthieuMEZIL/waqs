@@ -186,7 +186,7 @@ public class SpecificationsElements
         _isModeOnInsert = (ConcurrentDictionary<MethodDeclarationSyntax, bool>)cache["_isModeOnInsert"];
         _isModeOnUpdate = (ConcurrentDictionary<MethodDeclarationSyntax, bool>)cache["_isModeOnUpdate"];
         _isModeOnDelete = (ConcurrentDictionary<MethodDeclarationSyntax, bool>)cache["_isModeOnDelete"];
-        _isValidatableOnInsertOutsideTransaction = (ConcurrentDictionary<Tuple<MethodDeclarationSyntax, bool>, bool>)cache["_isValidatableOnInsertOutsideTransaction"];
+        _isValidableOnInsertOutsideTransaction = (ConcurrentDictionary<Tuple<MethodDeclarationSyntax, bool>, bool>)cache["_isValidableOnInsertOutsideTransaction"];
         _isCriticityError = (ConcurrentDictionary<MethodDeclarationSyntax, bool>)cache["_isCriticityError"];
         _isValidatedInTransaction = (ConcurrentDictionary<MethodDeclarationSyntax, bool>)cache["_isValidatedInTransaction"];
         _dependentNavigationProperties = (ConcurrentDictionary<MethodDeclarationSyntax, List<NavigationProperty>>)cache["_dependentNavigationProperties"];
@@ -343,7 +343,7 @@ EntitiesDocumentsNull:
         cache.Add("_isModeOnInsert", value._isModeOnInsert);
         cache.Add("_isModeOnUpdate", value._isModeOnUpdate);
         cache.Add("_isModeOnDelete", value._isModeOnDelete);
-        cache.Add("_isValidatableOnInsertOutsideTransaction", value._isValidatableOnInsertOutsideTransaction);
+        cache.Add("_isValidableOnInsertOutsideTransaction", value._isValidableOnInsertOutsideTransaction);
         cache.Add("_isCriticityError", value._isCriticityError);
         cache.Add("_isValidatedInTransaction", value._isValidatedInTransaction);
         cache.Add("_dependentNavigationProperties", value._dependentNavigationProperties);
@@ -1676,21 +1676,21 @@ EntitiesDocumentsNull:
         }
     }
 
-    private ConcurrentDictionary<Tuple<MethodDeclarationSyntax, bool>, bool> _isValidatableOnInsertOutsideTransaction = new ConcurrentDictionary<Tuple<MethodDeclarationSyntax, bool>, bool>();
-    public bool IsValidatableOnInsertOutsideTransaction(MethodDeclarationSyntax method, StructuralType edmType, EdmxElements edmxElements, bool withNotInTransactionMethods = true)
+    private ConcurrentDictionary<Tuple<MethodDeclarationSyntax, bool>, bool> _isValidableOnInsertOutsideTransaction = new ConcurrentDictionary<Tuple<MethodDeclarationSyntax, bool>, bool>();
+    public bool IsValidableOnInsertOutsideTransaction(MethodDeclarationSyntax method, StructuralType edmType, EdmxElements edmxElements, bool withNotInTransactionMethods = true)
     {
-        bool isValidatableOnInsertOutsideTransaction;
-        if (_isValidatableOnInsertOutsideTransaction.TryGetValue(new Tuple<MethodDeclarationSyntax, bool>(method, withNotInTransactionMethods), out isValidatableOnInsertOutsideTransaction))
-            return isValidatableOnInsertOutsideTransaction;
+        bool isValidableOnInsertOutsideTransaction;
+        if (_isValidableOnInsertOutsideTransaction.TryGetValue(new Tuple<MethodDeclarationSyntax, bool>(method, withNotInTransactionMethods), out isValidableOnInsertOutsideTransaction))
+            return isValidableOnInsertOutsideTransaction;
         var entityType = edmType as EntityType;
         bool isTransactionalMethod = false;
-        isValidatableOnInsertOutsideTransaction = ! IsValidateFunc(method) && (withNotInTransactionMethods && ! IsValidatedInTransaction(method, entityType, edmxElements) || entityType != null && GetDependentNavigationProperties(method, entityType, edmxElements).All(np => 
+        isValidableOnInsertOutsideTransaction = ! IsValidateFunc(method) && (withNotInTransactionMethods && ! IsValidatedInTransaction(method, entityType, edmxElements) || entityType != null && GetDependentNavigationProperties(method, entityType, edmxElements).All(np => 
             {
                 isTransactionalMethod = true;
                 return np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many;
             }) && isTransactionalMethod);
-        _isValidatableOnInsertOutsideTransaction.TryAdd(new Tuple<MethodDeclarationSyntax, bool>(method, withNotInTransactionMethods), isValidatableOnInsertOutsideTransaction);
-        return isValidatableOnInsertOutsideTransaction;
+        _isValidableOnInsertOutsideTransaction.TryAdd(new Tuple<MethodDeclarationSyntax, bool>(method, withNotInTransactionMethods), isValidableOnInsertOutsideTransaction);
+        return isValidableOnInsertOutsideTransaction;
     }
 
     private ConcurrentDictionary<MethodDeclarationSyntax, bool> _isCriticityError = new ConcurrentDictionary<MethodDeclarationSyntax, bool>();

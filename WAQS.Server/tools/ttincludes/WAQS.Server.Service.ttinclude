@@ -531,28 +531,52 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
         {
 <#+
         var validateInTransactionClasses = new List<string>();
-        if (specificationsElements.ValidateMethods.Any())
+		var hasServerErrors = specificationsElements.ValidateMethods.Any() || specificationsElements.Metadata.Any();
+        if (hasServerErrors)
         {
 #>
             var errors = new List<Error>();
 <#+
         }
+		var validateOutTransactionSubClasses = new HashSet<string>();
+		var validateOutTransactionClasses = new HashSet<string>();
+		foreach (var m in specificationsElements.Metadata)
+		{
+			if (!(validateOutTransactionSubClasses.Contains(m.Key) || validateOutTransactionClasses.Contains(m.Key)))
+			{
+				validateOutTransactionClasses.Add(m.Key);
+				foreach (var st in GetSubEntityTypes(edmxElements.ItemCollection, m.Key))
+				{
+					var stName = code.Escape(st);
+					if (validateOutTransactionClasses.Contains(stName))
+					{
+						validateOutTransactionClasses.Remove(stName);
+					}
+					validateOutTransactionSubClasses.Add(stName);
+				}
+			}
+		}
         var transactionalValidationMethods = new Dictionary<EntityType, List<MethodDeclarationSyntax>>();
         var transactionalValidationMethodsNavigationPropertiesDependences = new Dictionary<EntityType, List<NavigationProperty>>();
         var toEntityTypesMethods = new Dictionary<EntityType, List<MethodDeclarationSyntax>>();
-        bool hasServerErrors = false;
         foreach (var validatesKVP in specificationsElements.ValidateMethods)
         {
             var entityType = GetEntityType(edmxElements.ItemCollection, validatesKVP.Key);
-            if (validatesKVP.Value.Any(m => specificationsElements.IsValidatableOnInsertOutsideTransaction(m, GetEntityType(edmxElements.ItemCollection, validatesKVP.Key), edmxElements)))
+            if (validatesKVP.Value.Any(m => specificationsElements.IsValidableOnInsertOutsideTransaction(m, GetEntityType(edmxElements.ItemCollection, validatesKVP.Key), edmxElements)))
             {
-                hasServerErrors = true;
-                var entitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, validatesKVP.Key);
-#>
-            foreach (var e in _context.<#=code.Escape(entitySet) #>.Local<#=code.Escape(entitySet.ElementType) == validatesKVP.Key ? "" : string.Concat(".OfType<", validatesKVP.Key, ">()") #>)
-                foreach (var error in e.ValidateOutTransaction(true).Where(er => er != null && (er.Criticity & Criticity.Error) != 0))
-                    errors.Add(error); 
-<#+
+				if (!(validateOutTransactionSubClasses.Contains(validatesKVP.Key) || validateOutTransactionClasses.Contains(validatesKVP.Key)))
+				{
+					validateOutTransactionClasses.Add(validatesKVP.Key);
+					foreach (var st in GetSubEntityTypes(edmxElements.ItemCollection, validatesKVP.Key))
+					{
+						var stName = code.Escape(st);
+						if (validateOutTransactionClasses.Contains(stName))
+						{
+							validateOutTransactionClasses.Remove(stName);
+						}
+						validateOutTransactionSubClasses.Add(stName);
+					}
+				}
             }
             if (validatesKVP.Value.Any(m => specificationsElements.IsValidateFunc(m)))
                 validateInTransactionClasses.Add(validatesKVP.Key);
@@ -573,13 +597,21 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
                 }
             }
         }
-    if (hasServerErrors)
-    {
+		foreach (var entityTypeName in validateOutTransactionClasses)
+		{
+                var entitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, entityTypeName);
+#>
+            foreach (var e in _context.<#=code.Escape(entitySet) #>.Local<#=code.Escape(entitySet.ElementType) == entityTypeName ? "" : string.Concat(".OfType<", entityTypeName, ">()") #>)
+                errors.AddRange(e.ValidateOutTransaction(true).Where(er => er != null && (er.Criticity & Criticity.Error) != 0));
+<#+
+		}
+		if (hasServerErrors)
+		{
 #>
             if (errors.Count != 0)
                 throw new ValidationException(errors);
 <#+
-    }
+	    }
         bool useTransaction = validateInTransactionClasses.Count != 0 || transactionalValidationMethods.Count != 0;
         var toEntityTypesNavigationProperties = new Dictionary<EntityType, List<NavigationProperty>>();
         if (useTransaction)
@@ -691,7 +723,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
         var toEntityType = toEntityTypeNavigationProperties.Key;
         var toEntityTypeName = code.Escape(toEntityType);
         var toEntityNameVariableName = code.CamelCase(toEntityTypeName);
-        var withAdded = ! toEntityTypesMethods[toEntityType].All(m => specificationsElements.IsValidatableOnInsertOutsideTransaction(m, toEntityType, edmxElements));
+        var withAdded = ! toEntityTypesMethods[toEntityType].All(m => specificationsElements.IsValidableOnInsertOutsideTransaction(m, toEntityType, edmxElements));
         var toEntitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, toEntityTypeName);
         string toEntitySetName = code.Escape(toEntitySet);
         var toEntityTypeNamePlurial = GetPlurial(code.Escape(toEntityTypeName));

@@ -137,11 +137,18 @@ WriteHeader(namespaceName, code);
 #>
 public abstract partial class ErrorInfo
 {
-	public ErrorInfo(string errorCode)
-	{
-		ErrorCode = errorCode;
-	}
-		
+    public ErrorInfo(string errorCode)
+    {
+    	ErrorCode = errorCode;
+    }
+    		
+    public ErrorInfo(string propertyName, string errorCode)
+    {
+        PropertyName = propertyName;
+    	ErrorCode = errorCode;
+    }
+    		
+    public string PropertyName { get; private set; }
 	public string ErrorCode { get; private set; }
 	public abstract string Message { get; }
 	
@@ -160,8 +167,8 @@ public partial class MinLengthErrorInfo : ErrorInfo
 {
 	public const string MinLengthErrorCode = "MinLength";
 
-	public MinLengthErrorInfo(int maxLength)
-		: base(MinLengthErrorCode)
+	public MinLengthErrorInfo(string propertyName, int maxLength)
+		: base(propertyName, MinLengthErrorCode)
 	{
 		MinLength = maxLength;
 	}
@@ -189,8 +196,8 @@ public partial class MaxLengthErrorInfo : ErrorInfo
 {
 	public const string MaxLengthErrorCode = "MaxLength";
 
-	public MaxLengthErrorInfo(int maxLength)
-		: base(MaxLengthErrorCode)
+	public MaxLengthErrorInfo(string propertyName, int maxLength)
+		: base(propertyName, MaxLengthErrorCode)
 	{
 		MaxLength = maxLength;
 	}
@@ -218,8 +225,8 @@ public partial class MinValueErrorInfo<T> : ErrorInfo
 {
 	public const string MinValueErrorCode = "MinValue";
 
-	public MinValueErrorInfo(T maxValue)
-		: base(MinValueErrorCode)
+	public MinValueErrorInfo(string propertyName, T maxValue)
+		: base(propertyName, MinValueErrorCode)
 	{
 		MinValue = maxValue;
 	}
@@ -247,8 +254,8 @@ public partial class MaxValueErrorInfo<T> : ErrorInfo
 {
 	public const string MaxValueErrorCode = "MaxValue";
 
-	public MaxValueErrorInfo(T maxValue)
-		: base(MaxValueErrorCode)
+	public MaxValueErrorInfo(string propertyName, T maxValue)
+		: base(propertyName, MaxValueErrorCode)
 	{
 		MaxValue = maxValue;
 	}
@@ -276,8 +283,8 @@ public partial class RequiredFieldErrorInfo : ErrorInfo
 {
 	public const string RequiredFieldErrorCode = "RequiredField";
 		
-	public RequiredFieldErrorInfo()
-		: base(RequiredFieldErrorCode)
+	public RequiredFieldErrorInfo(string propertyName)
+		: base(propertyName, RequiredFieldErrorCode)
 	{
 	}
 
@@ -302,8 +309,8 @@ public partial class PatternErrorInfo : ErrorInfo
 {
 	public const string PatternErrorCode = "Pattern";
 
-	public PatternErrorInfo(string pattern)
-		: base(PatternErrorCode)
+	public PatternErrorInfo(string propertyName, string pattern)
+		: base(propertyName, PatternErrorCode)
 	{
 		Pattern = pattern;
 	}
@@ -462,635 +469,687 @@ public partial class RelayCommand : ICommand
 #>
 public partial class Validators
 {
-	public static ErrorInfo ValidateRequiredStringProperty<T>(string value, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (string.IsNullOrWhiteSpace(value))
-		{
-			var errorInfo = new RequiredFieldErrorInfo();
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, RequiredFieldErrorInfo.RequiredFieldErrorCode);
-		return null;
-	}
-		
-	public static ErrorInfo ValidateRequiredProperty<T>(T? value, Expression<Func<T?>> prop, DataErrorInfo dataErrorInfo)
-		where T : struct
-	{
-		if (! value.HasValue)
-		{
-			var errorInfo = new RequiredFieldErrorInfo();
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, RequiredFieldErrorInfo.RequiredFieldErrorCode);
-		return null;
-	}
-	
-	public static ErrorInfo ValidateRequiredObjectProperty<T>(T value, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
-		where T : class
-	{
-		if (value == null)
-		{
-			var errorInfo = new RequiredFieldErrorInfo();
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, RequiredFieldErrorInfo.RequiredFieldErrorCode);
-		return null;
-	}
-
-	public static ErrorInfo ValidateStringMinLength<T>(string value, int minLength, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value != null && value.Length < minLength)
-		{
-			var errorInfo = new MinLengthErrorInfo(minLength);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinLengthErrorInfo.MinLengthErrorCode);
-		return null;
-	}
-		
-	public static ErrorInfo ValidateStringMaxLength<T>(string value, int maxLength, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value != null && value.Length > maxLength)
-		{
-			var errorInfo = new MaxLengthErrorInfo(maxLength);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxLengthErrorInfo.MaxLengthErrorCode);
-		return null;
-	}
-
-	public static ErrorInfo ValidateBinaryMaxLength<T>(Byte[] value, int maxLength, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value != null && value.Length > maxLength)
-		{
-			var errorInfo = new MaxLengthErrorInfo(maxLength);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxLengthErrorInfo.MaxLengthErrorCode);
-		return null;
-	}
-
-	public static ErrorInfo ValidateMinValue(byte value, int minValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMinValue(value, (byte)minValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMinValue(byte value, byte minValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<byte>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<byte>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(byte? value, int minValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMinValue(value, (byte)minValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMinValue(byte? value, byte minValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<byte>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<byte?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(DateTime value, DateTime minValue, Expression<Func<DateTime>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<DateTime>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<DateTime>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(DateTime? value, DateTime minValue, Expression<Func<DateTime?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<DateTime>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<DateTime?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(DateTimeOffset value, DateTimeOffset minValue, Expression<Func<DateTimeOffset>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<DateTimeOffset>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<DateTimeOffset>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(DateTimeOffset? value, DateTimeOffset minValue, Expression<Func<DateTimeOffset?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<DateTimeOffset>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<DateTimeOffset?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(TimeSpan value, TimeSpan minValue, Expression<Func<TimeSpan>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<TimeSpan>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<TimeSpan>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(TimeSpan? value, TimeSpan minValue, Expression<Func<TimeSpan?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<TimeSpan>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<TimeSpan?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(decimal value, decimal minValue, Expression<Func<decimal>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<decimal>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<decimal>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(decimal? value, decimal minValue, Expression<Func<decimal?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<decimal>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<decimal?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(double value, double minValue, Expression<Func<double>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<double>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<double>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(double? value, double minValue, Expression<Func<double?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<double>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<double?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(float value, float minValue, Expression<Func<float>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<float>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<float>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(float? value, float minValue, Expression<Func<float?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<float>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<float?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(short value, int minValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMinValue(value, (short)minValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMinValue(short value, short minValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<short>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<short>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(short? value, int minValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMinValue(value, (short)minValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMinValue(short? value, short minValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<short>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<short?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(int value, int minValue, Expression<Func<int>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<int>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<int>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(int? value, int minValue, Expression<Func<int?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<int>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<int?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(long value, long minValue, Expression<Func<long>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<long>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<long>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(long? value, long minValue, Expression<Func<long?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<long>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<long?>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(sbyte value, int minValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMinValue(value, (sbyte)minValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMinValue(sbyte value, sbyte minValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<sbyte>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<sbyte>.MinValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMinValue(sbyte? value, int minValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMinValue(value, (sbyte)minValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMinValue(sbyte? value, sbyte minValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value < minValue)
-		{
-			var errorInfo = new MinValueErrorInfo<sbyte>(minValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MinValueErrorInfo<sbyte?>.MinValueErrorCode);
-		return null;
-	}
-
-	public static ErrorInfo ValidateMaxValue(byte value, int maxValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMaxValue(value, (byte)maxValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMaxValue(byte value, byte maxValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<byte>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<byte>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(byte? value, int maxValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMaxValue(value, (byte)maxValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMaxValue(byte? value, byte maxValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<byte>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<byte?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(DateTime value, DateTime maxValue, Expression<Func<DateTime>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<DateTime>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<DateTime>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(DateTime? value, DateTime maxValue, Expression<Func<DateTime?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<DateTime>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<DateTime?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(DateTimeOffset value, DateTimeOffset maxValue, Expression<Func<DateTimeOffset>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<DateTimeOffset>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<DateTimeOffset>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(DateTimeOffset? value, DateTimeOffset maxValue, Expression<Func<DateTimeOffset?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<DateTimeOffset>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<DateTimeOffset?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(TimeSpan value, TimeSpan maxValue, Expression<Func<TimeSpan>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<TimeSpan>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<TimeSpan>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(TimeSpan? value, TimeSpan maxValue, Expression<Func<TimeSpan?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<TimeSpan>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<TimeSpan?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(decimal value, decimal maxValue, Expression<Func<decimal>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<decimal>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<decimal>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(decimal? value, decimal maxValue, Expression<Func<decimal?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<decimal>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<decimal?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(double value, double maxValue, Expression<Func<double>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<double>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<double>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(double? value, double maxValue, Expression<Func<double?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<double>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<double?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(float value, float maxValue, Expression<Func<float>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<float>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<float>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(float? value, float maxValue, Expression<Func<float?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<float>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<float?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(short value, int maxValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMaxValue(value, (short)maxValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMaxValue(short value, short maxValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<short>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<short>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(short? value, int maxValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMaxValue(value, (short)maxValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMaxValue(short? value, short maxValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<short>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<short?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(int value, int maxValue, Expression<Func<int>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<int>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<int>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(int? value, int maxValue, Expression<Func<int?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<int>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<int?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(long value, long maxValue, Expression<Func<long>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<long>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<long>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(long? value, long maxValue, Expression<Func<long?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<long>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<long?>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(sbyte value, int maxValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMaxValue(value, (sbyte)maxValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMaxValue(sbyte value, sbyte maxValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<sbyte>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<sbyte>.MaxValueErrorCode);
-		return null;
-	}
-	public static ErrorInfo ValidateMaxValue(sbyte? value, int maxValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		return ValidateMaxValue(value, (sbyte)maxValue, prop, dataErrorInfo);
-	}
-	public static ErrorInfo ValidateMaxValue(sbyte? value, sbyte maxValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (value.HasValue && value.Value > maxValue)
-		{
-			var errorInfo = new MaxValueErrorInfo<sbyte>(maxValue);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, MaxValueErrorInfo<sbyte?>.MaxValueErrorCode);
-		return null;
-	}
-	
-	public static ErrorInfo ValidatePattern(string value, string pattern, Expression<Func<string>> prop, DataErrorInfo dataErrorInfo)
-	{
-		if (! (value == null || Regex.IsMatch(value, pattern)))
-		{
-			var errorInfo = new PatternErrorInfo(pattern);
-			dataErrorInfo.AddErrorForProperty(prop, errorInfo);
-			return errorInfo;
-		}
-		dataErrorInfo.RemoveErrorFromProperty(prop, PatternErrorInfo.PatternErrorCode);
-		return null;
-	}
-	
-	public static ErrorInfo DefineErrors<T>(string message, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
-	{
-		dataErrorInfo.RemoveErrorFromProperty(prop, ValidateErrorInfo.ValidateErrorCode);
-		if (string.IsNullOrEmpty(message))
-			return null;
-		var value = new ValidateErrorInfo(message);
-		dataErrorInfo.AddErrorForProperty(prop, value);
-		return value;
-	}
+    public static ErrorInfo ValidateRequiredStringProperty<T>(string value, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+    	if (string.IsNullOrWhiteSpace(value))
+    	{
+            var errorInfo = new RequiredFieldErrorInfo(propertyName);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, RequiredFieldErrorInfo.RequiredFieldErrorCode);
+    	return null;
+    }
+    		
+    public static ErrorInfo ValidateRequiredProperty<T>(T? value, Expression<Func<T?>> prop, DataErrorInfo dataErrorInfo)
+    	where T : struct
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (! value.HasValue)
+    	{
+    		var errorInfo = new RequiredFieldErrorInfo(propertyName);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, RequiredFieldErrorInfo.RequiredFieldErrorCode);
+    	return null;
+    }
+    	
+    public static ErrorInfo ValidateRequiredObjectProperty<T>(T value, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
+    	where T : class
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value == null)
+    	{
+    		var errorInfo = new RequiredFieldErrorInfo(propertyName);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, RequiredFieldErrorInfo.RequiredFieldErrorCode);
+    	return null;
+    }
+    
+    public static ErrorInfo ValidateStringMinLength<T>(string value, int minLength, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value != null && value.Length < minLength)
+    	{
+    		var errorInfo = new MinLengthErrorInfo(propertyName, minLength);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinLengthErrorInfo.MinLengthErrorCode);
+    	return null;
+    }
+    		
+    public static ErrorInfo ValidateStringMaxLength<T>(string value, int maxLength, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value != null && value.Length > maxLength)
+    	{
+    		var errorInfo = new MaxLengthErrorInfo(propertyName, maxLength);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxLengthErrorInfo.MaxLengthErrorCode);
+    	return null;
+    }
+    
+    public static ErrorInfo ValidateBinaryMaxLength<T>(Byte[] value, int maxLength, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value != null && value.Length > maxLength)
+    	{
+    		var errorInfo = new MaxLengthErrorInfo(propertyName, maxLength);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxLengthErrorInfo.MaxLengthErrorCode);
+    	return null;
+    }
+    
+    public static ErrorInfo ValidateMinValue(byte value, int minValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMinValue(value, (byte)minValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMinValue(byte value, byte minValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<byte>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<byte>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(byte? value, int minValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMinValue(value, (byte)minValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMinValue(byte? value, byte minValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<byte>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<byte?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(DateTime value, DateTime minValue, Expression<Func<DateTime>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<DateTime>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<DateTime>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(DateTime? value, DateTime minValue, Expression<Func<DateTime?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<DateTime>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<DateTime?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(DateTimeOffset value, DateTimeOffset minValue, Expression<Func<DateTimeOffset>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<DateTimeOffset>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<DateTimeOffset>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(DateTimeOffset? value, DateTimeOffset minValue, Expression<Func<DateTimeOffset?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<DateTimeOffset>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<DateTimeOffset?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(TimeSpan value, TimeSpan minValue, Expression<Func<TimeSpan>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<TimeSpan>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<TimeSpan>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(TimeSpan? value, TimeSpan minValue, Expression<Func<TimeSpan?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<TimeSpan>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<TimeSpan?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(decimal value, decimal minValue, Expression<Func<decimal>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<decimal>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<decimal>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(decimal? value, decimal minValue, Expression<Func<decimal?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<decimal>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<decimal?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(double value, double minValue, Expression<Func<double>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<double>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<double>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(double? value, double minValue, Expression<Func<double?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<double>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<double?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(float value, float minValue, Expression<Func<float>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<float>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<float>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(float? value, float minValue, Expression<Func<float?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<float>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<float?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(short value, int minValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMinValue(value, (short)minValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMinValue(short value, short minValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<short>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<short>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(short? value, int minValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMinValue(value, (short)minValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMinValue(short? value, short minValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<short>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<short?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(int value, int minValue, Expression<Func<int>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<int>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<int>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(int? value, int minValue, Expression<Func<int?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<int>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<int?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(long value, long minValue, Expression<Func<long>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<long>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<long>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(long? value, long minValue, Expression<Func<long?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<long>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<long?>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(sbyte value, int minValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMinValue(value, (sbyte)minValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMinValue(sbyte value, sbyte minValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<sbyte>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<sbyte>.MinValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMinValue(sbyte? value, int minValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMinValue(value, (sbyte)minValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMinValue(sbyte? value, sbyte minValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value < minValue)
+    	{
+    		var errorInfo = new MinValueErrorInfo<sbyte>(propertyName, minValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MinValueErrorInfo<sbyte?>.MinValueErrorCode);
+    	return null;
+    }
+    
+    public static ErrorInfo ValidateMaxValue(byte value, int maxValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMaxValue(value, (byte)maxValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMaxValue(byte value, byte maxValue, Expression<Func<byte>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<byte>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<byte>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(byte? value, int maxValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMaxValue(value, (byte)maxValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMaxValue(byte? value, byte maxValue, Expression<Func<byte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<byte>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<byte?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(DateTime value, DateTime maxValue, Expression<Func<DateTime>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<DateTime>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<DateTime>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(DateTime? value, DateTime maxValue, Expression<Func<DateTime?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<DateTime>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<DateTime?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(DateTimeOffset value, DateTimeOffset maxValue, Expression<Func<DateTimeOffset>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<DateTimeOffset>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<DateTimeOffset>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(DateTimeOffset? value, DateTimeOffset maxValue, Expression<Func<DateTimeOffset?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<DateTimeOffset>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<DateTimeOffset?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(TimeSpan value, TimeSpan maxValue, Expression<Func<TimeSpan>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<TimeSpan>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<TimeSpan>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(TimeSpan? value, TimeSpan maxValue, Expression<Func<TimeSpan?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<TimeSpan>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<TimeSpan?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(decimal value, decimal maxValue, Expression<Func<decimal>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<decimal>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<decimal>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(decimal? value, decimal maxValue, Expression<Func<decimal?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<decimal>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<decimal?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(double value, double maxValue, Expression<Func<double>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<double>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<double>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(double? value, double maxValue, Expression<Func<double?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<double>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<double?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(float value, float maxValue, Expression<Func<float>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<float>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<float>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(float? value, float maxValue, Expression<Func<float?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<float>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<float?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(short value, int maxValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMaxValue(value, (short)maxValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMaxValue(short value, short maxValue, Expression<Func<short>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<short>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<short>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(short? value, int maxValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMaxValue(value, (short)maxValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMaxValue(short? value, short maxValue, Expression<Func<short?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<short>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<short?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(int value, int maxValue, Expression<Func<int>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<int>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<int>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(int? value, int maxValue, Expression<Func<int?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<int>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<int?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(long value, long maxValue, Expression<Func<long>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<long>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<long>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(long? value, long maxValue, Expression<Func<long?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<long>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<long?>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(sbyte value, int maxValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMaxValue(value, (sbyte)maxValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMaxValue(sbyte value, sbyte maxValue, Expression<Func<sbyte>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<sbyte>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<sbyte>.MaxValueErrorCode);
+    	return null;
+    }
+    public static ErrorInfo ValidateMaxValue(sbyte? value, int maxValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+    	return ValidateMaxValue(value, (sbyte)maxValue, prop, dataErrorInfo);
+    }
+    public static ErrorInfo ValidateMaxValue(sbyte? value, sbyte maxValue, Expression<Func<sbyte?>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (value.HasValue && value.Value > maxValue)
+    	{
+    		var errorInfo = new MaxValueErrorInfo<sbyte>(propertyName, maxValue);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, MaxValueErrorInfo<sbyte?>.MaxValueErrorCode);
+    	return null;
+    }
+    	
+    public static ErrorInfo ValidatePattern(string value, string pattern, Expression<Func<string>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        if (! (value == null || Regex.IsMatch(value, pattern)))
+    	{
+    		var errorInfo = new PatternErrorInfo(propertyName, pattern);
+    		dataErrorInfo.AddErrorForProperty(propertyName, errorInfo);
+    		return errorInfo;
+    	}
+    	dataErrorInfo.RemoveErrorFromProperty(propertyName, PatternErrorInfo.PatternErrorCode);
+    	return null;
+    }
+    	
+    public static ErrorInfo DefineErrors<T>(string message, Expression<Func<T>> prop, DataErrorInfo dataErrorInfo)
+    {
+        var propertyName = PropertyName.GetPropertyName(prop);
+        dataErrorInfo.RemoveErrorFromProperty(propertyName, ValidateErrorInfo.ValidateErrorCode);
+    	if (string.IsNullOrEmpty(message))
+    		return null;
+    	var value = new ValidateErrorInfo(message);
+    	dataErrorInfo.AddErrorForProperty(propertyName, value);
+    	return value;
+    }
 }
 <#+
 	WriteFooter(namespaceName);
