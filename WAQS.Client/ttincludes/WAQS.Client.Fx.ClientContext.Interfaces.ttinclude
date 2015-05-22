@@ -139,6 +139,8 @@ WriteHeader(namespaceName, code, "System", "System.Collections.Generic", "System
 public interface IClientContextBase : IDisposable
 {
     string Name { get; }
+    string ServerEntitiesNamespace { get; }
+    string ClientEntitiesNamespace { get; }
     Task<IEnumerable<T>> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryable<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly);
     Task<T> ExecuteQuery<#=asyncSuffix#><T>(IAsyncQueryableValue<T> query, MergeOption? mergeOption = null, Func<bool> cancel = null, GetEntityAsyncOption getEntityOption = GetEntityAsyncOption.NoTrackingOnly);
     Task<object[]> ExecuteQueries<#=asyncSuffix#>(params IAsyncQueryableBase[] queries);
@@ -887,7 +889,7 @@ public class SerializableExpressionBuilder : ExpressionVisitor
                 method = queryableMethod.MakeGenericMethod(method.GetGenericArguments());
         }
         
-        _serializableReference.Value = new SerializableMethodCallExpression(serializableSourceReference.Value, node.Arguments.Select((a, i) =>
+        var serializableMethodCallExpression = new SerializableMethodCallExpression(serializableSourceReference.Value, node.Arguments.Select((a, i) =>
         {
             var parameterSourceReference = new Reference<SerializableExpression>();
             var serializableExpressionBuilder = new SerializableExpressionBuilder(parameterSourceReference, _parameterMode, _lambdaParameters, _clientContext, _transformParameter);
@@ -896,6 +898,11 @@ public class SerializableExpressionBuilder : ExpressionVisitor
             serializableExpressionBuilder.Visit(a);
             return parameterSourceReference.Value;
         }), method);
+        if (! method.IsStatic && method.DeclaringType.Namespace == _clientContext.ClientEntitiesNamespace && serializableMethodCallExpression.Signature != null)
+        {
+            serializableMethodCallExpression.Signature = serializableMethodCallExpression.Signature.Replace(_clientContext.ClientEntitiesNamespace, _clientContext.ServerEntitiesNamespace);
+        }
+        _serializableReference.Value = serializableMethodCallExpression;
         return null;
     }
                 

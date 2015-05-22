@@ -72,6 +72,16 @@ public abstract partial class <#=contextBaseName#> : IClientContextBase
         get { return "<#=edmxElements.NamespaceName#>.<#=contextName#>"; } 
     }
 
+    public string ServerEntitiesNamespace 
+	{ 
+		get { return "<#=serverEntitiesNamespace#>"; } 
+	}
+
+    public string ClientEntitiesNamespace 
+	{ 
+		get { return "<#=clientEntitiesNamespace#>"; }
+	}
+
     protected Func<<#=clientServiceNamespace#>.I<#=edmxName#>Service> ServiceFactory { get; private set; }
     
     private Dictionary<object, object> _entitiesGot;
