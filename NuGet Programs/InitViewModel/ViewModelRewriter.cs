@@ -31,7 +31,7 @@ namespace InitViewModel
 
         public override SyntaxNode VisitCompilationUnit(CompilationUnitSyntax node)
         {
-            return ((CompilationUnitSyntax)base.VisitCompilationUnit(node)).WithUsings(SyntaxFactory.List(node.Usings.Union( new[] { "System", "System.Collections.Generic", "System.Linq", _entitiesNamespace, _clientContextNamespace, _clientContextInterfacesNamespace, _clientContextInterfacesNamespace + ".Errors", _waqsClientContextNamespace, _waqsClientContextInterfacesNamespace, _waqsClientContextInterfacesNamespace + ".Errors", _waqsClientContextInterfacesNamespace + ".Querying", _waqsComponentModelNamespace }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))))));
+            return ((CompilationUnitSyntax)base.VisitCompilationUnit(node)).WithUsings(SyntaxFactory.List(node.Usings.Select(u => u.Name.ToString()).Union( new[] { "System", "System.Collections.Generic", "System.Linq", _entitiesNamespace, _clientContextNamespace, _clientContextInterfacesNamespace, _clientContextInterfacesNamespace + ".Errors", _waqsClientContextNamespace, _waqsClientContextInterfacesNamespace, _waqsClientContextInterfacesNamespace + ".Errors", _waqsClientContextInterfacesNamespace + ".Querying", _waqsComponentModelNamespace }).Distinct().OrderBy(u => u).Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u)))));
         }
 
         public override SyntaxNode VisitNamespaceDeclaration(NamespaceDeclarationSyntax node)

@@ -16,6 +16,17 @@ if ($ttIncludePath.EndsWith("\"))
 $roslynAssemblies = Join-Path $ttIncludePath 'WAQS.Roslyn.Assemblies.ttinclude'
 if (-not (Test-Path $roslynAssemblies))
 {
+	$ttIncludePathLoop = $ttIncludePath
+	$ttIncludePathStack = New-Object 'System.Collections.Generic.Stack[System.String]'
+	while (-not [IO.Directory]::Exists($ttIncludePathLoop))
+	{
+		$ttIncludePathStack.Push($ttIncludePathLoop)
+		$ttIncludePathLoop = [IO.Path]::GetDirectoryName($ttIncludePathLoop)
+	}
+	while ($ttIncludePathStack.Count -ne 0)
+	{
+		$null = [IO.Directory]::CreateDirectory($ttIncludePathStack.Pop())
+	}
     if (Test-Path "HKCU:\Software\Microsoft\VisualStudio\14.0_Config")
     {
         $assembliesPath = Join-Path (Get-Item HKCU:\Software\Microsoft\VisualStudio\14.0_Config).GetValue("InstallDir") 'PrivateAssemblies'

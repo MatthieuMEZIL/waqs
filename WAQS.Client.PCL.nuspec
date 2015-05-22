@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>WAQS.Client.PCL</id>
-    <version>1.9.2.76</version>
+    <version>1.9.2.79</version>
     <authors>Matthieu MEZIL</authors>
     <owners>Matthieu MEZIL</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
@@ -13,11 +13,11 @@
     <copyright>Matthieu MEZIL</copyright>
     <tags>WAQS</tags>
     <dependencies>
-      <dependency id="WAQS.RoslynDeploy" version="1.0.49" />
+      <dependency id="WAQS.RoslynDeploy" version="1.0.50" />
       <dependency id="T4.Helper" version="1.0.10" />
       <dependency id="EnvDTE.Helper" version="1.0.0" />
     </dependencies>
-    <releaseNotes>Version 1.9.2.76</releaseNotes>
+    <releaseNotes>Version 1.9.2.79</releaseNotes>
   </metadata>
   <files>
     <file src="WAQS.Client\PCL\lib\**\*" target="lib" />
