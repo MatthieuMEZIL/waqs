@@ -2,23 +2,22 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>WAQS</id>
-    <version>1.9.2.8</version>
+    <version>1.9.2.9</version>
     <authors>Matthieu MEZIL</authors>
     <owners>Matthieu MEZIL</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
-    <projectUrl>https://waqs.codeplex.com/</projectUrl>
-    <requireLicenseAcceptance>true</requireLicenseAcceptance>
-    <description>https://waqs.codeplex.com/documentation</description>
-    <summary>http://msmvps.com/blogs/matthieu/archive/2014/04/14/waqs-write-your-code-faster-and-better.aspx</summary>
+    <projectUrl>https://github.com/MatthieuMEZIL/waqs</projectUrl>
+    <description>https://github.com/MatthieuMEZIL/waqs/wiki</description>
+    <summary>https://github.com/MatthieuMEZIL/waqs/wiki</summary>
     <copyright>Matthieu MEZIL</copyright>
     <tags>WAQS</tags>
     <dependencies>
-      <dependency id="WAQS.Client.PCL" version="1.9.2.79" />
-      <dependency id="WAQS.Client.WPF" version="1.9.2.74" />
-      <dependency id="WAQS.Server.Mock" version="1.9.2.74" />
-      <dependency id="WAQS.Server" version="1.9.2.76" />
+      <dependency id="WAQS.Client.PCL" version="1.9.2.80" />
+      <dependency id="WAQS.Client.WPF" version="1.9.2.75" />
+      <dependency id="WAQS.Server.Mock" version="1.9.2.75" />
+      <dependency id="WAQS.Server" version="1.9.2.77" />
     </dependencies>
-    <releaseNotes>Version 1.9.2.8</releaseNotes>
+    <releaseNotes>Version 1.9.2.9</releaseNotes>
   </metadata>
   <files />
 </package>

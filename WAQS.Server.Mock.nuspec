@@ -2,22 +2,22 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>WAQS.Server.Mock</id>
-    <version>1.9.2.74</version>
+    <version>1.9.2.75</version>
     <authors>Matthieu MEZIL</authors>
     <owners>Matthieu MEZIL</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
-    <projectUrl>https://waqs.codeplex.com/</projectUrl>
+    <projectUrl>https://github.com/MatthieuMEZIL/waqs</projectUrl>
     <requireLicenseAcceptance>true</requireLicenseAcceptance>
-    <description>https://waqs.codeplex.com/documentation</description>
-    <summary>http://msmvps.com/blogs/matthieu/archive/2014/04/14/waqs-write-your-code-faster-and-better.aspx</summary>
+    <description>https://github.com/MatthieuMEZIL/waqs/wiki</description>
+    <summary>https://github.com/MatthieuMEZIL/waqs/wiki</summary>
     <copyright>Matthieu MEZIL</copyright>
     <tags>WAQS</tags>
     <dependencies>
-      <dependency id="WAQS.RoslynDeploy" version="1.0.50" />
+      <dependency id="WAQS.RoslynDeploy" version="1.0.51" />
       <dependency id="T4.Helper" version="1.0.10" />
       <dependency id="EnvDTE.Helper" version="1.0.0" />
     </dependencies>
-    <releaseNotes>Version 1.9.2.74</releaseNotes>
+    <releaseNotes>Version 1.9.2.75</releaseNotes>
   </metadata>
   <files>
     <file src="WAQS.Server.Mock\lib\**\*" target="lib" />
