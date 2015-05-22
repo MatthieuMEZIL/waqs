@@ -18,14 +18,12 @@
 /NuGet Programs/InitWAQSServerMock/obj/Debug
 /NuGet Programs/WAQSNuGetPrograms.sln.ide
 *.suo
-
 /TestResults
 /TestsDependences/ClassLibrary1/bin/Debug
 /TestsDependences/ClassLibrary1/obj/Debug
 /TestsDependences/TestsDependences/bin/Debug
 /TestsDependences/TestsDependences/obj/Debug
 /TestsDependences/TestsDependences.sln.ide
-
 /New-NuGetPackages
 /NuGet Programs/.vs/WAQSNuGetPrograms/vbcs.cache
 /TestsDependences/.vs/TestsDependences/vbcs.cache
@@ -34,3 +32,5 @@
 /NuGet Programs/InitWAQSClientWPF/InitWAQSClientWPF.csproj.user
 /NuGet Programs/InitWAQSClientPCL/InitWAQSClientPCL.csproj.user
 /NuGet Programs/InitViewModel/InitViewModel.csproj.user
+*.exe
+/ttincludes/WAQS.Specifications.Dependences.ttinclude
