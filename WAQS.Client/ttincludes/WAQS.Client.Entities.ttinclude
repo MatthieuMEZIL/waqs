@@ -1252,6 +1252,18 @@ foreach(EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.
         get { return <#+
     if (entityType.BaseType != null){#>base.HasChanges || <#+}#>ChangeTracker.State != ObjectState.Unchanged || ChangeTracker.ObjectsRemovedFromCollectionProperties.Any() || ChangeTracker.OriginalValues.Any() || ChangeTracker.ObjectsAddedToCollectionProperties.Any(); }
     }
+<#+
+	if (entityType.BaseType == null)
+	{
+#>
+	private Guid? _uniqueIdentifier;
+	Guid IObjectWithChangeTracker.UniqueIdentifier
+	{
+		get { return _uniqueIdentifier ?? (_uniqueIdentifier = Guid.NewGuid()).Value; }
+	}
+<#+
+	}
+#>
     #endregion
 
     #region Association Fixup
