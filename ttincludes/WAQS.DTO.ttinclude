@@ -128,6 +128,12 @@ IEnumerable<NamespaceSymbol> GetNamespaces(SpecificationPath[] dtoPathes)
 		}
 }
 
+public Func<string, string> GetSelectUsing(SpecificationPath[] dtoPathes, string dtoNamespace)
+{
+	var dtoNamespaces = new HashSet<string>(GetNamespaces(dtoPathes).Select(n => n.ToString()));
+	return u => dtoNamespaces.Contains(u) ? dtoNamespace : u;
+}
+
 class AddDataContractAttribute : DTOAndInterfacesTypesRewriter
 {
 	private Dictionary<string, List<TypeSymbol>> _inheritedTypes;

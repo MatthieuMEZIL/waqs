@@ -19,11 +19,12 @@
         var entityTypesWithEntitySet = edmxElements.EntityTypes.Where(e => GetEntitySet(edmxElements.Container, e) != null).ToList();
 
         IEnumerable<string> usings = new string[] {"System", "System.Collections", "System.Collections.Concurrent", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Threading.Tasks", "System.Transactions", serverFxDALInterfacesNamespace, serverDALInterfacesNamespace, serverFxCommonNamespace, serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxServiceNamespace, serverFxEntitiesNamespace, serverEntitiesNamespace, serverServiceInterfacesNamespace};
-        List<string> specificationMethodsUsings;
+		var selectUsings = GetSelectUsing(dtoPathes, dtoNamespace);
+		List<string> specificationMethodsUsings;
         if (specificationsElements.Usings.TryGetValue("@Service", out specificationMethodsUsings))
-            usings = usings.Union(specificationMethodsUsings);
+            usings = usings.Union(specificationMethodsUsings.Select(selectUsings));
         if (specificationsElements.Usings.TryGetValue("@Other", out specificationMethodsUsings))
-            usings = usings.Union(specificationMethodsUsings);
+            usings = usings.Union(specificationMethodsUsings.Select(selectUsings));
         fileManager.StartNewFile(edmxName + "Service.cs");
         WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
 

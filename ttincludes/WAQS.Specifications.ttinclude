@@ -2834,7 +2834,10 @@ public class DTOAndInterfacesTypesRewriter : TypeRewriter
                 {
                     var dtoTypeName = typeSymbol.ToString();
                     if (DTOTypes.Any(dt => dt.ToString() == dtoTypeName))
+					{
+						UseDTO = true;
                         return SyntaxFactory.ParseName(typeSymbol.Name);
+					}
                 }
                 string @namespace;
                 if (_namespacesReplacement != null && _namespacesReplacement.TryGetValue(typeSymbol.ContainingNamespace.ToString(), out @namespace))
@@ -2843,6 +2846,8 @@ public class DTOAndInterfacesTypesRewriter : TypeRewriter
                 return (NameSyntax)t;
             };
     }
+
+	public bool UseDTO { get; private set; }
 
     public override SyntaxNode VisitUsingDirective(UsingDirectiveSyntax node)
     {

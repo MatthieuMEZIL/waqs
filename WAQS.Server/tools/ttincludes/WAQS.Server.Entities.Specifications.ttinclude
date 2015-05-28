@@ -36,6 +36,8 @@
             string propertyAttributes = null)
         {
             var classesCode = new ConcurrentDictionary<string, StringBuilder>();
+
+			var dtoSpecifications = new HashSet<string>();
             
             Action<StructuralType, Dictionary<string, bool>, Dictionary<string, List<MemberDeclarationSyntax>>> defineSpecifications = (edmType, classesHasSpecifications, classesMembers) =>
             {
@@ -78,11 +80,10 @@
                                         .AttributeLists);
 
                             bool isOverride = specificationsElements.OverrideMethods.Contains(method);
-                            var returnType =
-                                (TypeSyntax)
-                                    new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes).Visit
-                                        (
-                                            method.ReturnType);
+							var dtoAndInterfacesTypesRewriter = new DTOAndInterfacesTypesRewriter(semanticModel, specificationsElements, dtoTypes);
+                            var returnType = (TypeSyntax)dtoAndInterfacesTypesRewriter.Visit(method.ReturnType);
+							if (dtoAndInterfacesTypesRewriter.UseDTO)
+								dtoSpecifications.Add(className);
                             if (! isOverride)
                             {
                                 members.TryAdd(propertyName, new List<MemberDeclarationSyntax>()
@@ -605,10 +606,12 @@
                                             interfaceTypes.Skip(1).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
                         }
 
+						if (dtoSpecifications.Contains(className))
+							usings.Add(dtoNamespace);
                         var compilationUnit = SyntaxFactory.CompilationUnit()
                             .WithUsings(
                                 SyntaxFactory.List<UsingDirectiveSyntax>(
-                                    usings.OrderBy(u => u).Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u)))))
+                                    usings.Distinct().OrderBy(u => u).Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u)))))
                             .WithMembers(SyntaxFactory.List(
                                 new MemberDeclarationSyntax []
                                 {
@@ -654,13 +657,12 @@
             usings.Insert(0, "System");
         if (! usings.Contains("WAQS.Specifications"))
             usings.Add("WAQS.Specifications");
-        new WritingFunctions(Write).WriteHeader(PushIndent, edmxElements.NamespaceName, edmxElements.Code,
-            usings.OrderBy(u => u).ToArray());
+		if (dtoTypes.Count != 0 && ! usings.Contains(dtoNamespace))
+			usings.Add(dtoNamespace);
+        new WritingFunctions(Write).WriteHeader(PushIndent, edmxElements.NamespaceName, edmxElements.Code, usings.OrderBy(u => u).ToArray());
         PushIndent(CodeRegion.GetIndent(1));
         var members = new ConcurrentDictionary<string, List<MemberDeclarationSyntax>>();
-        foreach (
-            var method in
-                specificationsElements.NonExtensionMethods.Union(specificationsElements.NonEntitiesExtensionMethods))
+        foreach (var method in specificationsElements.NonExtensionMethods.Union(specificationsElements.NonEntitiesExtensionMethods))
             AddEntityMethod(members, null, method, specificationsElements.SemanticModelPerMethods[method], serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, namespaceName, specificationsElements, edmxElements, dtoTypes, dtoNamespace, true, null);
         PopIndent();
 #>

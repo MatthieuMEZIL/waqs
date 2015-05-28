@@ -12,9 +12,10 @@ void WriteServerWCFServiceContract(string edmxPath, SpecificationPath[] specific
 	var edmxName = edmxElements.EdmxName;
 
 	IEnumerable<string> usings = new string[] { "System", "System.Collections.Generic", "System.ServiceModel", serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxWCFServiceContractNamespace, serverServiceInterfacesNamespace, serverEntitiesNamespace };
+	var selectUsings = GetSelectUsing(dtoPathes, dtoNamespace);
 	List<string> specificationMethodsUsings;
 	if (specificationsElements.Usings.TryGetValue("@ServiceContract", out specificationMethodsUsings))
-		usings = usings.Union(specificationMethodsUsings);
+		usings = usings.Union(specificationMethodsUsings.Select(selectUsings));
 	fileManager.StartNewFile(string.Concat("I", edmxName, "WCFService.cs"));
 	WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
 #>

@@ -321,7 +321,7 @@ void WriteServer(string waqsFilePath, string namespaceName = null, string relati
 	{
 		var dtoNamespaceNameAttribute = dtos.Attribute("NamespaceName");
 		if (dtoNamespaceNameAttribute == null)
-			dtoNamespaceName = namespaceName;
+			dtoNamespaceName = namespaceName + ".WAQSDTO";
 		else
 			dtoNamespaceName = dtoNamespaceNameAttribute.Value;
 		var dtoWCFNamespaceAttribute = dtos.Attribute("WCFNamespace");

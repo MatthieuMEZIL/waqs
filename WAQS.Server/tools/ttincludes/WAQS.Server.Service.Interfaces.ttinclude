@@ -11,11 +11,12 @@ void WriteServerServiceInterfaces(string edmxPath, SpecificationPath[] specifica
 	var specificationsElements = SpecificationsElements.Get(Host, specificationPathes, entitiesPath, serverFxSpecificationsNamespace, serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverEntitiesNamespace, edmxElements, SpecificationsElements.Type.Server, isInterface:true);
 
 	IEnumerable<string> usings = new string[] { "System", "System.Collections.Generic", serverFxDALInterfacesNamespace, serverFxServiceInterfacesNamespace, serverFxSerializableExpressionsNamespace, serverEntitiesNamespace };
+	var selectUsings = GetSelectUsing(dtoPathes, dtoNamespace);
 	List<string> specificationMethodsUsings;
 	if (specificationsElements.Usings.TryGetValue("@ServiceContract", out specificationMethodsUsings))
-		usings = usings.Union(specificationMethodsUsings);
+		usings = usings.Union(specificationMethodsUsings.Select(selectUsings));
 	if (specificationsElements.Usings.TryGetValue("@Service", out specificationMethodsUsings))
-		usings = usings.Union(specificationMethodsUsings);
+		usings = usings.Union(specificationMethodsUsings.Select(selectUsings));
 	fileManager.StartNewFile(string.Concat("I", edmxElements.EdmxName, "Service.cs"));
 	WriteHeader(edmxElements.NamespaceName, code, usings.Distinct().OrderBy(u => u).ToArray());
 #>
