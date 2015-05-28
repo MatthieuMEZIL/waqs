@@ -911,6 +911,7 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
             if (navProp.GetDependentProperties().Where(p => ! entityType.KeyMembers.Contains(p)).Any())
             {
 #>
+		entity.<#=npName#>FKsChanged -= <#=npFromEndMemberEntityTypeName#><#=npName#>FKsChanged;
         entity.<#=npName#>FKsChanged += <#=npFromEndMemberEntityTypeName#><#=npName#>FKsChanged;
 <#+
             }
@@ -1208,6 +1209,68 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
 <#+
     }
 #>
+	private void DisposeCollection<#=entityTypeName#>()
+	{
+		<#=entitySetEntityTypeNamePlurial#>DataTransferDico.Clear();
+		<#=entitySetEntityTypeNamePlurial#>Dico.Clear();
+<#+
+foreach (var navProp in navigationProperties.Where(np => np.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many))
+    {
+        var dicoNpFieldNameBegining = code.CamelCase(entityTypeNamePlurial);
+        var npName = code.Escape(navProp);
+        var npEntityType = navProp.ToEndMember.GetEntityType();
+        var npEntityTypeName = GetEntitySetEntityTypeName(npEntityType, container, code);
+#>
+		if (_<#=dicoNpFieldNameBegining#><#=npName#>FKsDico != null) 
+		{
+			_<#=dicoNpFieldNameBegining#><#=npName#>FKsDico.Clear();
+		}
+<#+
+	}
+#>
+	}
+
+	private void DisposeEntity(<#=entityTypeFullName#> entity)
+	{
+<#+
+		if (couldHaveTemporaryKey)
+        {
+#>
+		entity.EntityKeyChanged -= ResetEntityKey;
+<#+
+		}
+#>
+		ClientEntitySetExtensions.RemoveEntityInDico(entity);
+<#+
+	bool disposeHasRelationshipCardinalityOne = false;
+    foreach (var navigationProperty in entityType.NavigationProperties.Where(np => IsPublic(np)))
+    {
+        string npName = code.Escape(navigationProperty);
+        if(navigationProperty.ToEndMember.RelationshipMultiplicity == System.Data.Metadata.Edm.RelationshipMultiplicity.Many)
+        {
+#>
+		entity.<#=npName#>.CollectionChanged -= <#=code.Escape(navigationProperty.FromEndMember.GetEntityType())#>_<#=npName#>CollectionChanged;
+<#+
+        }
+        else
+        {
+            disposeHasRelationshipCardinalityOne = true;
+            if (navigationProperties.Contains(navigationProperty) && navigationProperty.GetDependentProperties().Where(p => ! entityType.KeyMembers.Contains(p)).Any())
+            {
+#>
+		entity.<#=npName#>FKsChanged -= <#=entityTypeName#><#=npName#>FKsChanged;
+<#+
+            }
+        }
+    }
+    if (disposeHasRelationshipCardinalityOne)
+    {
+#>
+		entity.NavigationPropertyChanged -= <#=entityTypeName#>NavigationPropertyChanged;
+<#+
+    }
+#>
+	}
 
     private void EntityDetached(<#=entityTypeFullName#> entity)
     {
@@ -2652,39 +2715,12 @@ if (((AssociationType)np.RelationshipType).ReferentialConstraints.Any())
     {
         if (<#=fieldClientEntitySetName#> != null)
         {
+			DisposeCollection<#=entityTypeName#>();
 			var allEntities = <#=fieldClientEntitySetName#>.AllEntities.ToArray();
             for (int ei = 0 ; ei < allEntities.Length ; ei++)
             {
 				var entity = allEntities[ei];
-<#+
-    foreach (var navigationProperty in entityType.NavigationProperties.Where(np => IsPublic(np)))
-    {
-        string npName = code.Escape(navigationProperty);
-        if(navigationProperty.ToEndMember.RelationshipMultiplicity == System.Data.Metadata.Edm.RelationshipMultiplicity.Many)
-        {
-#>
-                entity.<#=npName#>.CollectionChanged -= <#=code.Escape(navigationProperty.FromEndMember.GetEntityType())#>_<#=npName#>CollectionChanged;
-<#+
-        }
-        else
-        {
-            hasRelationshipCardinalityOne = true;
-            if (navigationProperties.Contains(navigationProperty) && navigationProperty.GetDependentProperties().Where(p => ! entityType.KeyMembers.Contains(p)).Any())
-            {
-#>
-                entity.<#=npName#>FKsChanged -= <#=entityTypeName#><#=npName#>FKsChanged;
-<#+
-            }
-        }
-    }
-    if (hasRelationshipCardinalityOne)
-    {
-#>
-                entity.NavigationPropertyChanged -= <#=entityTypeName#>NavigationPropertyChanged;
-<#+
-    }
-#>
-                EntityDetached(entity);
+                DisposeEntity(entity);
             }
             <#=fieldClientEntitySetName#>.EntityAdded -= EntityAddedOrAttached;
             <#=fieldClientEntitySetName#>.EntityAttached -= EntityAddedOrAttached;
@@ -3478,6 +3514,8 @@ partial void <#=specificationServiceMethodValue.Identifier.ValueText#>CatchExcep
         IsDisposed = true;
         if (disposing)
         {
+			EntitiesGot.Clear();
+			CustomPropertyDescriptors.Clear();
             ClientEntitySetExtensions.ClearDico(this);
 <#+
     foreach (EntityType entityType in entityTypes)
