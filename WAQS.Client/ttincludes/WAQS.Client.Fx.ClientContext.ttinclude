@@ -314,8 +314,10 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
             }
 
             _isDisposed = true;
-			foreach (var entity in AllEntities.ToList())
+			var allEntities = AllEntities.ToArray();
+			for (var ei = 0 ; ei < allEntities.Length ; ei++)
             {
+				var entity = allEntities[ei];
                 entity.ChangeTracker.AcceptChanges(false); 
                 entity.ChangeTracker.ChangeTrackingEnabled = false;
                 entity.StateChanged -= EntityStateChanged;
@@ -545,9 +547,10 @@ public class ClientEntitySet<ClientContext, EntityType> : ClientEntitySetBase<Cl
                 return;
             }
 
-            foreach (var item in _entitiesStateChanged)
+            for (int esci = 0 ; esci < _entitiesStateChanged.Count ; esci++)
 			{
-                item.Key.ChangeTracker.ObjectStateChanged -= item.Value;
+				var esc = _entitiesStateChanged[esci];
+                esc.Key.ChangeTracker.ObjectStateChanged -= esc.Value;
 			}
 
             _entitiesStateChanged.Clear();
