@@ -302,22 +302,41 @@ public abstract class ClientEntitySetBase<ClientContext> : IClientEntitySet<Clie
         Dispose(true);
         GC.SuppressFinalize(this);
     }
-                                        
+                               
+	protected bool _isDisposed;         
     protected internal virtual void Dispose(bool disposing)
     {
         if (disposing)
         {
-			var allEntities = AllEntities.ToArray();
-			for (var ei = 0 ; ei < allEntities.Length ; ei++)
+			if (_isDisposed)
             {
-				var entity = allEntities[ei];
+                return;
+            }
+
+            _isDisposed = true;
+			foreach (var entity in AllEntities.ToList())
+            {
                 entity.ChangeTracker.AcceptChanges(false); 
                 entity.ChangeTracker.ChangeTrackingEnabled = false;
                 entity.StateChanged -= EntityStateChanged;
                 entity.ChangeTracker.ClientContextDispose();
+				entity.ChangeTracker = null;
             }
-            _entitiesDico = null;
-            GetEntityKey = null;
+
+			_expression = null;
+			_entitiesDico = null;
+			GetEntityKey = null;
+			if (HashSet != null)
+            {
+                HashSet.Clear();
+                HashSet = null;
+            }
+
+			if (Entities != null)
+            {
+                Entities.Clear();
+                Entities = null;
+            }
         }
     }
 }
@@ -521,11 +540,16 @@ public class ClientEntitySet<ClientContext, EntityType> : ClientEntitySetBase<Cl
     {
         if (disposing)
         {
-            for (int esci = 0 ; esci < _entitiesStateChanged.Count ; esci++)
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            foreach (var item in _entitiesStateChanged)
 			{
-				var esc = _entitiesStateChanged[esci];
-                esc.Key.ChangeTracker.ObjectStateChanged -= esc.Value;
+                item.Key.ChangeTracker.ObjectStateChanged -= item.Value;
 			}
+
             _entitiesStateChanged.Clear();
         }
         base.Dispose(disposing);
@@ -634,9 +658,17 @@ public class ClientSubEntitySet<ClientContext, EntityType, EntityTypeBase> : Cli
     {
         if (disposing)
         {
-            _entitySet.CollectionChanged -= EntitySetCollectionChanged;
-            _entitySet.EntityRemoving -= EntitySetEntityRemoving;
-            _entitySet = null;
+            if (_isDisposed)
+            {
+                return;
+            }
+
+			if (_entitySet != null) 
+			{
+				_entitySet.CollectionChanged -= EntitySetCollectionChanged;
+				_entitySet.EntityRemoving -= EntitySetEntityRemoving;
+				_entitySet = null;
+			}
         }
         base.Dispose(disposing);
     }
