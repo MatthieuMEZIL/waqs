@@ -739,13 +739,16 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
 <#+
         }
 #>
+        if (!ClientEntitySetExtensions.AddEntityInDico(<#=entityTypeNamePlurial#>, entity)) 
+		{
+			return;
+		}
 
-        ClientEntitySetExtensions.AddEntityInDico(<#=entityTypeNamePlurial#>, entity);
         <#=entitySetEntityTypeName#> entityTmp;
         if (<#=entitySetEntityTypeNamePlurial#>DataTransferDico.TryGetValue(entity.DataTransferEntityKey, out entityTmp))
         {
             if (entityTmp == entity)
-                new InvalidOperationException();
+                throw new InvalidOperationException();
         }
         else
             <#=entitySetEntityTypeNamePlurial#>DataTransferDico.Add(entity.DataTransferEntityKey, entity);		
