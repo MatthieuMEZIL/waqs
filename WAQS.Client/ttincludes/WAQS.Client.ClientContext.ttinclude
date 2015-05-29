@@ -747,7 +747,7 @@ public partial class <#=contextName#> : <#=contextBaseName#>, I<#=contextName#>,
         <#=entitySetEntityTypeName#> entityTmp;
         if (<#=entitySetEntityTypeNamePlurial#>DataTransferDico.TryGetValue(entity.DataTransferEntityKey, out entityTmp))
         {
-            if (entityTmp == entity)
+            if (entityTmp != entity)
                 throw new InvalidOperationException();
         }
         else
