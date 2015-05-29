@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using VSLangProj;
 
@@ -208,27 +209,12 @@ namespace WAQS
             return (string)project.Properties.Cast<Property>().First(p => p.Name == "TargetFrameworkMoniker").Value;
         }
 
-        public static void RecursiveT4RunCustomTool(this ProjectItem item, Action<ProjectItem, Exception> error, Action<ProjectItem> generated)
+        public static async Task RecursiveT4RunCustomToolAsync(this ProjectItem item, Action<ProjectItem, Exception> error, Action<ProjectItem> generated, CancellationToken cancellationToken)
         {
-            if (item != null)
+            if (cancellationToken.IsCancellationRequested)
             {
-                try
-                {
-                    ((VSProjectItem)item.Object).RunCustomTool();
-                    generated(item);
-                }
-                catch (Exception e)
-                {
-                    error(item, e);
-                }
+                return;
             }
-            foreach (var subItem in item.ProjectItems.Cast<ProjectItem>().Where(pi => pi.Name.EndsWith(".tt")))
-            {
-                RecursiveT4RunCustomTool(subItem, error, generated);
-            }
-        }
-        public static async Task RecursiveT4RunCustomToolAsync(this ProjectItem item, Action<ProjectItem, Exception> error, Action<ProjectItem> generated)
-        {
             if (item != null)
             {
                 try
@@ -244,7 +230,11 @@ namespace WAQS
             }
             foreach (var subItem in item.ProjectItems.Cast<ProjectItem>().Where(pi => pi.Name.EndsWith(".tt")))
             {
-                await RecursiveT4RunCustomToolAsync(subItem, error, generated);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+                await RecursiveT4RunCustomToolAsync(subItem, error, generated, cancellationToken);
             }
         }
 

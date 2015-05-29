@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -12,7 +13,7 @@ namespace WAQS
     public partial class UpdateGeneratedCodeWizard
     {
         private EnvDTE.DTE _dte;
-        private bool _cancel;
+        private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
         public UpdateGeneratedCodeWizard(EnvDTE.DTE dte)
         {
@@ -30,7 +31,20 @@ namespace WAQS
 
         private async Task Run()
         {
-            await Task.Delay(100);
+            Logs.Add(new LogViewModel { Message = "Build solution" });
+            Logs.Add(new LogViewModel()); //Empty line
+            _dte.Solution.SolutionBuild.Build(true);
+            if (_dte.Solution.SolutionBuild.LastBuildInfo != 0)
+            {
+                Logs.Add(new LogViewModel { Message = "Build failed", Error = true });
+                return;
+            }
+
+            if (_cancellationTokenSource.IsCancellationRequested)
+            {
+                goto Close;
+            }
+
             var referencedProjects = new HashSet<EnvDTE.Project>();
 
             var serverProjects = new HashSet<EnvDTE.Project>();
@@ -47,12 +61,12 @@ namespace WAQS
                             error = true;
                             Logs.Add(new LogViewModel { Message = string.Format("\t{0} code transformation failed", item.GetDisplayPath()), Error = true });
                             Logs.Add(new LogViewModel { Message = exception.Message, Error = true });
-                        }, item => Logs.Add(new LogViewModel { Message = string.Format("\t{0} code transformation succeed", item.GetDisplayPath()) }));
+                        }, item => Logs.Add(new LogViewModel { Message = string.Format("\t{0} code transformation succeed", item.GetDisplayPath()) }), _cancellationTokenSource.Token);
                     if (error)
                     {
                         return;
                     }
-                    if (_cancel)
+                    if (_cancellationTokenSource.IsCancellationRequested)
                     {
                         goto Close;
                     }
@@ -61,6 +75,12 @@ namespace WAQS
             Logs.Add(new LogViewModel()); //Empty line
             Logs.Add(new LogViewModel { Message = "Build solution" });
             _dte.Solution.SolutionBuild.Build(true);
+            if (_dte.Solution.SolutionBuild.LastBuildInfo != 0)
+            {
+                Logs.Add(new LogViewModel { Message = "Build failed", Error = true });
+                return;
+            }
+            Logs.Add(new LogViewModel()); //Empty line
             Logs.Add(new LogViewModel { Message = "Run services" });
             _dte.StartServices();
             Logs.Add(new LogViewModel()); //Empty line
@@ -77,12 +97,12 @@ namespace WAQS
                             error = true;
                             Logs.Add(new LogViewModel { Message = string.Format("\t{0} code transformation failed", item.GetDisplayPath()), Error = true });
                             Logs.Add(new LogViewModel { Message = exception.Message, Error = true });
-                        }, item => Logs.Add(new LogViewModel { Message = string.Format("\t{0} code transformation succeed", item.GetDisplayPath()) }));
+                        }, item => Logs.Add(new LogViewModel { Message = string.Format("\t{0} code transformation succeed", item.GetDisplayPath()) }), _cancellationTokenSource.Token);
                     if (error)
                     {
                         return;
                     }
-                    if (_cancel)
+                    if (_cancellationTokenSource.IsCancellationRequested)
                     {
                         goto Close;
                     }
@@ -95,7 +115,7 @@ namespace WAQS
 
         private void CancelClick(object sender, RoutedEventArgs e)
         {
-            _cancel = true;
+            _cancellationTokenSource.Cancel();
             Close();
         }
 
