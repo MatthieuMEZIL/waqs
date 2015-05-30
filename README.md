@@ -41,3 +41,6 @@ With a manager point of view, WAQS allows:
 And this is possible
 * Without fundamentally change developer habits, WAQS having been thought for them, 
 * Without using a private tool or engine. WAQS only generates some code in the solution just using Microsoft tools in order to ensure the maximum of durability and reducing the risk. 
+
+# Roadmap
+The roadmap is available [here](https://github.com/MatthieuMEZIL/waqs-workshops/wiki/Roadmap).
