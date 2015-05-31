@@ -41,11 +41,11 @@ foreach ($file in [System.IO.Directory]::GetFiles($ttIncludeSource))
     }
 }
 
-foreach ($_ in Get-Module | ?{$_.Name -eq 'WCFAsyncQueryableFunctionsServer'})
+foreach ($_ in Get-Module | ?{$_.Name -eq 'WAQSFunctionsServer'})
 {
-    Remove-Module 'WCFAsyncQueryableFunctionsServer'
+    Remove-Module 'WAQSFunctionsServer'
     break
 }
 
 #Import Module
-Import-Module (Join-Path $toolsPath WCFAsyncQueryableFunctionsServer.psm1)
+Import-Module (Join-Path $toolsPath WAQSFunctionsServer.psm1)

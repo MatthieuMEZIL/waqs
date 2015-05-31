@@ -1295,21 +1295,19 @@ public enum Criticity
     WriteFooter(errorNamespaceName);
 
     fileManager.StartNewFile("Error.cs");
-    WriteHeader(errorNamespaceName, code, "System", "System.Runtime.Serialization", clientFxComponentModelNamespace);
+    WriteHeader(errorNamespaceName, code, "System", "System.Runtime.Serialization");
 #>
 [DataContract(Namespace = "http://WAQS/Errors")]
 public partial class Error
 {
     [DataMember]
-    public string Message { get; set; }
+    public virtual string Message { get; set; }
     [DataMember]
     public Criticity Criticity { get; set; }
     [DataMember]
     public string Key { get; set; }
     [DataMember]
     public ErrorDetail[] ErrorDetails { get; set; }
-
-    public ErrorInfo ErrorInfo { get; set; }
 
     private ErrorSource _source = ErrorSource.FromClient;
     public ErrorSource Source
@@ -1322,6 +1320,21 @@ public partial class Error
     {
         Source = ErrorSource.FromServer;
     }
+}
+<#+
+    WriteFooter(errorNamespaceName);
+
+    fileManager.StartNewFile("MetadataError.cs");
+    WriteHeader(errorNamespaceName, code, clientFxComponentModelNamespace);
+#>
+public class MetadataError : Error
+{
+    public ErrorInfo ErrorInfo { get; set; }
+	public override string Message 
+	{ 
+		get { return (ErrorInfo == null ? "" : (ErrorInfo.PropertyName + ": ")) + base.Message; }
+		set { base.Message = value; }
+	}
 }
 <#+
     WriteFooter(errorNamespaceName);

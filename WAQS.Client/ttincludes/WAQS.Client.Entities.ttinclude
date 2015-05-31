@@ -858,7 +858,7 @@ if (IsPublic(otherNavProp))
             return null;
         }
         if (error == null)
-            Errors.<#=navPropertyName#>.Add(error = new Error { Criticity = Criticity.Mandatory, Key = "<#=navPropertyName#>Required", Message = errorInfo.Message, ErrorInfo = errorInfo });
+            Errors.<#=navPropertyName#>.Add(error = new MetadataError { Criticity = Criticity.Mandatory, Key = "<#=navPropertyName#>Required", Message = errorInfo.Message, ErrorInfo = errorInfo });
         return error;
     }
 
@@ -4654,7 +4654,7 @@ void WriteValidateMethod(string propertyTypeName, Action writeGetError, string k
             return null;
         }
         if (error == null)
-            Errors.<#=propertyName#>.Add(error = new Error { Criticity = Criticity.<#=errorType#>, Key = "<#=propertyName#><#=key#>", Message = errorInfo.Message, ErrorInfo = errorInfo });
+            Errors.<#=propertyName#>.Add(error = new MetadataError { Criticity = Criticity.<#=errorType#>, Key = "<#=propertyName#><#=key#>", Message = errorInfo.Message, ErrorInfo = errorInfo });
         return error;
     }
 
