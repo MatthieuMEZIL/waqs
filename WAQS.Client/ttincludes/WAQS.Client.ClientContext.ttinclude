@@ -1544,6 +1544,7 @@ if (useEntityremovings)
         EntityAttachWithoutChangingStateSubEntitiesBody((<#=clientEntitiesNamespace#>.<#=code.Escape(entityType.BaseType)#>)entity, (<#=clientEntitiesNamespace#>.<#=code.Escape(entityType.BaseType)#>)entityInCache);
 <#+
     }
+	bool isFirstTime = true;
     foreach (var navigationProperty in entityType.NavigationProperties.Where(np => (isEntitySet || np.DeclaringType == entityType) && IsPublic(np)))
     {
         bool cascadeDeleteFrom = navigationProperty.FromEndMember.DeleteBehavior == OperationAction.Cascade;
@@ -1642,9 +1643,13 @@ if (useEntityremovings)
             if (!hasCascadeDelete && cascadeDeleteTo)
             {
                 hasCascadeDelete = true;
+				if (isFirstTime) 
+				{
+					isFirstTime = false;
 #>
         bool isDeleted = false;
 <#+
+				}
             }
 #>
         if (entity.<#=npName#> != null)
