@@ -1043,12 +1043,24 @@ public partial class EntitySet<T> : IEntitySet<T>
         item.ChangeTracker.State = ObjectState.Added;
         ObjectSet.AddObject(item);
     }
-                
+
+    public void AddRange(IEnumerable<T> items)
+    {
+        foreach (var item in items)
+            Add(item);
+    }
+                    
     public void Attach(T item)
     {
         item.ChangeTracker.ChangeTrackingEnabled = true;
         item.ChangeTracker.State = ObjectState.Unchanged;
         ObjectSet.Attach(item);
+    }
+
+    public void AttachRange(IEnumerable<T> items)
+    {
+        foreach (var item in items)
+            Attach(item);
     }
 
     public void AttachAsModified(T item)
