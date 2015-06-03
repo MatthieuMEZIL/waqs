@@ -2055,23 +2055,9 @@ if (cascadeDeleteTo)
         entityInCache.IsDeserializing = isDeserializing;
     }
 
-    public void RefreshCurrentValues(<#=entityTypeFullName#> entityInCache, <#=entityTypeFullName#> entity)
-    {
-        RefreshCurrentValues(entityInCache, entity, false);
-    }
-    public void RefreshCurrentValues(<#=entityTypeFullName#> entityInCache, <#=entityTypeFullName#> entity, bool applyState = false)
-    {
-        bool isDeserializing = entityInCache.IsDeserializing;
-        entityInCache.IsDeserializing = true;
-<#+
-    entityTypeTmp = entityType.BaseType;
-    while (entityTypeTmp != null)
-    {
-#>
-        RefreshCurrentValues((<#=clientEntitiesNamespace#>.<#=code.Escape(entityTypeTmp)#>) entityInCache, (<#=clientEntitiesNamespace#>.<#=code.Escape(entityTypeTmp)#>) entity);
-<#+
-        entityTypeTmp = entityTypeTmp.BaseType;
-    }
+	private void InternalRefreshCurrentValues(<#=entityTypeFullName#> entityInCache, <#=entityTypeFullName#> entity)
+	{
+<#+    
     foreach (EdmProperty edmProperty in entityType.Properties.Where(p => p.TypeUsage.EdmType is PrimitiveType && p.DeclaringType == entityType && IsPublic(p)))
     {
 #>
@@ -2128,6 +2114,26 @@ if (cascadeDeleteTo)
 <#+
     }
 #>
+	}
+    public void RefreshCurrentValues(<#=entityTypeFullName#> entityInCache, <#=entityTypeFullName#> entity)
+    {
+        RefreshCurrentValues(entityInCache, entity, applyState: false);
+    }
+    public void RefreshCurrentValues(<#=entityTypeFullName#> entityInCache, <#=entityTypeFullName#> entity, bool applyState = false)
+    {
+        bool isDeserializing = entityInCache.IsDeserializing;
+        entityInCache.IsDeserializing = true;
+<#+
+    entityTypeTmp = entityType.BaseType;
+    while (entityTypeTmp != null)
+    {
+#>
+        InternalRefreshCurrentValues((<#=clientEntitiesNamespace#>.<#=code.Escape(entityTypeTmp)#>) entityInCache, (<#=clientEntitiesNamespace#>.<#=code.Escape(entityTypeTmp)#>) entity);
+<#+
+        entityTypeTmp = entityTypeTmp.BaseType;
+    }
+#>
+		InternalRefreshCurrentValues(entityInCache, entity);    
         entityInCache.IsDeserializing = isDeserializing;
         if (applyState)
         {
