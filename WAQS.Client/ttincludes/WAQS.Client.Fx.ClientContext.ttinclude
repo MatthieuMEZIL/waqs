@@ -92,7 +92,6 @@ public abstract partial class ClientEntitySetBase<ClientContext> : IClientEntity
         return AddEntity(entity, checkIfAlreadyExist);
     }
 
-	partial void SetMessageAddEntityInvalidOperation(ref string message, IObjectWithChangeTracker entity);
     protected bool AddEntity(IObjectWithChangeTracker entity, bool checkIfAlreadyExist = true)
     {
         if (checkIfAlreadyExist && EntitiesContains(entity))
@@ -118,6 +117,7 @@ public abstract partial class ClientEntitySetBase<ClientContext> : IClientEntity
                 NotifyCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, entity));
         return true;
     }
+	partial void SetMessageAddEntityInvalidOperation(ref string message, IObjectWithChangeTracker entity);
         
     protected virtual bool Replace(ref IObjectWithChangeTracker entity)
     {
@@ -3065,7 +3065,6 @@ public static partial class ClientEntitySetExtensions
 
     private static <#=concurrentDictionary#><Type, <#=concurrentDictionary#><Guid, WeakReference>> _entitySetPerEntity = new <#=concurrentDictionary#><Type, <#=concurrentDictionary#><Guid, WeakReference>>();
         
-	static partial void SetMessageAttachEntityOneContextInvalidOperation(ref string message, IObjectWithChangeTracker entity);
     public static bool AddEntityInDico(IClientEntitySet entitySet, IObjectWithChangeTracker entity)
     {
         if (entity == null)
@@ -3108,6 +3107,7 @@ public static partial class ClientEntitySetExtensions
         entitySetPerEntityForEntityType.<#=concurrentDictionaryTry ? "Try" : ""#>Add(entity.UniqueIdentifier, new WeakReference(entitySet));
         return true;
     }
+	static partial void SetMessageAttachEntityOneContextInvalidOperation(ref string message, IObjectWithChangeTracker entity);
         
     public static IClientEntitySet GetClientEntitySet(IObjectWithChangeTracker entity)
     {
