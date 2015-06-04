@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
   <metadata>
     <id>WAQS.Client.PCL</id>
-    <version>1.9.2.87</version>
+    <version>1.9.2.88</version>
     <authors>Matthieu MEZIL</authors>
     <owners>Matthieu MEZIL</owners>
     <licenseUrl>http://www.opensource.org/licenses/mit</licenseUrl>
@@ -17,7 +17,7 @@
       <dependency id="T4.Helper" version="1.0.10" />
       <dependency id="EnvDTE.Helper" version="1.0.0" />
     </dependencies>
-    <releaseNotes>Version 1.9.2.87</releaseNotes>
+    <releaseNotes>Version 1.9.2.88</releaseNotes>
   </metadata>
   <files>
     <file src="WAQS.Client\PCL\lib\**\*" target="lib" />
