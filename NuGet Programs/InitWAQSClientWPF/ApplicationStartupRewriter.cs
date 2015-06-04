@@ -34,7 +34,7 @@ namespace InitWAQSClientWPF
         {
             var value = ((CompilationUnitSyntax)base.VisitCompilationUnit(node));
             if (_first)
-                value = value.AddUsings(new[] { "System.Threading", "Microsoft.Practices.Unity", "WAQS.ComponentModel", "WAQS.Controls", _clientInterfacesContextNamespace, _clientContextNamespace, _clientContextNamespace + ".ServiceReference" }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))).ToArray());
+                value = value.AddUsings(new[] { "System.Threading", "Microsoft.Practices.Unity", "WAQS.ClientContext.Interfaces", "WAQS.ComponentModel", "WAQS.Controls", _clientInterfacesContextNamespace, _clientContextNamespace, _clientContextNamespace + ".ServiceReference" }.Select(u => SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(u))).ToArray());
             return value;
         }
 
@@ -43,7 +43,7 @@ namespace InitWAQSClientWPF
             var value = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
             if (_first)
             {
-                var statements = new[] { string.Format("            unityContainer.RegisterType<I{0}Service, {0}ServiceClient>(new InjectionConstructor());\r\n", _edmxName), string.Format("            unityContainer.RegisterType<I{0}ClientContext, {0}ClientContext>();\r\n", _edmxName) };
+                var statements = new[] { string.Format("            unityContainer.RegisterType<I{0}Service, {0}ServiceClient>(new InjectionConstructor());\r\n", _edmxName), string.Format("            unityContainer.RegisterType<I{0}ClientContext, {0}ClientContext>();\r\n", _edmxName), string.Format("            ClientContextFactory<I{0}ClientContext>.Factory = () => unityContainer.Resolve<I{0}ClientContext>();\r\n", _edmxName) };
                 if (_addApplicationStart)
                     value = value.AddMembers(
                         SyntaxFactory.MethodDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)), "OnStartup")

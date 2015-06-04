@@ -1489,7 +1489,7 @@ public class QueriesSerialization
     }
 }
 <#+
-WriteFooter(namespaceName);
+WriteFooter(queryNamespaceName);
 
 fileManager.StartNewFile("MergeOption.cs");
 WriteHeader(namespaceName, code);
@@ -1514,7 +1514,23 @@ public enum GetEntityAsyncOption
 	AllMergeOption = 2
 }
 <#+
-    WriteFooter(queryNamespaceName);
+WriteFooter(namespaceName);
+
+fileManager.StartNewFile("ClientContextFactory.cs");
+WriteHeader(namespaceName, code, "System");
+#>
+public static class ClientContextFactory<T> 
+	where T : IClientContext
+{
+    public static Func<T> Factory { get; set; }
+
+    public static T Create()
+    {
+        return Factory();
+    }
+}
+<#+
+    WriteFooter(namespaceName);
 
     WriteSpecificClasses(fileManager, code, clientFxComponentModelNamespace, clientFxEntitiesTrackingNamespace, namespaceName);
 

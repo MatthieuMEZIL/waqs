@@ -1,6 +1,6 @@
 function GetToolsPath()
 {
-    $modules = (Get-Module WCFAsyncQueryableFunctionsClientWPF | select -property path)
+    $modules = (Get-Module WAQSFunctionsClientWPF | select -property path)
     if ($modules.Length -eq $null -or $modules.Length -eq 1)
     {
         return [System.IO.Path]::GetDirectoryName($modules.Path)
