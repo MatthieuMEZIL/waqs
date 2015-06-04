@@ -3645,7 +3645,7 @@ public class PaginatedQuery<T> : PaginatedQuery, IPaginatedQuery
         set
         {
             _pageIndex = value;
-            NotifyPropertyChanged.RaisePropertyChanged(() => PageIndex);
+            <#=RaisePropertyChanged("PageIndex")#>
             if (PageIndexChanged != null)
                 PageIndexChanged();
             LoadPage(value);
@@ -3671,8 +3671,8 @@ public class PaginatedQuery<T> : PaginatedQuery, IPaginatedQuery
         {
             _count = value;
             _isCounting = false;
-            NotifyPropertyChanged.RaisePropertyChanged(() => Count);
-            NotifyPropertyChanged.RaisePropertyChanged(() => MaxPage);
+            <#=RaisePropertyChanged("Count")#>
+            <#=RaisePropertyChanged("MaxPage")#>
         }
     }
         
@@ -3721,7 +3721,7 @@ public class PaginatedQuery<T> : PaginatedQuery, IPaginatedQuery
         if (_identifiers == identifiers)
         {
             _pageIndex = result.PageIndex + 1;
-            NotifyPropertyChanged.RaisePropertyChanged(() => PageIndex);
+            <#=RaisePropertyChanged("PageIndex")#>
             if (PageIndexChanged != null)
                 PageIndexChanged();
             Items.Clear();

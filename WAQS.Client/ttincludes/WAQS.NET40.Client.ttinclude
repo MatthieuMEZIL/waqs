@@ -1,0 +1,8 @@
+<#+
+// Copyright (c) Matthieu MEZIL.  All rights reserved.
+
+private static string RaisePropertyChanged(string propertyName, string className = null)
+{
+	return string.Format("NotifyPropertyChanged.RaisePropertyChanged(({0}) => {1}{2});", className == null ? "" : className + " e", className == null ? "" : "e.", propertyName);
+}
+#>

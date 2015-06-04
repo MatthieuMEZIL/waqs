@@ -315,7 +315,7 @@ public <#=code.SpaceAfter(code.AbstractOption(entityType))#>partial class <#=ent
                         if (value == null || ! value.IsInitializingRelationships)
                             OnNavigationPropertyChanged("<#=np.Name#>");
                         else
-                            NotifyPropertyChanged.RaisePropertyChanged(() => <#=np.Name#>);
+                            <#=RaisePropertyChanged(np.Name)#>
                     }
 <#+
                     }
@@ -821,7 +821,7 @@ if (IsPublic(otherNavProp))
                 if (<#=navPropertyFieldName#> == null || !<#=navPropertyFieldName#>.IsInitializingRelationships)
                     OnNavigationPropertyChanged("<#=navProperty.Name#>");
                 else
-                    NotifyPropertyChanged.RaisePropertyChanged(() => <#=navProperty.Name#>);
+                    <#=RaisePropertyChanged(navProperty.Name)#>
             }
         }
     }
@@ -2538,7 +2538,7 @@ IEnumerable<Task> GetSpecifications(string edmxName, SpecificationsElements spec
                                                                 new []
                                                                 {
                                                                     SyntaxFactory.ParseStatement(valueFiedlName + " = value;"),
-                                                                    SyntaxFactory.ParseStatement(string.Format("if (NotifyPropertyChanged != null)NotifyPropertyChanged.RaisePropertyChanged(({0} e) => e.{1});", className, propertyName))
+                                                                    SyntaxFactory.ParseStatement("if (NotifyPropertyChanged != null)" + RaisePropertyChanged(propertyName, className))
                                                                 })))
                                             }))));
 
@@ -2572,7 +2572,7 @@ IEnumerable<Task> GetSpecifications(string edmxName, SpecificationsElements spec
                                                                         new []
                                                                         {
                                                                             SyntaxFactory.ParseStatement(hasFieldName + " = value;"),
-                                                                            SyntaxFactory.ParseStatement(string.Format("if (NotifyPropertyChanged != null)NotifyPropertyChanged.RaisePropertyChanged(({0} e) => e.{1});", className, propertyName))
+                                                                            SyntaxFactory.ParseStatement("if (NotifyPropertyChanged != null)" + RaisePropertyChanged(propertyName, className))
                                                                         })))
                                                     })))
                                         .WithAttributeLists(

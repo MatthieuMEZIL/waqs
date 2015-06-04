@@ -128,7 +128,7 @@ public class ByStepQuery<T> : ByStepQuery
 		set 
 		{ 
 			_isCompleted = value;
-			NotifyPropertyChanged.RaisePropertyChanged(() => IsCompleted);
+			<#=RaisePropertyChanged("IsCompleted")#>
 		}
 	}
 }

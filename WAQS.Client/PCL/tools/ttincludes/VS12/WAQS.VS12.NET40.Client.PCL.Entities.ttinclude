@@ -1,4 +1,5 @@
 <#@ include file="WAQS.VS12.Client.PCL.Entities.ttinclude"#>
+<#@ include file="WAQS.NET40.Client.ttinclude"#>
 <#+
 // Copyright (c) Matthieu MEZIL.  All rights reserved.
 #>
