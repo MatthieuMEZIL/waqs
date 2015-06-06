@@ -2437,8 +2437,11 @@ IEnumerable<Task> GetSpecifications(string edmxName, SpecificationsElements spec
                                                 SyntaxFactory.AccessorDeclaration(
                                                     SyntaxKind.SetAccessorDeclaration,
                                                     SyntaxFactory.Block(
-                                                        SyntaxFactory.ThrowStatement(
-                                                            SyntaxFactory.ParseExpression("new System.InvalidOperationException();"))))
+                                                        new [] 
+														{
+															SyntaxFactory.ParseStatement(string.Concat("GetSpecifications().", propertyName, " = value;")),
+															SyntaxFactory.ParseStatement(string.Concat("Specifications.Has", propertyName, " = true;"))
+														}))
                                             })))
                         };
                         if (! syntaxTokens.Any(st => GetKind(st) == SyntaxKind.OverrideKeyword))
@@ -2646,6 +2649,17 @@ IEnumerable<Task> GetSpecifications(string edmxName, SpecificationsElements spec
                                     (FieldDeclarationSyntax)SyntaxFactory.ParseCompilationUnit(string.Concat("private ", className, "Specifications _specifications;")).Members[0],
                                     (PropertyDeclarationSyntax)SyntaxFactory.ParseCompilationUnit(string.Concat("[DataMember", classInheritance == null ? "" : string.Concat("(Name = \"", className, "Specifications\")"), "]public ", classInheritance == null ? "" : "new ", className, "Specifications Specifications { get { ", setSpecificationsIfNull.ToString(), " return _specifications; } set { _specifications = value;", classInheritance == null ? "" : string.Concat("if (!(IsDeserializing && value == null)){", initSpecificationsFromBase.ToString(), "base.Specifications = value;}"), "if (_specifications != null)_specifications.NotifyPropertyChanged = NotifyPropertyChanged;} }")).Members[0]
                                 });
+						specificationsMemberDeclarationSyntax.Add( SyntaxFactory.ParseCompilationUnit(string.Concat("protected ", classInheritance == null ? "" : "new ", className, "Specifications GetSpecifications() { return Specifications ?? (Specifications = GetSpecifications", className, "()); }")).Members[0]);
+                        specificationsMemberDeclarationSyntax.Add( SyntaxFactory.ParseCompilationUnit(string.Concat("protected virtual ", className, "Specifications GetSpecifications", className, "() { return new ", className, "Specifications(); }")).Members[0]);
+                        EdmType baseTypeLoop = edmType.BaseType;
+                        while (baseTypeLoop != null)
+                        {
+                            string baseTypeName = edmxElements.Code.Escape(baseTypeLoop);
+                            List<MethodDeclarationSyntax> baseGetMethods;
+                            if (specificationsElements.GetMethods.TryGetValue(baseTypeName, out baseGetMethods) && baseGetMethods.Any())
+                                specificationsMemberDeclarationSyntax.Add( SyntaxFactory.ParseCompilationUnit(string.Concat("protected override ", baseTypeName, "Specifications GetSpecifications", baseTypeName, "() { return GetSpecifications(); }")).Members[0]);
+                            baseTypeLoop = baseTypeLoop.BaseType;
+                        }
                     }
                 }
             }), 
