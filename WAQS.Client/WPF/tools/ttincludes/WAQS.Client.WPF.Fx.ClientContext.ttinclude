@@ -129,8 +129,12 @@ public class ByStepQuery<T> : ByStepQuery
 		{ 
 			_isCompleted = value;
 			<#=RaisePropertyChanged("IsCompleted")#>
+			if (value && Completed != null)
+				Completed();
 		}
 	}
+
+	public event Action Completed;
 }
 
 public static class ByStepQueryExtension
