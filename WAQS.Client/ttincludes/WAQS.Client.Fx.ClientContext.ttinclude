@@ -3693,13 +3693,13 @@ public class PaginatedQuery<T> : PaginatedQuery, IPaginatedQuery
     }
     
     private bool _load;
-    public PaginatedQuery<T> LoadPage(int? pageIndex = null, Action callBack = null)
+    public PaginatedQuery<T> LoadPage(int? pageIndex = null)
     {
         _load = true;
-        LoadPageBody<#=asyncSuffix#>(pageIndex, callBack).ConfigureAwait(true);
+        LoadPageBody<#=asyncSuffix#>(pageIndex).ConfigureAwait(true);
         return this;
     }
-    private async Task LoadPageBody<#=asyncSuffix#>(int? pageIndex, Action callBack)
+    private async Task LoadPageBody<#=asyncSuffix#>(int? pageIndex)
     {
         Items.Clear();
         int pageIndexValue = pageIndex ?? PageIndex;

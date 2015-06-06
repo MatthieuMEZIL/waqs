@@ -199,6 +199,37 @@ public partial class NumberRoundConverter : IValueConverter
 <#+
 WriteFooter(namespaceName);
 
+fileManager.StartNewFile("IsNullConverter.cs");
+WriteHeader(namespaceName, code, "System", "System.Globalization", "System.Windows", "System.Windows.Data");
+#>
+public partial class IsNullConverter : IValueConverter
+{
+	public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+		bool isNull = value == null;
+		if (parameter != null && (!(bool)parameter))
+			isNull = !isNull;
+		return isNull;
+	}
+
+	public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+	{
+        object result = null;
+        bool proceed = false;
+        CustomConvertBack(value, targetType, parameter, culture, ref result, ref proceed);
+        if (proceed || result != null)
+        {
+            return result;
+        }
+
+        throw new NotImplementedException();
+    }
+
+    partial void CustomConvertBack(object value, Type targetType, object parameter, CultureInfo culture, ref object result, ref bool proceed);
+}
+<#+
+WriteFooter(namespaceName);
+
 fileManager.Process();
 }
 #>
