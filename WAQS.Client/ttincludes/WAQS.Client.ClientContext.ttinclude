@@ -3084,7 +3084,10 @@ foreach (EntitySet entitySet in container.BaseEntitySets.OfType<EntitySet>().Whe
             var clientContext = GetModifiedEntities();
             var sentContext = GetSerializableContext(clientContext);
             var saveResult = await TrySaving<#=asyncSuffix#>(() => ProxyHelper.ExecuteFunc<#=asyncSuffix#>(ServiceFactory, service => Task.Factory.FromAsync(service.BeginSaveChanges(sentContext, null, null), ar => service.EndSaveChanges(ar)), <#=nbRetryOnTimeout#>));
-            Refresh(clientContext, saveResult);
+			if (saveResult != null) 
+			{
+				Refresh(clientContext, saveResult);
+			}
         }
         SavedChanges();
     }
