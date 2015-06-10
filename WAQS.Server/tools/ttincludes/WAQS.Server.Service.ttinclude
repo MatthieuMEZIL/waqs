@@ -720,7 +720,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
 <#+
     foreach (var toEntityTypeNavigationProperties in toEntityTypesNavigationProperties)
     {
-        //TODO : Si FK dans Key alors inutile de faire la requête en base
+        //TODO : If key contanins FK it's useless to query DB
         var toEntityType = toEntityTypeNavigationProperties.Key;
         var toEntityTypeName = code.Escape(toEntityType);
         var toEntityNameVariableName = code.CamelCase(toEntityTypeName);
