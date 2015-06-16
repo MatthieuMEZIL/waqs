@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:WAQS"
         xmlns:platformUI="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.14.0"
         mc:Ignorable="d"
-        Title="Update Generated Code" Height="600" Width="800">
+        Title="WAQS Update Generated Code" Height="600" Width="800">
     <Window.Resources>
         <local:ForegroundColorConverter x:Key="ForegroundColorConverter" />
     </Window.Resources>

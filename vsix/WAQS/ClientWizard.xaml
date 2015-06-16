@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:WAQS"
         xmlns:platformUI="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.14.0"
         mc:Ignorable="d"
-        Title="ClientWPFWizard" Height="219.936" Width="600">
+        Title="WAQS Client Generation" Height="219.936" Width="600">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />

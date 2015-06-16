@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:WAQS"
         xmlns:platformUI="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.14.0"
         mc:Ignorable="d"
-        Title="ServerMockWizard" Height="185" Width="600">
+        Title="WAQS Server Mock Generation" Height="185" Width="600">
     <Grid Margin="10">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
