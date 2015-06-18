@@ -146,9 +146,9 @@ namespace WAQS
                 references.Add("System.Transactions");
                 references.Add("System.Web");
                 references.Add("System.Xml");
-                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "Unity", "3.0.1304.1", false);
-                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "CommonServiceLocator", "1.2.0", false);
-                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "EntityFramework", "6.1.2", false);
+                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "Unity", "3.5.1404", false);
+                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "CommonServiceLocator", "1.3.0", false);
+                _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "EntityFramework", "6.1.3", false);
                 try
                 {
                     referencesUIHierarchyItems.Expanded = referencesExpanded;

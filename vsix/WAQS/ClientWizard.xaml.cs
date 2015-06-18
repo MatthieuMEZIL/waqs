@@ -160,16 +160,9 @@ namespace WAQS
                     references.Add("PresentationFramework");
                     references.Add("System.Xaml");
                     references.Add("System.Xml");
-                    if (!references.Cast<Reference>().Any(r => r.Name == "System.Windows.Interactivity"))
-                    {
-                        references.Add(Path.Combine(clientToolsPath, "System.Windows.Interactivity.dll"));
-                    }
-                    if (!references.Cast<Reference>().Any(r => r.Name == "Microsoft.Expression.Interactions"))
-                    {
-                        references.Add(Path.Combine(clientToolsPath, "Microsoft.Expression.Interactions.dll"));
-                    }
-                    _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "Unity", "3.0.1304.1", false);
-                    _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "Rx-WPF", "1.0.11226", false);
+                    _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "System.Windows.Interactivity.WPF", "2.0.20525", false);
+                    _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "Unity", "3.5.1404", false);
+                    _packageInstaller.InstallPackage("http://packages.nuget.org", _project, "Rx-WPF", "2.2.5", false);
                 }
                 else if (_clientKind == GenerationOptions.PCL)
                 {

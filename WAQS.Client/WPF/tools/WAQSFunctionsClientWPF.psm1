@@ -106,18 +106,7 @@ function WAQSClientWPFInternal($edmxPath, $svcUrl, $kind, $sourceControl, $netVe
     $null = $references.Add("System.ServiceModel")
     $null = $references.Add("System.Xaml")
     $null = $references.Add("System.Xml")
-    $ref = (Get-Project).Object.References | ?{$_.Name -eq 'System.Windows.Interactivity'}
-    if ($ref -ne $null)
-    {
-        $ref.Remove()
-    }
-    $null = $references.Add((Join-Path $wpfToolsPath "System.Windows.Interactivity.dll"))
-    $ref = (Get-Project).Object.References | ?{$_.Name -eq 'Microsoft.Expression.Interactions'}
-    if ($ref -ne $null)
-    {
-        $ref.Remove()
-    }
-    $null = $references.Add((Join-Path $wpfToolsPath "Microsoft.Expression.Interactions.dll"))
+	
     if ($netVersion -eq "NET40")
     {
         switch ($DTE.Version)
@@ -137,6 +126,7 @@ function WAQSClientWPFInternal($edmxPath, $svcUrl, $kind, $sourceControl, $netVe
         Install-Package Unity -Version 3.5.1404
     }
     Install-Package Rx-WPF -Version 2.2.5 
+    Install-Package System.Windows.Interactivity.WPF -Version 2.0.20525 
     
     try
     {
