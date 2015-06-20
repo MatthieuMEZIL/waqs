@@ -347,7 +347,7 @@ namespace WAQS
                 catch
                 {
                 }
-                _dte.ItemOperations.Navigate("https://waqs.codeplex.com/documentation");
+                _dte.ItemOperations.Navigate("https://github.com/MatthieuMEZIL/waqs/blob/master/README.md");
                 Close();
             }
             catch (Exception ex)
