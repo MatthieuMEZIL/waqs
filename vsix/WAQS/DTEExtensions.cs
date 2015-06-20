@@ -259,7 +259,8 @@ namespace WAQS
                    from f in p.GetAllProjectItems()
                    where f.Name.EndsWith(extension)
                    let path = f.GetFilePath()
-                   where !(skipWaqsAlreadyUsed && Path.GetFileName(Path.GetDirectoryName(path)).StartsWith("WAQS."))
+                   let pathDirectory = Path.GetDirectoryName(path)
+                   where !(skipWaqsAlreadyUsed && Path.GetFileName(pathDirectory).StartsWith("WAQS.")) || pathDirectory == Path.GetDirectoryName(p.FullName)
                    orderby defaultProject != null && path.StartsWith(Path.GetDirectoryName(defaultProject.FullName) + "\\") descending, path
                    select new FilePathes { FullPath = path, DisplayPath = f.GetDisplayPath() };
         }
