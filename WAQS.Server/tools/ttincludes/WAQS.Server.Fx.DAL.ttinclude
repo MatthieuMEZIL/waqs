@@ -1167,7 +1167,7 @@ public static class MergeOptionExtensions
     WriteFooter(namespaceName);
 
     fileManager.StartNewFile("CustomizableObjectContext.cs");
-    List<string> customizableObjectContextUsings = new List<string>() { "System", "System.Collections.Generic", "System.Data.Entity.Core.EntityClient", "System.Data.Entity.Core.Objects" };
+    List<string> customizableObjectContextUsings = new List<string>() { "System", "System.Collections.Generic", "System.Data.Entity.Core.EntityClient", "System.Data.Entity.Core.Objects", "System.Linq" };
     CompleteCustomizableObjectContextUsings(customizableObjectContextUsings);
     WriteHeader(namespaceName, code, customizableObjectContextUsings.ToArray());
 #>
@@ -1209,6 +1209,36 @@ public class CustomizableObjectContext : ObjectContext
         return saveAction(_saveActions.Count - 1, options);
     }
 <#+ CompleteCustomizableObjectContext(); #>
+
+	protected override void Dispose(bool disposing)
+	{
+		if (disposing)
+		{
+			if (_saveActions != null)
+			{
+				for (int i = 0; i < _saveActions.Count(); i++)
+				{
+					_saveActions[i] = null;
+				}
+
+				_saveActions.Clear();
+				_saveActions = null;
+			}
+
+			if (_saveAsyncActions != null)
+			{
+				for (int i = 0; i < _saveAsyncActions.Count(); i++)
+				{
+					_saveAsyncActions[i] = null;
+				}
+
+				_saveAsyncActions.Clear();
+				_saveAsyncActions = null;
+			}
+		}
+
+		base.Dispose(disposing);
+	}
 }
 <#+
     WriteFooter(namespaceName);
@@ -1289,24 +1319,31 @@ public partial class ExceptionHandlerObjectContext<T> : ObjectContextCustomizer<
     {
         //rajouter une condition si on a déjà eu le pb sur l'entité => throw
         bool canHandle = true;
-        return e.StateEntries.Any() && e.StateEntries.Select(se =>
-            {
-                if (se.State != EntityState.Deleted)
-                    return false;
+		try 
+		{
+			return e.StateEntries.Any() && e.StateEntries.Select(se =>
+				{
+					if (se.State != EntityState.Deleted)
+						return false;
 
-                object dbEntity;
-                if (contextTmp.TryGetObjectByKey(se.EntityKey, out dbEntity))
-                {
-                    if (_entities.Contains(se.Entity))
-                        return false;
-                    _entities.Add(se.Entity);
-                    ObjectContext.ApplyOriginalValues(se.EntitySet.Name, dbEntity); // In case of ConcurrencyMode = fixed
-                }
-                else
-                    ObjectContext.Detach(se.Entity);
+					object dbEntity;
+					if (contextTmp.TryGetObjectByKey(se.EntityKey, out dbEntity))
+					{
+						if (_entities.Contains(se.Entity))
+							return false;
+						_entities.Add(se.Entity);
+						ObjectContext.ApplyOriginalValues(se.EntitySet.Name, dbEntity); // In case of ConcurrencyMode = fixed
+					}
+					else
+						ObjectContext.Detach(se.Entity);
 
-                return true;
-            }).TakeWhile(b => canHandle).Aggregate((b1, b2) => canHandle = b2);// Aggregate for execute select on each of them
+					return true;
+				}).TakeWhile(b => canHandle).Aggregate((b1, b2) => canHandle = b2);// Aggregate for execute select on each of them
+		} 
+		catch 
+		{
+			return false;
+		}
     }
 
     private void HandleOrReThrow(Exception e)

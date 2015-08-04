@@ -173,6 +173,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
 <#+
         var funcActionMethods = new List<MethodDeclarationSyntax>();
         var addedMethod = new List<MethodDeclarationSyntax>();
+		var disposeMethod = new List<string>();
         foreach (var methodsWithContextPerClass in methodsWithContextOrServicePropertyPerClasses)
             foreach (var methodWithContext in methodsWithContextPerClass.Value)
             {
@@ -181,6 +182,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
                 string funcAction = methodWithContextSymbol.ReturnsVoid ? "Action" : "Func";
                 bool isServiceMethod = specificationsElements.AllServiceMethods.Contains(methodWithContext) && methodWithContextSymbol.IsStatic && ! methodWithContextSymbol.IsExtensionMethod;
                 string methodSuffix = ! isServiceMethod && (specificationsElements.VirtualMethods.Contains(methodWithContext) || specificationsElements.OverrideMethods.Contains(methodWithContext)) ? methodWithContextSymbol.Parameters[0].Type.Name : "";
+				disposeMethod.Add(string.Format("{0}.{1}.{2}{3} = null;", serverEntitiesNamespace, methodsWithContextPerClass.Key, methodWithContext.Identifier.ValueText, funcAction));
 #>
         <#=serverEntitiesNamespace #>.<#=methodsWithContextPerClass.Key #>.<#=methodWithContext.Identifier.ValueText #><#=funcAction #> = <#=methodWithContext.Identifier.ValueText #><#=methodSuffix #><#=isServiceMethod ? "" : funcAction #>;
 <#+
@@ -194,7 +196,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
 #>
     }
 
-    private readonly I<#=containerName #> _context;
+    private I<#=containerName #> _context;
     protected I<#=containerName #> Context
     {
         get { return _context; }
@@ -1066,7 +1068,27 @@ var <#=variableName #> = <#=entitySetCollection #>.Local<#=ofType #>.ToList();
 
     void IDisposable.Dispose()
     {
+		TrackableCollectionExtensions.AttachAction = null;
+<#+
+	foreach(var item in disposeMethod)
+	{
+#>		<#=item#>
+<#+
+	}
+	foreach (var p in specificationsElements.ServiceProperties)
+    {
+#>
+		var <#=p.Name #>Disp = <#=p.Name #> as IDisposable;
+		if (<#=p.Name #>Disp != null) 
+		{
+			<#=p.Name #>Disp.Dispose();
+		}        
+<#+
+    }
+#>    
+        _contextFactory = null;
         _context.Dispose();
+        _context = null;
     }
 }
 <#+
