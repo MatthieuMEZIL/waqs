@@ -110,7 +110,7 @@ public class SpecificationsElements
     }
 
     private SpecificationsElements(Dictionary<string, object> cache)
-    {
+    {		
         Usings = new Dictionary<string, List<string>>();
         Solution = (ISolution)cache["Solution"];
         GetMethods = (Dictionary<string, List<MethodDeclarationSyntax>>)cache["GetMethods"];
@@ -237,16 +237,16 @@ public class SpecificationsElements
             value.Init(type, dal, service, isInterface, entitiesNamespace, getNamespaceFromTypeSymbol, getNamespaceFromMethodSymbol);
             return value;
         }
+
         ISolution solution = null;
         IProject entitiesProject = null;
-        List<IDocument> entitiesDocuments = null;
+        List<IDocument> entitiesDocuments = null;		
         var specificationDocuments = new Dictionary<IDocument, Compilation>();
         if (specificationPathes.Length != 0 && entitiesPath != null)
         {
-            var entitiesSlnFilePath = Path.GetFullPath(host.ResolvePath(entitiesPath.Sln));
-            var entitiesSolution = LoadSolution(entitiesSlnFilePath, host);
+            var entitiesSlnFilePath = Path.GetFullPath(host.ResolvePath(entitiesPath.Sln));            
             var entitiesProjectPath = Path.GetFullPath(host.ResolvePath(entitiesPath.Csproj));
-            entitiesProject = entitiesSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == entitiesProjectPath);
+            entitiesProject = LoadProject(entitiesProjectPath);
             if (entitiesProject == null)
                 goto EntitiesDocumentsNull;
             var entitiesFolderPath = entitiesPath.Folder;
@@ -255,10 +255,13 @@ public class SpecificationsElements
         }
         foreach (var specificationPath in specificationPathes)
         {
-            var specificationSlnFilePath = Path.GetFullPath(host.ResolvePath(specificationPath.Sln));
-            solution = LoadSolution(specificationSlnFilePath, host);
+            var specificationSlnFilePath = Path.GetFullPath(host.ResolvePath(specificationPath.Sln));            
+			if (solution == null) 
+			{
+				solution = LoadSolution(specificationSlnFilePath, host);
+			}
             var specificationProjectPath = Path.GetFullPath(host.ResolvePath(specificationPath.Csproj));
-            var project = solution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == specificationProjectPath);
+            var project = LoadProject(specificationProjectPath);
             var specificationFolderPath = specificationPath.Folder;
             specificationFolderPath = Path.GetFullPath(host.ResolvePath(specificationFolderPath));
             var compilation = GetCompilation(project);
@@ -274,7 +277,7 @@ EntitiesDocumentsNull:
     {
         var cache = new Dictionary<string, object>();
         cache.Add("LastWriteTime", lastWriteTime);
-        cache.Add("Solution", value.Solution);
+        cache.Add("Solution", value.Solution);		
         cache.Add("GetMethods", value.GetMethods);
         cache.Add("ValidateMethods", value.ValidateMethods);
         cache.Add("ServiceMethods", value.ServiceMethods);
@@ -355,10 +358,10 @@ EntitiesDocumentsNull:
         System.AppDomain.CurrentDomain.SetData(cacheKey, cache);
     }
     private SpecificationsElements(ITextTemplatingEngineHost host, SpecificationPath[] specificationPathes, SpecificationPath entitiesPath, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string entitiesNamespace, EdmxElements edmxElements, SpecificationsElements.Type type, bool dal, bool service, Func<ITypeSymbol, string> getNamespaceFromTypeSymbol, Func<IMethodSymbol, string> getNamespaceFromMethodSymbol, bool isInterface, ISolution solution, IProject entitiesProject, List<IDocument> entitiesDocuments, Dictionary<IDocument, Compilation> specificationDocuments)
-    {
+    {		
         ServerFxDALInterfacesNamespace = serverFxDALInterfacesNamespace;
         ServerFxServiceInterfacesNamespace = serverFxServiceInterfacesNamespace;
-        Solution = solution;
+        Solution = solution;		
         _classes = edmxElements.EntityTypes.Select(e => 
             {
                 string name = edmxElements.Code.Escape(e);
@@ -709,14 +712,18 @@ EntitiesDocumentsNull:
             value.SetUsings(type, dtoNamespace, getNamespaceFromTypeSymbol, getNamespaceFromMethodSymbol);
             return value;
         }
+	
         var specificationDocuments = new Dictionary<IDocument, Compilation>();
-        ISolution solution = null;
+        ISolution solution = null;		
         foreach (var specificationPath in specificationPathes)
         {
-            var specificationSlnFilePath = specificationPath.Sln;
-            solution = LoadSolution(Path.GetFullPath(host.ResolvePath(specificationSlnFilePath)), host);
+            var specificationSlnFilePath  = specificationPath.Sln;   									         			
+			if (solution == null)
+			{
+				solution = LoadSolution(specificationSlnFilePath, host);
+			}
             var specificationProjectPath = Path.GetFullPath(host.ResolvePath(specificationPath.Csproj));
-            var project = solution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == specificationProjectPath);
+            var project = LoadProject(specificationProjectPath);
             var specificationFolderPath = specificationPath.Folder;
             specificationFolderPath = Path.GetFullPath(host.ResolvePath(specificationFolderPath));
             var compilation = GetCompilation(project);
@@ -727,10 +734,10 @@ EntitiesDocumentsNull:
         Cache(cacheKey, value, lastWriteTime);
         return value;
     }
-    private SpecificationsElements(ITextTemplatingEngineHost host, SpecificationPath[] specificationPathes, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, SpecificationsElements.Type type, Func<ITypeSymbol, string> getNamespaceFromTypeSymbol, Func<IMethodSymbol, string> getNamespaceFromMethodSymbol, ISolution solution, Dictionary<IDocument, Compilation> specificationDocuments)
-    {
+    private SpecificationsElements(ITextTemplatingEngineHost host, SpecificationPath[] specificationPathes, IEnumerable<TypeSymbol> dtoTypes, string dtoNamespace, string serverFxSpecificationsNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, SpecificationsElements.Type type, Func<ITypeSymbol, string> getNamespaceFromTypeSymbol, Func<IMethodSymbol, string> getNamespaceFromMethodSymbol, ISolution solution, Dictionary<IDocument, Compilation> specificationDocuments)    
+	{		
         ServerFxDALInterfacesNamespace = serverFxDALInterfacesNamespace;
-        ServerFxServiceInterfacesNamespace = serverFxServiceInterfacesNamespace;
+        ServerFxServiceInterfacesNamespace = serverFxServiceInterfacesNamespace;		
         Solution = solution;
         _classes = dtoTypes.Select(dto => new ClassNames { Name = dto.Name, FullName = dto.ToString() }).ToList();
         ServerFxSpecificationsNamespace = serverFxSpecificationsNamespace;
@@ -942,8 +949,8 @@ EntitiesDocumentsNull:
             return false;
         }
     }
-    
-    public ISolution Solution { get; private set; }
+    	
+    public ISolution Solution { get; private set; } 		
     public Dictionary<string, List<MethodDeclarationSyntax>> GetMethods { get; private set; }
     public Dictionary<string, List<MethodDeclarationSyntax>> ValidateMethods { get; private set; }
     public List<MethodDeclarationSyntax> ServiceMethods { get; private set; }
@@ -1844,7 +1851,7 @@ EntitiesDocumentsNull:
             }
             var methodSymbolValue = methodSymbol;
             if (Methods != null && Methods.Any(m => m.Identifier.ValueText == methodSymbolValue.Name))
-            {
+            {								
                 var newMethodSymbol = (MethodSymbol)FindSourceDefinition(methodSymbol, Solution);
                 if (newMethodSymbol != null && newMethodSymbol.IsStatic)
                 {
@@ -2926,7 +2933,7 @@ public abstract class SpecificationMethodBodyRewriter : DTOAndInterfacesTypesRew
                 initializers.Add(SyntaxFactory.AssignmentExpression(SyntaxKindAssignExpression, SyntaxFactory.IdentifierName("ErrorDetails"), SyntaxFactory.ParseExpression(string.Concat("new ErrorDetail[] { ", dependentProperties.Select(p => string.Concat("new ErrorDetail { EntityKey = ", GetDataTransfertEntityKeyParameter(), "DataTransferEntityKey, PropertyName = \"", p, "\" }")).Aggregate((ps1, ps2) => string.Concat(ps1, ", ", ps2)), " }"))));
             }
             if (! _hasKey && _validateMethodName != null)
-                initializers.Add(SyntaxFactory.AssignmentExpression(SyntaxKindAssignExpression, SyntaxFactory.IdentifierName("Key"), SyntaxFactory.ParseExpression(string.Concat("\"", _validateMethodName, "\""))));
+					initializers.Add(SyntaxFactory.AssignmentExpression(SyntaxKindAssignExpression, SyntaxFactory.IdentifierName("Key"), SyntaxFactory.ParseExpression(string.Concat("\"", _validateMethodName, "\""))));
             if (initializers.Count != 0)
                 return SyntaxFactory.ObjectCreationExpression(node.Type).WithInitializer(SyntaxFactory.InitializerExpression(SyntaxKind.ObjectInitializerExpression, SyntaxFactory.SeparatedList(value.Initializer.Expressions.Union(initializers), value.Initializer.Expressions.Union(initializers.Skip(1)).Select(_ => SyntaxFactory.Token(SyntaxKind.CommaToken)))));
         }
@@ -3896,10 +3903,8 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
 
             var dte = (EnvDTE.DTE)new DynamicHost(Host).AsIServiceProvider().GetService(typeof(EnvDTE.DTE));
             var projectPath = dte.Solution.FindProjectItem(Host.TemplateFile).ContainingProject.FullName;
-            var templateFolder = Path.GetDirectoryName(Host.TemplateFile);
-
-            var solution = LoadSolution(dte.Solution.FullName, Host);
-            var project = solution.Projects.First(p => Path.GetFullPath(p.FilePath) == projectPath);
+            var templateFolder = Path.GetDirectoryName(Host.TemplateFile);            
+            var project = LoadProject(projectPath);
 
             var documentIdCodes = new Dictionary<string, DocumentId>();
 
@@ -3913,7 +3918,7 @@ StringBuilder IncludeFor(MethodDeclarationSyntax method, SpecificationsElements 
                 documentIdCodes.Add(classCode.Key, documentId);
             }
 
-            foreach (var documentIdCode in documentIdCodes)
+			foreach (var documentIdCode in documentIdCodes)
             {
                 fileManager.StartNewFile(documentIdCode.Key);
                 var newDocument = project.Documents.First(d => d.Id == documentIdCode.Value);

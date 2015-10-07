@@ -13,9 +13,8 @@ void WriteDTOs(SpecificationPath[] dtoPathes, string wcfNamespace, string namesp
 
 	var types = new List<TypeSymbol>();
 	foreach (var dtoPath in dtoPathes)
-	{
-		var dtoSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
-		var dtoProject = dtoSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
+	{		
+		var dtoProject = LoadProject(Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
 		if (dtoProject == null)
 			return;
 		var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
@@ -44,9 +43,8 @@ void WriteDTOs(SpecificationPath[] dtoPathes, string wcfNamespace, string namesp
 		}
 	}
 	foreach (var dtoPath in dtoPathes)
-	{
-		var dtoSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
-		var dtoProject = dtoSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
+	{		
+		var dtoProject = LoadProject(Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
 		var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
 		foreach (var document in dtoProject.Documents.Where(d => Path.GetFullPath(d.FilePath).StartsWith(dtoFolderPath)))
 		{
@@ -68,10 +66,9 @@ IEnumerable<TypeSymbol> GetClasses(SpecificationPath[] dtoPathes)
 {
 	if (dtoPathes != null)
 		foreach (var dtoPath in dtoPathes)
-		{
-			var dtoSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
+		{			
 			string dtoProjectFullPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj));
-			var dtoProject = dtoSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == dtoProjectFullPath);
+			var dtoProject = LoadProject(dtoProjectFullPath);
 			if (dtoProject == null)
 				yield break;
 			var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
@@ -109,9 +106,8 @@ IEnumerable<NamespaceSymbol> GetNamespaces(SpecificationPath[] dtoPathes)
 {
 	if (dtoPathes != null)
 		foreach (var dtoPath in dtoPathes)
-		{
-			var entitiesSolution = LoadSolution(Path.GetFullPath(Host.ResolvePath(dtoPath.Sln)), Host);
-			var entitiesProject = entitiesSolution.Projects.FirstOrDefault(p => Path.GetFullPath(p.FilePath) == Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
+		{			
+			var entitiesProject = LoadProject(Path.GetFullPath(Host.ResolvePath(dtoPath.Csproj)));
 			var dtoFolderPath = Path.GetFullPath(Host.ResolvePath(dtoPath.Folder));
 			foreach (var document in entitiesProject.Documents)
 			{
@@ -212,7 +208,7 @@ class AddDataContractAttribute : DTOAndInterfacesTypesRewriter
 			{
 				if (baseType == null || !_inheritedTypes.ContainsKey(baseTypeString))
 					return t;
-				if ((SemanticModel.GetSymbolInfo(t).Symbol).ToString() == baseTypeString)
+				if (SemanticModel.GetSymbolInfo(t).Symbol != null && (SemanticModel.GetSymbolInfo(t).Symbol).ToString() == baseTypeString)
 					return GetBaseType(SyntaxFactory.ParseTypeName(baseType.Name));
 				return t;
 			}).ToList();

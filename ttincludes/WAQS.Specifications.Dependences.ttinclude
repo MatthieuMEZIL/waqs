@@ -253,7 +253,7 @@ partial class GetMembersVisitor : SyntaxVisitor
             foreach (var m in node.Initializer.Expressions)
             {
                 var assignment = m as AssignmentExpressionSyntax;
-                if (IsAssignExpression(GetKind(assignment)))
+                if (assignment != null && IsAssignExpression(GetKind(assignment)))
                 {
                     var initializerVisitor = new GetMembersVisitor(this);
                     initializerVisitor.Visit(assignment.Right);
