@@ -1,7 +1,7 @@
 <#@ include file="WAQS.Service.Base.ttinclude"#>
 <#+
 // Copyright (c) Matthieu MEZIL.  All rights reserved.
-    private void WriteServerService(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, string dtoWCFNamespace, SpecificationPath entitiesPath, string serverFxCommonNamespace, string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxServiceInterfacesNamespace, string serverFxServiceNamespace, string serverFxSerializableExpressionsNamespace, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, string serverServiceInterfacesNamespace, string serverDALInterfacesNamespace, bool isParallel, string namespaceName, string relativePath)
+    private void WriteServerService(string edmxPath, SpecificationPath[] specificationPathes, SpecificationPath[] dtoPathes, string dtoNamespace, string dtoWCFNamespace, SpecificationPath entitiesPath, string serverFxCommonNamespace, string serverFxEntitiesNamespace, string serverFxDALInterfacesNamespace, string serverFxDALNamespace, string serverFxServiceInterfacesNamespace, string serverFxServiceNamespace, string serverFxSerializableExpressionsNamespace, string serverFxSpecificationsNamespace, string serverEntitiesNamespace, string serverServiceInterfacesNamespace, string serverDALInterfacesNamespace, bool isParallel, string namespaceName, string relativePath)
     {
         var fileManager = EntityFrameworkTemplateFileManager.Create(this);
         var edmxElements = EdmxElements.Get(Host, edmxPath, namespaceName);
@@ -18,7 +18,7 @@
         var edmxName = edmxElements.EdmxName;
         var entityTypesWithEntitySet = edmxElements.EntityTypes.Where(e => GetEntitySet(edmxElements.Container, e) != null).ToList();
 
-        IEnumerable<string> usings = new string[] {"System", "System.Collections", "System.Collections.Concurrent", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Threading.Tasks", "System.Transactions", serverFxDALInterfacesNamespace, serverDALInterfacesNamespace, serverFxCommonNamespace, serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxServiceNamespace, serverFxEntitiesNamespace, serverEntitiesNamespace, serverServiceInterfacesNamespace};
+        IEnumerable<string> usings = new string[] {"System", "System.Collections", "System.Collections.Concurrent", "System.Collections.Generic", "System.Linq", "System.Linq.Expressions", "System.Reflection", "System.Threading.Tasks", "System.Transactions", serverFxDALInterfacesNamespace, serverDALInterfacesNamespace, serverFxCommonNamespace, serverFxSerializableExpressionsNamespace, serverFxServiceInterfacesNamespace, serverFxServiceNamespace, serverFxEntitiesNamespace, serverEntitiesNamespace, serverServiceInterfacesNamespace, serverFxDALNamespace};
 		var selectUsings = GetSelectUsing(dtoPathes, dtoNamespace);
 		List<string> specificationMethodsUsings;
         if (specificationsElements.Usings.TryGetValue("@Service", out specificationMethodsUsings))
@@ -370,7 +370,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
                     onlyOne = true;
                     break;
             }
-        bool manyResult = HasManyResult(expression.Type) && ! onlyOne;
+        bool manyResult = HasManyResult(expression.Type) && !onlyOne;
         Type queryType = manyResult ? GetGenericType(expression.Type) : expression.Type;
         Type queryTypeLoop = queryType;
         int genericIndex = 0;
@@ -439,7 +439,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
         }
 #>
         var result = new <#=edmxName #>QueriesResult { QueryResults = new <#=edmxName #>QueryResult[queries.QuerySerializations.Length] };
-        for (int queryIndex = 0 ; queryIndex < queries.QuerySerializations.Length ; queryIndex ++)
+        for (int queryIndex = 0; queryIndex < queries.QuerySerializations.Length; queryIndex++)
         {
             var query = queries.QuerySerializations[queryIndex];
 <#+
@@ -530,7 +530,7 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
     }
 #>
         SaveChanges(ref saved);
-        if (! saved)
+        if (!saved)
         {
 <#+
         var validateInTransactionClasses = new List<string>();
@@ -615,37 +615,44 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
                 throw new ValidationException(errors);
 <#+
 	    }
-        bool useTransaction = validateInTransactionClasses.Count != 0 || transactionalValidationMethods.Count != 0;
-        var toEntityTypesNavigationProperties = new Dictionary<EntityType, List<NavigationProperty>>();
+
+		var toEntityTypesNavigationProperties = new Dictionary<EntityType, List<NavigationProperty>>();
+		foreach (var fromEntityType in transactionalValidationMethods.Where(kvp => kvp.Value.Count != 0).Select(kvp => kvp.Key))
+        {
+            foreach (var np in transactionalValidationMethodsNavigationPropertiesDependences[fromEntityType])
+            {
+                if (np.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
+                    continue;
+                var toEntityType = np.ToEndMember.GetEntityType();
+                List<NavigationProperty> toEntityTypeNavigationProperties;
+                if (toEntityTypesNavigationProperties.TryGetValue(toEntityType, out toEntityTypeNavigationProperties))
+                {
+                    if (toEntityTypeNavigationProperties.Contains(np))
+                        continue;
+                }
+                else
+                    toEntityTypesNavigationProperties.Add(toEntityType, toEntityTypeNavigationProperties = new List<NavigationProperty>());
+                toEntityTypeNavigationProperties.Add(GetOtherNavigationProperty(np));
+            }
+        }
+
+		bool useTransaction = validateInTransactionClasses.Count != 0 || toEntityTypesNavigationProperties.Count != 0;
         if (useTransaction)
         {
-#>
-            using (var transaction = new TransactionScope())
-            {
+#>						
+			while (true)
+			{			
+				try 
+				{
+					using (var transaction = GetTransactionScope())
+					{
 <#+
             bool getErrorInTransactionDeclared = false;
-            foreach (var fromEntityType in transactionalValidationMethods.Where(kvp => kvp.Value.Count != 0).Select(kvp => kvp.Key))
-            {
-                foreach (var np in transactionalValidationMethodsNavigationPropertiesDependences[fromEntityType])
-                {
-                    if (np.ToEndMember.RelationshipMultiplicity != RelationshipMultiplicity.Many)
-                        continue;
-                    var toEntityType = np.ToEndMember.GetEntityType();
-                    List<NavigationProperty> toEntityTypeNavigationProperties;
-                    if (toEntityTypesNavigationProperties.TryGetValue(toEntityType, out toEntityTypeNavigationProperties))
-                    {
-                        if (toEntityTypeNavigationProperties.Contains(np))
-                            continue;
-                    }
-                    else
-                        toEntityTypesNavigationProperties.Add(toEntityType, toEntityTypeNavigationProperties = new List<NavigationProperty>());
-                    toEntityTypeNavigationProperties.Add(GetOtherNavigationProperty(np));
-                }
-            }
+
             if (toEntityTypesNavigationProperties.Count != 0)
             {
 #>
-                var getErrorsInTransaction = new List<Func<IEnumerable<Error>>>();	
+						var getErrorsInTransaction = new List<Func<IEnumerable<Error>>>();	
 <#+
             }
         foreach (var toEntityTypeNavigationProperties in toEntityTypesNavigationProperties)
@@ -657,32 +664,32 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
             if (! getErrorInTransactionDeclared)
             {
                 getErrorInTransactionDeclared = true;
-#>var <#+
+#>		var <#+
             }
 #>getErrorInTransaction = <#=toEntityTypeName #>DependencesErrors();
-                if (getErrorInTransaction != null)
-                    getErrorsInTransaction.Add(getErrorInTransaction);
+						if (getErrorInTransaction != null)
+							getErrorsInTransaction.Add(getErrorInTransaction);
 <#+
         }
         if (validateInTransactionClasses.Count != 0)
         {
 #>
-                var getSpecificErrorsInTransaction = new List<Func<Error>>();
+						var getSpecificErrorsInTransaction = new List<Func<Error>>();
 <#+
         }
         foreach (var className in validateInTransactionClasses)
         {
             var entitySet = GetEntitySet(edmxElements.Container, edmxElements.ItemCollection, className);
 #>
-                foreach (var e in _context.<#=code.Escape(entitySet) #>.Local<#=code.Escape(entitySet.ElementType) == className ? "" : string.Concat(".OfType<", className, ">()") #>)
-                    foreach (var entityGetErrorsInTransaction in e.ValidateInTransaction(true))
-                        getSpecificErrorsInTransaction.Add(entityGetErrorsInTransaction);
+						foreach (var e in _context.<#=code.Escape(entitySet) #>.Local<#=code.Escape(entitySet.ElementType) == className ? "" : string.Concat(".OfType<", className, ">()") #>)
+							foreach (var entityGetErrorsInTransaction in e.ValidateInTransaction(true))
+								getSpecificErrorsInTransaction.Add(entityGetErrorsInTransaction);
 <#+
         }
             PushIndent(CodeRegion.GetIndent(1));
         }
 #>
-            _context.SaveChanges();
+					_context.SaveChanges();
 <#+
     if (useTransaction)
     {
@@ -701,16 +708,28 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
         if (toEntityTypesNavigationProperties.Count != 0)
         {
 #>
-                foreach (var er in getErrorsInTransaction.SelectMany(getErrors => getErrors()).Where(e => e != null))
-                    errors.Add(er);
+						foreach (var er in getErrorsInTransaction.SelectMany(getErrors => getErrors()).Where(e => e != null))
+							errors.Add(er);
 <#+
         }
 #>
-                if (errors.Count == 0)
-                    transaction.Complete();
-            }
-            if (errors.Count != 0)
-                throw new ValidationException(errors);
+						if (errors.Count == 0)
+						{
+							transaction.Complete();
+							break;
+						}
+					}
+					if (errors.Count != 0)
+						throw new ValidationException(errors);
+				} 
+				catch (RetrySaveChangeException)
+				{			
+				}
+				catch (Exception)
+				{
+					throw;
+				}
+		}
 <#+
     }
 #>
@@ -718,7 +737,18 @@ public abstract partial class <#=edmxName #>Service : ServiceBase, I<#=edmxName 
     }
 
     partial void SaveChanges(ref bool saved);
+	private TransactionScope GetTransactionScope()
+    {
+        TransactionScope ts = null;
+        GettingTransactionScope(ref ts);
+        if (ts == null)
+        {
+            ts = new TransactionScope();
+        }
 
+        return ts;
+    }
+    partial void GettingTransactionScope(ref TransactionScope transactionScope);
 <#+
     foreach (var toEntityTypeNavigationProperties in toEntityTypesNavigationProperties)
     {

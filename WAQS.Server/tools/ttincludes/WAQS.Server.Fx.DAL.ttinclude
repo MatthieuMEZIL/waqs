@@ -1289,7 +1289,7 @@ public abstract class ObjectContextCustomizer<T>  : ObjectContextCustomizerBase<
     WriteFooter(namespaceName);
 
     fileManager.StartNewFile("ExceptionHandlerObjectContext.cs");
-    var exceptionHandlerObjectContextUsings = new List<string>(){ "System", "System.Collections.Generic", "System.Data.Entity", "System.Data.Entity.Core", "System.Data.Entity.Core.Objects", "System.Linq" };
+    var exceptionHandlerObjectContextUsings = new List<string>(){ "System", "System.Collections.Generic", "System.Data.Entity", "System.Data.Entity.Core", "System.Data.Entity.Core.Objects", "System.Linq", "System.Data.SqlClient", "System.Transactions"};
     CompleteExceptionHandlerObjectContextUsings(exceptionHandlerObjectContextUsings);
     WriteHeader(namespaceName, code, exceptionHandlerObjectContextUsings.ToArray());
 #>
@@ -1300,28 +1300,51 @@ public partial class ExceptionHandlerObjectContext<T> : ObjectContextCustomizer<
         _entities.Clear();
         return SaveChangesInternal(context, options, baseSaveChanges);
     }
+
     private int SaveChangesInternal(ObjectContext context, SaveOptions options, Func<SaveOptions, int> baseSaveChanges)
-    { 
+    {
+		bool enableLocalRetry = Transaction.Current == null;
+        bool retry = false;
         int value = 0;
-        try
+        do
         {
-            value = baseSaveChanges(options);
-        }
-        catch (OptimisticConcurrencyException e)
-        {
-            using (var contextTmp = new T())
+            retry = false;
+            try
             {
-                contextTmp.MetadataWorkspace.LoadFromAssembly(context.GetType().Assembly);
-                if (DetachAlreadyDeletedEntities(e, contextTmp)) 
-                    SaveChanges(context, options, baseSaveChanges);
-                else
-                    HandleOrReThrow(e);
+                value = baseSaveChanges(options);
             }
-        }
-        catch (Exception e)
-        {
-            HandleOrReThrow(e);
-        }
+            catch (OptimisticConcurrencyException e)
+            {
+                bool doRetry = false;
+                using (var contextTmp = new T())
+                {
+                    contextTmp.MetadataWorkspace.LoadFromAssembly(context.GetType().Assembly);
+                    doRetry = DetachAlreadyDeletedEntities(e, contextTmp);
+                }
+
+                if (doRetry)
+                {
+                    _entities.Clear();
+                    if (enableLocalRetry)
+                    {
+                        retry = true;
+                    }
+                    else
+                    {
+                        HandleOrReThrow(new RetrySaveChangeException(e));
+                    }
+                }
+                else
+                {
+                    HandleOrReThrow(e);
+                }
+            }  
+            catch (Exception e)
+            {
+                HandleOrReThrow(e);
+            }
+        } while (retry);
+
         return value;
     }
 
@@ -1331,27 +1354,29 @@ public partial class ExceptionHandlerObjectContext<T> : ObjectContextCustomizer<
     {
         //rajouter une condition si on a déjà eu le pb sur l'entité => throw
         bool canHandle = true;
-		try
+		try 
 		{
 			return e.StateEntries.Any() && e.StateEntries.Select(se =>
 				{
 					if (se.State != EntityState.Deleted)
+					return false;
+
+				object dbEntity;
+				if (contextTmp.TryGetObjectByKey(se.EntityKey, out dbEntity))
+				{
+					if (_entities.Contains(se.Entity))
 						return false;
+					_entities.Add(se.Entity);
+					ObjectContext.ApplyOriginalValues(se.EntitySet.Name, dbEntity); // In case of ConcurrencyMode = fixed
+				}
+				else
+					ObjectContext.Detach(se.Entity);
 
-					object dbEntity;
-					if (contextTmp.TryGetObjectByKey(se.EntityKey, out dbEntity))
-					{
-						if (_entities.Contains(se.Entity))
-							return false;
-						_entities.Add(se.Entity);
-						ObjectContext.ApplyOriginalValues(se.EntitySet.Name, dbEntity); // In case of ConcurrencyMode = fixed
-					}
-					else
-						ObjectContext.Detach(se.Entity);
-
-					return true;
-				}).TakeWhile(b => canHandle).Aggregate((b1, b2) => canHandle = b2);// Aggregate for execute select on each of them
-		} catch {
+				return true;
+			}).TakeWhile(b => canHandle).Aggregate((b1, b2) => canHandle = b2);// Aggregate for execute select on each of them
+		} 
+		catch 
+		{
 			return false;
 		}
     }
@@ -1371,14 +1396,27 @@ public partial class ExceptionHandlerObjectContext<T> : ObjectContextCustomizer<
     WriteFooter(namespaceName);
 
     fileManager.StartNewFile("UpdateExceptionDetail.cs");
-    WriteHeader(namespaceName, code, "System.Data.Entity.Core", "System.Linq");
+    WriteHeader(namespaceName, code, "System.Collections.Generic", "System.Data.Entity.Core", "System.Linq");
 #>
 public class UpdateExceptionDetail : <#=serverFxCommonNamespace#>.ExceptionDetail<UpdateException>
 {
     public UpdateExceptionDetail(UpdateException updateException)
         : base(updateException)
+    {        
+        Entities = updateException.StateEntries.Select(se => se.Entity);        
+    }
+}
+<#+
+    WriteFooter(namespaceName);
+
+    fileManager.StartNewFile("RetrySaveChangeException.cs");
+    WriteHeader(namespaceName, code, "System", "System.Data.Entity.Core");
+#>
+public class RetrySaveChangeException : Exception
+{
+    public RetrySaveChangeException(UpdateException innerException)
+        : base("An error occured in saving context, a retry will be tempted.", innerException)
     {
-        Entities = updateException.StateEntries.Select(se => se.Entity);
     }
 }
 <#+
