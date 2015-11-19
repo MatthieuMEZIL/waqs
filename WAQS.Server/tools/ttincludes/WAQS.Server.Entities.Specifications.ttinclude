@@ -408,7 +408,7 @@
                                                     SyntaxFactory.IfStatement(
                                                         SyntaxFactory.ParseExpression(
                                                             string.Concat(
-                                                                "ChangeTracker.State == ObjectState.Added || ChangeTracker.State == ObjectState.Modified && ChangeTracker.ModifiedProperties.Intersect(new [] { \"", metadata.Property, string.Concat(metadata.DependentProperties.Select(dp => "\", \"" + dp.First().Name)), "\" }).Any()")),
+                                                                "ChangeTracker.State == ObjectState.Added || ChangeTracker.State == ObjectState.Modified && !new [] { \"", metadata.Property, string.Concat(metadata.DependentProperties.Select(dp => "\", \"" + dp.First().Name)), "\" }.Except(ChangeTracker.ModifiedProperties).Any()")),
                                                         SyntaxFactory.Block(
                                                             statements)),
                                                     SyntaxFactory.ParseStatement("return null;")))

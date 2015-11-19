@@ -40,6 +40,11 @@
         return MSBuildWorkspace.Create().OpenSolutionAsync(path).Result;
     }
 
+	public static Microsoft.CodeAnalysis.Project LoadProject(string path)
+    {
+        return MSBuildWorkspace.Create().OpenProjectAsync(path).Result;
+    }
+
     public static ISymbol FindSourceDefinition(ISymbol symbol, ISolution solution)
     {
         return SymbolFinder.FindSourceDefinitionAsync(symbol, solution).Result;

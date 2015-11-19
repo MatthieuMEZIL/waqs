@@ -181,8 +181,8 @@ void WriteServer(string waqsFilePath, string namespaceName = null, string relati
 			fxServiceNamespaceName = fxServiceNamespaceNameAttribute.Value;
 		var fxServiceGenerateAttribute = fxService.Attribute("Generate");
 		if (fxServiceGenerateAttribute == null || fxServiceGenerateAttribute.Value != "false")
-		{
-			fxServiceNamespaceName = "WAQS.Service";
+		{	
+			fxServiceNamespaceName = "WAQS.Service";		
 			if (fxExpressionsNamespaceName == null)
 				throw new InvalidOperationException(@"Framework\Expressions can't be null");
 			if (fxCommonNamespaceName == null)
@@ -709,7 +709,9 @@ void WriteServer(string waqsFilePath, string namespaceName = null, string relati
 			sb.Append(fxEntitiesNamespaceName);
 			sb.Append("\", @\"");
 			sb.Append(fxDALInterfacesNamespaceName);
-			sb.Append("\", @\"");
+			sb.Append("\", @\"");			
+			sb.Append(fxDALNamespaceName);
+			sb.Append("\", @\"");				
 			sb.Append(fxServiceInterfacesNamespaceName);
 			sb.Append("\", @\"");
 			sb.Append(fxServiceNamespaceName);
@@ -918,7 +920,7 @@ void WriteServer(string waqsFilePath, string namespaceName = null, string relati
 			servicesPropertiesSB.Append(", ");
 			servicesPropertiesSB.Append("(Func<");
 			servicesPropertiesSB.Append(serviceName);
-			servicesPropertiesSB.Append(">)(() => unityContainer.Resolve<");
+			servicesPropertiesSB.Append(">)(() => childUnityContainer.Resolve<");
 			servicesPropertiesSB.Append(serviceName);
 			servicesPropertiesSB.Append(">())");
 		}
@@ -944,7 +946,7 @@ partial class <#=globalClassName#>
 }
 <#+
 		WriteFooter(namespaceName);
-	}
+	}	
 
 	XElement globalContextElement = root.Element("GlobalContext");
 	if (globalContextElement != null)

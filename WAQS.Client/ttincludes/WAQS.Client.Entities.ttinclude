@@ -2251,9 +2251,8 @@ public partial class <#=complexTypeName#> : <#=(complexTypesBaseType ?? dynamicT
 var sharedClassTask = entityTypesSkip == 0 ? Task.Factory.StartNew(() =>
 {
     if (! (string.IsNullOrEmpty(serverEntitiesPath.Sln) || string.IsNullOrEmpty(serverEntitiesPath.Csproj)))
-    {
-        var serverEntitiesSolution = LoadSolution(Path.GetFullPath(HostResolvePath(serverEntitiesPath.Sln)), Host);
-        var serverEntitiesProject = serverEntitiesSolution.Projects.FirstOrDefault(p => p.FilePath == Path.GetFullPath(HostResolvePath(serverEntitiesPath.Csproj)));
+    {        
+        var serverEntitiesProject = LoadProject(Path.GetFullPath(HostResolvePath(serverEntitiesPath.Csproj)));
         if (serverEntitiesPath.Folder != null)
             Parallel.ForEach (serverEntitiesProject.Documents.Where(d => d.Name.EndsWith(".shared.cs")), document => 
             {
@@ -3695,13 +3694,23 @@ void AddOrRemoveHandler(SpecificationsElements specificationsElements, string pr
     private void <#=prefix#><#=propertyName#>PropertyChanged(object sender, PropertyChangedEventArgs e)
     {
 <#+
-            foreach (var propertiesPerType in  
-                from pr in getPropertyChangedProperties.Select(p => new { Properties = new { Key = p.Key, Value = p.Value.Cast<DependencesInfo>() }, DependenceType = DependenceType.Get })
+            var source = (from pr in getPropertyChangedProperties.Select(p => new { Properties = new { Key = p.Key, Value = p.Value.Cast<DependencesInfo>() }, DependenceType = DependenceType.Get })
                     .Union(validatePropertyChangedProperties.Select(p => new { Properties = new { Key = p.Key, Value = p.Value.Cast<DependencesInfo>() }, DependenceType = DependenceType.Validate }))
                     .Union(metadataPropertyChangedProperties.Select(p => new { Properties = new { Key = p.Key, Value = p.Value.Cast<DependencesInfo>() }, DependenceType = DependenceType.Metadata}))
-                group pr by subProperties[pr.Properties.Value.First().Property] into groupByType
+                select pr).ToList();
+
+			bool isOrder = false;
+			if (source.Any(s => s.Properties.Value.First().Property is IComparable)) 
+			{
+				isOrder = true;
+			}
+
+            foreach (var propertiesPerType in (isOrder ? 
+				(from pr in source group pr by subProperties[pr.Properties.Value.First().Property] into groupByType
                 orderby groupByType.Key
-                select new { Type = groupByType.Key, Properties = groupByType.GroupBy(p => p.Properties.Key) })
+                select new { Type = groupByType.Key, Properties = groupByType.GroupBy(p => p.Properties.Key) }) : 
+				(from pr in source group pr by subProperties[pr.Properties.Value.First().Property] into groupByType                
+                select new { Type = groupByType.Key, Properties = groupByType.GroupBy(p => p.Properties.Key) })))
             {
                 if (! (propertiesPerType.Type == null || propertiesPerType.Type.IsAnonymousType))
                 {
