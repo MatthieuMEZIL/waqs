@@ -3869,7 +3869,8 @@ foreach (EntityType entityType in entityTypes)
         var entitySet = (IClientEntitySet<I<#=edmxName#>ClientContext, <#=subEntityTypeFullName#>>)ClientEntitySetExtensions.GetClientEntitySet(entity);
         if (entitySet == null)
             throw new InvalidOperationException("Load method only works with tracking entities");
-        var value = await entitySet.AsAsyncQueryable().Where(e => <#+TestKeys(code, entityType, "e", "entity");#>).Select(e => e.<#=propertyName#>).First().Execute<#=asyncSuffix#>(mergeOption);
+		<#+TestVarKeys(code, entityType, "e", "entity");#>
+        var value = await entitySet.AsAsyncQueryable().Where(e => <#+TestVarValueKeys(code, entityType, "e", "entity");#>).Select(e => e.<#=propertyName#>).First().Execute<#=asyncSuffix#>(mergeOption);
         if (entity.Specifications == null)
             entity.Specifications = new <#=clientEntitiesNamespace#>.<#=specificationsClassName#>.<#=specificationsClassName#>Specifications();
         entity.Specifications.Has<#=propertyName#> = true;
@@ -3917,7 +3918,8 @@ foreach (EntityType entityType in entityTypes)
         var entitySet = (IClientEntitySet<I<#=edmxName#>ClientContext, <#=entityTypeFullName#>>)ClientEntitySetExtensions.GetClientEntitySet(entity);
         if (entitySet == null)
             throw new InvalidOperationException("Load method only works with tracking entities");
-        var value = await entitySet.AsAsyncQueryable().Where(e => <#+TestKeys(code, entityType, "e", "entity");#>).Select(e => e.<#=propertyName#>).First().Execute<#=asyncSuffix#>(mergeOption);
+		<#+TestVarKeys(code, entityType, "e", "entity");#>
+        var value = await entitySet.AsAsyncQueryable().Where(e => <#+TestVarValueKeys(code, entityType, "e", "entity");#>).Select(e => e.<#=propertyName#>).First().Execute<#=asyncSuffix#>(mergeOption);
         if (entity.Specifications == null)
             entity.Specifications = new <#=entityTypeFullName#>.<#=entityTypeName#>Specifications();
         entity.Specifications.Has<#=propertyName#> = true;
@@ -4072,10 +4074,16 @@ foreach (var entityType in entityTypes)
         var entitySet = ClientEntitySetExtensions.GetClientEntitySet(entity);
         if (mergeOption == MergeOption.NoTracking || entitySet == null)
             throw new InvalidOperationException("Load method only works with tracking entities");
+		<#+if (np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many && np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
+        {
+			TestVarKeys(code, entityType, "e2", "entity");
+		} else {
+			TestVarNavigationKeys(code, np, "entity", "e"); 
+		}#>		
         var value = await ((I<#=contextName#>)entitySet.Context).<#=toEntitySetName#>.AsAsyncQueryable()<#=toEntityType == toEntitySet.ElementType ? "" : string.Concat(".OfType<", clientEntitiesNamespace, ".", toEntityTypeName, ">()")#>.Where(e => <#+
         if (np.ToEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many && np.FromEndMember.RelationshipMultiplicity == RelationshipMultiplicity.Many)
         {
-#>e.<#=code.Escape(GetOtherNavigationProperty(np))#>.Any(e2 => <#+TestKeys(code, entityType, "entity", "e2");#>)<#+
+#>e.<#=code.Escape(GetOtherNavigationProperty(np))#>.Any(e2 => <#+TestVarValueKeys(code, entityType, "e2", "entity");#>)<#+
         }
         else
             TestNavigationKeys(code, np, "entity", "e");

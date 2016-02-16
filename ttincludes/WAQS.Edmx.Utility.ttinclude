@@ -1195,4 +1195,83 @@ void TestNavigationKeys(CodeGenerationTools code, NavigationProperty navigationP
         }
     }
 }
+
+void TestVarNavigationKeys(CodeGenerationTools code, NavigationProperty navigationProperty, string e1 = "e1", string e2 = "e2")
+{
+    IEnumerator<EdmProperty> fromEnumerator, toEnumerator;
+    ReferentialConstraint referentialConstraint;
+    GetNavigationPropertyReferentialConstraintsEnumerators(navigationProperty, out referentialConstraint, out fromEnumerator, out toEnumerator);
+    if (referentialConstraint != null)
+    {
+		int i = 0;
+        bool hasNext = fromEnumerator.MoveNext() & toEnumerator.MoveNext(); 
+        while (hasNext)
+        {
+			i++;
+#>var id<#=i#> = <#=e1#>.<#=fromEnumerator.Current#>;
+<#+
+            hasNext = fromEnumerator.MoveNext() & toEnumerator.MoveNext(); 
+            if (! hasNext)
+                break;
+        }
+    }
+}
+
+void TestVarValueNavigationKeys(CodeGenerationTools code, NavigationProperty navigationProperty, string e1 = "e1", string e2 = "e2")
+{
+    IEnumerator<EdmProperty> fromEnumerator, toEnumerator;
+    ReferentialConstraint referentialConstraint;
+    GetNavigationPropertyReferentialConstraintsEnumerators(navigationProperty, out referentialConstraint, out fromEnumerator, out toEnumerator);
+    if (referentialConstraint != null)
+    {
+		int i = 0;
+        bool hasNext = fromEnumerator.MoveNext() & toEnumerator.MoveNext(); 
+        while (hasNext)
+        {
+			i++;
+#>id<#=i#> == <#=e2#>.<#=toEnumerator.Current#><#+
+            hasNext = fromEnumerator.MoveNext() & toEnumerator.MoveNext(); 
+            if (! hasNext)
+                break;
+#> && <#+
+        }
+    }
+}
+
+void TestVarKeys(CodeGenerationTools code, EntityType entityType, string e1, string e2, string prefix1 = null, string prefix2 = null)
+{
+    var keysEnumerator = entityType.KeyMembers.GetEnumerator();
+	int i = 0;
+    keysEnumerator.MoveNext();
+    for(;;)
+    {
+		i++;
+	    string key = code.Escape(keysEnumerator.Current);
+#>var id<#=i#> = <#=e2#>.<#=prefix2 ?? ""#><#=key#>;
+<#+      
+        if (!keysEnumerator.MoveNext())
+        {
+			break;
+        } 
+    }
+}
+
+void TestVarValueKeys(CodeGenerationTools code, EntityType entityType, string e1, string e2, string prefix1 = null, string prefix2 = null)
+{
+	var keysEnumerator = entityType.KeyMembers.GetEnumerator();
+    keysEnumerator.MoveNext();
+	int i = 0;
+    for(;;)
+    {
+		i++;
+        string key = code.Escape(keysEnumerator.Current);
+#><#=e1#>.<#=prefix1 ?? ""#><#=key#> == id<#=i#><#+
+        if (keysEnumerator.MoveNext())
+        {
+#> && <#+
+        }
+        else
+            break;		
+    }
+}
 #>
