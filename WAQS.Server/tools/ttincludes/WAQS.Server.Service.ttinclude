@@ -865,7 +865,7 @@ var <#=variableName #> = <#=entitySetCollection #>.Local<#=ofType #>.ToList();
             var fromQueryable = string.Concat("_context.", code.Escape(fromEntitySet), fromOfType);
 #>
             var <#=fromEntityTypePlurial #>PredicateAfterTransactionParameter = Expression.Parameter(typeof(<#=fromEntityTypeName #>));
-            var <#=fromEntityTypePlurial #>PredicateAfterTransaction = Expression.Lambda<Func<<#=fromEntityTypeName #>, bool>>(<#=toEntityNameVariableName #><#=npName #>Ids.Select(idValue => 
+            var <#=fromEntityTypePlurial #>PredicateAfterTransaction = Expression.Lambda<Func<<#=fromEntityTypeName #>, bool>>(<#=toEntityNameVariableName #><#=npName #>Ids.DefaultIfEmpty().Select(idValue => 
             {
 <#+
             var fksExpressions = new List<string>();
